@@ -166,7 +166,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if hold_aim_down_sight:_secondary_held=event.is_action_pressed("secondary")
 		elif event.is_action_pressed("secondary") and session.current_tool==2 and not session.is_reloading:_aim_toggled=not _aim_toggled
 		var next:=_secondary_held if hold_aim_down_sight else _aim_toggled
-		if session.current_tool==2 and next and not previous and not session.is_reloading and can_use_tool():
+		if session.current_tool==2 and next and not previous and not session.is_reloading and can_use_tool() and session.can_fire():
 			_play_sound("Weapons/AimDownSightLocal",.08,OpenSpadesAudio.LOCAL_ORIGIN)
 	# Inputs below invoke offline authority. In multiplayer their button edges
 	# reach the shared rules through the fixed input command instead.

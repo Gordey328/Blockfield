@@ -1096,7 +1096,7 @@ func _network_cosmetic_audio(kind: String, event: Dictionary, own: bool) -> void
 			if not own: audio.weapon_reload(event.weapon,false,point)
 		"reload_completed":
 			if not own: audio.weapon_reloaded(session.get_target(event.owner_id).get("weapon",0),false,point)
-		"dry_fire": player._play_sound("Weapons/DryFire",.1,OpenSpadesAudio.LOCAL_ORIGIN)
+		"dry_fire": player._play_sound("Weapons/DryFire",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
 		"grenade_pin":
 			if own: player._play_sound("Weapons/Grenade/Fire",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
 		"grenade_thrown", "grenade_release":

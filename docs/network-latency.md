@@ -58,6 +58,11 @@ Authority step measurements were mean 0.800 ms, p95 1.890 ms and maximum 4.807 m
 
 ## Explicit remaining limits
 
+Frozen9d186266fb8b rerun passed501/0 in8.094s with438 real steps versus439
+in the502-check handoff. The fixture adds an assertion per real simulation step;
+the fixed remainder63 and required stages/admissions/two resumes/late rejection
+are identical. Assertion count is scheduling-dependent, not an omitted gate.
+
 The relay does not model packet loss/reordering, bandwidth limits, TLS proxy behavior, WAN jitter, browser scheduling or large-map memory pressure. TCP preserves order; calling a stream unreliable cannot bypass its head-of-line blocking. A 350 ms held input backlog is intentionally rejected under the current authored admission policy. Supporting longer interruptions would require an explicit server policy change, not relaxing validation in this fixture.
 
 The runner's task-local JSON is trusted control only. Python publishes with `os.replace`; the GDScript writer removes the previous task-local destination then renames its complete temporary file because Windows rename cannot overwrite it. Readers retry a missing or invalid file. This service-file fix does not change network packet handling or project configuration.

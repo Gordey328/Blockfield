@@ -79,6 +79,18 @@ func _run() -> void:
 		action("secondary",false)
 		app.player._aim_toggled=false
 	app.player.hold_aim_down_sight=true
+	app.session.fire_cooldown=.5
+	var cooldown_count:=voices("Weapons/AimDownSightLocal").size()
+	action("secondary",true)
+	check(app.player._secondary_held and voices("Weapons/AimDownSightLocal").size()==cooldown_count,"shot cooldown suppresses ADS audio while preserving actual aim input")
+	action("secondary",false)
+	app.session.fire_cooldown=0
+	var prior_magazine: int=app.session.magazine
+	app.session.unlimited_ammo=false;app.session.magazine=0;app.session.reserve=20
+	action("secondary",true)
+	check(app.player._secondary_held and voices("Weapons/AimDownSightLocal").size()==cooldown_count,"empty magazine with reserve suppresses ADS audio without suppressing aim input")
+	action("secondary",false)
+	app.session.magazine=prior_magazine
 	app.player._sprint_state=.5
 	var count:=voices("Weapons/AimDownSightLocal").size()
 	action("secondary",true);action("secondary",false)
@@ -127,6 +139,9 @@ func _run() -> void:
 		var active:=voices(path)
 		check(not active.is_empty() and active.back().get_meta("origin")==Vector3.ZERO and not active.back().get_meta("efx_eligible"),"map UI sound uses actual dry source playback: "+path)
 	app.hud.map_sound_requested.disconnect(map_callback)
+	app._network_cosmetic_audio("dry_fire",{"owner_id":app.session.local_player_id()},true)
+	var dry:=voices("Weapons/DryFire")
+	check(not dry.is_empty() and dry.back().get_meta("gain")==1.0 and dry.back().get_meta("origin")==OpenSpadesAudio.LOCAL_ORIGIN,"confirmed private network dry-fire preserves native gain and weapon listener offset")
 	var slash:=InputEventKey.new();slash.keycode=KEY_SLASH;slash.unicode=47;slash.pressed=true
 	Input.parse_input_event(slash);Input.flush_buffered_events()
 	check(app.hud.is_chat_open() and app.hud._chat.get_input_text()=="/" and not app.player.controls_enabled,"native slash shortcut opens command input with one prefix and captures gameplay")
