@@ -135,8 +135,15 @@ func _run() -> void:
 func cleanup() -> void:
 	app.network_disconnect()
 	server.stop()
+	app.stop_audio()
 	app.queue_free()
 	for frame in 8: await process_frame
+	# This fixed-FPS fixture exits soon after real spatial hit sounds. Give the
+	# Vorbis/mixer thread wall time to release stopped playback, as lab/UI do.
+	var audio_deadline := Time.get_ticks_msec() + 200
+	while Time.get_ticks_msec() < audio_deadline:
+		OS.delay_msec(1)
+		await process_frame
 	if prefs_existed:
 		var file := FileAccess.open("user://settings.cfg",FileAccess.WRITE)
 		file.store_buffer(prefs); file.close()
