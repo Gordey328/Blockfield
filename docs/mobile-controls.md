@@ -103,8 +103,36 @@ Those browser actions use desktop mouse preview, not physical touch.
 Browser review found building feedback overlapping the lower action row at140%.
 A placement-only HUD follow-up positions it above the action grid and the look
 hint, with an actual HUD regression. Workspace repeat import/HUD272/0/touch-look144/0
-and runtime smoke passed (`.cache/logs/mobile-hint-*.log`). That exact diff still
-requires frozen follow-up export, final browser review and public artifact checks.
+and runtime smoke passed (`.cache/logs/mobile-hint-*.log`). Frozen8f04c2240a22 repeated
+import/controls2381/0/HUD272/0/touch-look144/0/runtime/export for placement/fonts;
+aa6f03e6e23a repeated import/controls/runtime/export for the caption-only follow-up.
+Final31c513d0aa18 uses56CSSpx button targets for comfortable thumbs and full12CSSpx
+captions. Its frozen import/controls2381/0/HUD272/0/touch-look144/0/runtime/Web export
+passed with clean diagnostics and manifest `validation-chain.json`. World/network/
+gameplay production files remain unchanged from full-tested3c. The rendered568×320
+default-size view shows complete captions and usable hit areas. This chain does not
+claim every suite ran again on31. Full fresh-checkout reproduction:
+
+```text
+python tools/release_checkpoint.py --revision 31c513d0aa182aaf42db51146b83a7aa22d1cd2c
+```
+
+## Current published artifact
+
+[Pages](https://gordey328.github.io/Blockfield/) publishes clean source
+`31c513d0aa182aaf42db51146b83a7aa22d1cd2c`, bundle
+`e28bfddd165209defbc388e398c9fc35d5bfae84`. Independently downloaded metadata and
+HTML match the tested export; PCK SHA256 is
+`7be6d3864fe75fa089082d0b4ad4cf1c99f350940ff1284b9592af675a0356bd`
+(16,167,776bytes). Report `.cache/previews/public-mobile-fps-31c513d0aa18.json`.
+Public844×390/390×844 desktop-preview views exercise movement/look, fire-drag
+rotation, block selection, palette/map separation and building feedback clear of
+actions; no browser console warnings/errors. Physical-phone multitouch, thumb
+feel, safe areas and hardware performance remain unverified.
+On mode survived a public reload; public Auto and local touch defaults were
+restored after testing. Browser report and landscape/portrait/small screenshots:
+`.cache/previews/mobile-fps-31c513d0aa18-browser.json` and the corresponding JPEGs.
+Temporary test tabs closed and viewport override reset.
 
 ## Previous checkpoint regression
 
@@ -153,7 +181,7 @@ palette/minimap/toolbar/action separation and the single-row footer.
 These browser gestures use the desktop mouse fallback. Physical phone touch,
 OS keyboard/safe-area behavior and hardware performance remain unverified.
 
-## Public artifact
+## Previous public artifact96
 
 [Pages](https://gordey328.github.io/Blockfield/) publishes clean96 source, bundle
 `e5c246c8f1135b54b69fa64bea19aae8403d7de0`; GitHub reports built/no error.
@@ -172,6 +200,10 @@ Screenshots/report: `.cache/previews/public-mobile-96c36cdc740d.{jpg,json}` and
 `.cache/previews/public-mobile-portrait-96c36cdc740d.jpg`.
 
 ## Research 2026-10-10
+
+Historical research before authorization: current contract/settings/evidence above
+supersede its next-step proposal. Device traces and subjective phone acceptance
+remain open.
 
 The user reports jitter when moving the joystick and looking with another finger.
 This turn is research/documentation only: implementation, new tests, skill installation
