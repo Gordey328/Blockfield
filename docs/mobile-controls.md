@@ -63,6 +63,9 @@ height. Movement/look areas retain a 52-pixel bottom HUD reserve. Required layou
 include960×540,854×480,480×854 and raw844×390, plus size0.8/1.4. Root's expanding
 viewport can turn physical844×390 into a taller logical canvas. Geometry checks
 do not establish phone text readability or OS safe-area handling.
+Button captions and gesture hints retain a12 CSS-pixel font floor, measured only
+when laying out. This keeps the smallest controls legible on568×320 without
+adding Web interop to the drawing loop.
 
 HUD connects actions to `Input.parse_input_event(InputEventAction)`, preserving
 reload, selection and ADS edges. Movement updates `player.touch_movement`; look

@@ -16,6 +16,7 @@ const GAP := 8.0
 const MIN_BUTTON_SIZE := 60.0
 const MAX_BUTTON_SIZE := 72.0
 const MIN_CSS_BUTTON_SIZE := 48.0
+const MIN_CSS_LABEL_SIZE := 12.0
 const MAX_POINTERS := 32
 const NO_POINTER := -2
 const MOUSE_POINTER := -1
@@ -62,6 +63,8 @@ var _stick_radius: float = STICK_RADIUS
 var _mouse_preview_enabled: bool = true
 var _layout_size: Vector2 = Vector2(-1, -1)
 var _button_size: float = MIN_BUTTON_SIZE
+var _button_font_size: int = 15
+var _hint_font_size: int = 13
 var _locale: String = ""
 var _normal_style: StyleBoxFlat
 var _held_style: StyleBoxFlat
@@ -375,7 +378,12 @@ func _ensure_layout() -> void:
 	_regions.clear()
 	if size.x < 440.0 or size.y < 320.0:
 		return
-	var desired_button: float = maxf(clampf(size.y * 0.13, MIN_BUTTON_SIZE, MAX_BUTTON_SIZE) * _control_scale, _logical_button_floor())
+	var button_floor: float = _logical_button_floor()
+	# Measure CSS scale only when laying out, keeping Web interop out of _draw.
+	var font_floor: int = ceili(button_floor * MIN_CSS_LABEL_SIZE / MIN_CSS_BUTTON_SIZE)
+	_button_font_size = maxi(clampi(roundi(15.0 * _control_scale), 12, 21), font_floor)
+	_hint_font_size = maxi(13, font_floor)
+	var desired_button: float = maxf(clampf(size.y * 0.13, MIN_BUTTON_SIZE, MAX_BUTTON_SIZE) * _control_scale, button_floor)
 	var two_rows: bool = size.x < desired_button * 7.0 + GAP * 6.0 + MARGIN * 2.0
 	var columns: int = 4 if two_rows else 7
 	var width_limit: float = (size.x - MARGIN * 2.0 - GAP * (columns - 1)) / columns
@@ -450,15 +458,15 @@ func _draw() -> void:
 		var held: bool = _action_counts.get(action, 0) > 0
 		draw_style_box(_held_style if held else _normal_style, rect)
 		var color := Color(1.0, 0.79, 0.58, 0.95) if action == "primary" else Color(0.91, 0.96, 1.0, 0.94)
-		_draw_label(rect, _label(action), clampi(roundi(15.0 * _control_scale), 12, 21), color)
+		_draw_label(rect, _label(action), _button_font_size, color)
 	var center: Vector2 = _stick_center
 	draw_circle(center, _stick_radius, Color(0.035, 0.065, 0.085, 0.28))
 	draw_arc(center, _stick_radius, 0, TAU, 64, Color(0.8, 0.91, 1.0, 0.46), 2.0, true)
 	draw_circle(center + _stick_delta, 24.0 * _stick_radius / STICK_RADIUS, Color(0.75, 0.9, 1.0, 0.40 if _move_owner == NO_POINTER else 0.72))
-	var hint_y: float = minf(center.y + _stick_radius - 4.0, size.y - HUD_BOTTOM_RESERVE - 20.0)
-	_draw_label(Rect2(Vector2(center.x - 75, hint_y), Vector2(150, 20)), _ui("Движение", "Move"), 12, Color(0.91, 0.96, 1.0, 0.58))
+	var hint_y: float = minf(center.y + _stick_radius - 4.0, size.y - HUD_BOTTOM_RESERVE - 24.0)
+	_draw_label(Rect2(Vector2(center.x - 75, hint_y), Vector2(150, 24)), _ui("Движение", "Move"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.58))
 	var look: Rect2 = _regions["look"]
-	_draw_label(Rect2(Vector2(look.position.x, look.end.y - 24), Vector2(look.size.x, 24)), _ui("Проведи для поворота", "Drag to look"), 13, Color(0.91, 0.96, 1.0, 0.34))
+	_draw_label(Rect2(Vector2(look.position.x, look.end.y - 24), Vector2(look.size.x, 24)), _ui("Проведи для поворота", "Drag to look"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.34))
 
 func _draw_label(rect: Rect2, text: String, font_size: int, color: Color) -> void:
 	var lines: PackedStringArray = text.split("\n")
