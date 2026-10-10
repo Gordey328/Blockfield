@@ -2,6 +2,71 @@
 
 Updated after the integrated renderer/network/UI handoffs on2026-10-10, against pinned OpenSpades v0.1.3. This report separates implemented code from acceptance evidence. Public57ad43b2b740 includes normalization/network/favorites changes and passed the complete registered frozen suite plus Web/Linux exports. Public metadata and PCK identity were verified separately; these checks do not make the full port complete.
 
+## Discussion-only fidelity audit 2026-10-10
+
+This is a bounded source/code/test audit prompted by missing block damage feedback,
+not a complete port certification or a new browser playtest. Root coordinated three
+read-only specialists with separate gameplay-feedback, renderer/effects and UI/audio
+ownership. No specialist edited files or ran engine/export checks.
+
+Confirmed incomplete requirements:
+
+- **W07 damaged-block appearance:** original `Sources/Draw/GLMapChunk.cpp:247-252`
+  halves RGB below100HP. Godot controller `_damage_block` keeps health outside voxel
+  RGB; `world/voxel_chunk.gd:rebuild` never consumes it. Original packed color includes
+  health; port data packs occupancy plus RGB. `tests/gameplay/test_source_parity.gd:
+  test_block_recovery` and `tests/network/test_match_simulation.gd:block_damage`
+  test survival/destruction/recovery, not damaged color. No recorded decision removes
+  this cue. The connection between simulation state and terrain presentation was missed.
+- **P15 offline grenade input:** original `Client/Player.cpp:147-159` begins cooking
+  on a press edge; automatic >2.9s release at490-494 does not set manual-release cooldown.
+  Godot `gameplay/player_controller.gd:_physics_process` begins cooking while primary
+  remains held whenever the session is not cooking. `local_session.gd:release_grenade`
+  always adds0.5s cooldown. Holding through forced release can start the next cook;
+  an immediate new press is delayed. `simulation/player_rules.gd` and
+  `tests/network/test_player_rules.gd:grenade_rules` already distinguish the source cases;
+  offline tests do not. These offline paths also exist in published source96
+  (`git show 96c36cdc740d19a9ab9c32928482dff06b76cade:<path>`).
+- **U05 scoreboard ID color:** native `Client/ScoreboardView.cpp:278,291-298` uses
+  the minimap's32-color player palette for #IDs when `cg_minimapPlayerColor=1`.
+  `game/ui/lab_scoreboard.gd:_process` gives the whole row one color and does not
+  consume the option; HUD settings affect only maps. `ui.md` records authored row
+  formatting but no specific decision to omit this identification cue.
+
+W07/P15/U05 are partial and therefore NOT_STARTED under the existing ledger vocabulary.
+Passing checks for the implemented portions remain valid; they do not cover these gaps.
+
+Separately, documented differences include fixed hidden-interior earth RGB instead of
+native low-bit random variation (`Client/GameMap.cpp:44-46`, `world/vxl_reader.gd:8,42-44`,
+`voxel.md:11`);32 strongest spectral modes instead of native full FFT water
+(`Draw/GLWaterRenderer.cpp:178-186,517-525`, `world/spectral_wave.gd`, ADR0004);
+4096 fragments/1024 smoke per falling cluster and24 active clusters instead of native
+six fragments/one smoke per surface block (`Client/FallingBlock.cpp:149-180`,
+`world/falling_cluster.gd:27-28,127-142`, `world/voxel_world.gd`, `voxel.md:57`).
+These are recorded substitutions, not automatically accepted full-fidelity equivalents.
+
+Next action is a source-driven review of complete player-visible transitions across
+simulation, rendering, HUD and audio before implementation/acceptance. Existing renderer
+and extension decisions do not explain or authorize the newly confirmed omissions.
+
+## Authorized fidelity repair 2026-10-10
+
+Implementation follow-up: the three specific omissions above are now repaired in
+the current workspace; release evidence is recorded in status/parity after checks.
+World's separate mesh-color mask and offline/confirmed-network expiry are specified
+in [ADR0009](decisions/0009-block-damage-presentation.md). Offline grenade input
+preserves effective press edges, pin minimum and manual-only cooldown. Scoreboard
+IDs consume the existing map palette/preference without changing name/death tint.
+
+The final source review found a separate shared-network grenade gate discrepancy:
+`simulation/player_rules.gd:281,312` retains raw previous primary buttons. A new
+press held during manual cooldown/tool raising therefore needs another release
+and press after the gate opens; source `Player.cpp:136-159` tracks the effective
+gated input. The existing shared tests cover holding after automatic throw and
+automatic cooldown, but not this extra gate case. It is outside this authorized
+offline repair and remains open; P15 stays partial/NOT_STARTED. No network rules
+or wire identity changes are included in this client release.
+
 ## Implemented HDR and renderer boundary
 
 Optional HDR, native temporal luminance adaptation and pre-tone dust bloom exist in `hdr_scene_viewport.gd`, `hdr_exposure.gd` and their shaders, connected to Main/HUD/console. An actual-scene washout exposed nonlinear Godot3D colors entering linear filters. `hdr_normalize.gdshader` now reverses the pinned Compatibility output transfer exactly once before metering/bloom/gamma; linear2D callers bypass it. Headless **47/0**, native GPU exposure **32/0**, color **79/0** and actual-Main **63/0** cover this contract and visible equipment/HUD/depth, resize/MSAA and camera restoration. Exported WebGL exposure **32/0** and color **79/0** were observed in the actual browser DOM with reported renderer `WebKitWebGL` and `float_color_buffer=true`.

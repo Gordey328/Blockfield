@@ -1234,7 +1234,7 @@ func _build_ui_settings(column: VBoxContainer) -> void:
 	_ui_settings_controls.hit_indicator=_ui_check(column,"Показывать подтверждение попадания","Show hit feedback",_show_hit_feedback,func(enabled):_show_hit_feedback=enabled;_save_ui_settings())
 	_ui_settings_controls.alerts=_ui_check(column,"Показывать уведомления","Show alerts",_show_alerts,func(enabled):_show_alerts=enabled;_save_ui_settings())
 	_ui_settings_controls.minimap_weapon_icons=_ui_check(column,"Значки оружия на карте","Weapon icons on map",_map_weapon_icons,func(enabled):_map_weapon_icons=enabled;_map.show_weapon_icons=enabled;_large_map.show_weapon_icons=enabled;_save_ui_settings())
-	_ui_settings_controls.minimap_player_colors=_ui_check(column,"Разные цвета игроков на карте","Per-player map colors",_map_player_colors,func(enabled):_map_player_colors=enabled;_map.per_player_colors=enabled;_large_map.per_player_colors=enabled;_save_ui_settings())
+	_ui_settings_controls.minimap_player_colors=_ui_check(column,"Разные цвета игроков на карте","Per-player map colors",_map_player_colors,func(enabled):_map_player_colors=enabled;_apply_map_settings();_save_ui_settings())
 	column.add_child(_ui_label("Размер миникарты","Minimap size"))
 	var map_size:=HSlider.new()
 	map_size.min_value=128
@@ -1309,6 +1309,7 @@ func _apply_map_settings() -> void:
 	_large_map.show_weapon_icons=_map_weapon_icons
 	_map.per_player_colors=_map_player_colors
 	_large_map.per_player_colors=_map_player_colors
+	_scoreboard.per_player_colors=_map_player_colors
 	_feed.position.y=top+map_size+26
 
 func _save_ui_settings() -> void:

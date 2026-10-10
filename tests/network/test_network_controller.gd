@@ -304,7 +304,16 @@ func inactive_and_identity() -> void:
 	check(client.prediction.get_status().last_submitted == seq+1,"drained class intent is not sent twice")
 	await wait_until(func():return simulation.get_actor(client.actor_id).pending_weapon == 2,"inactive pending class reaches authority without refill")
 	var previous_generation := confirmed.spawn_generation
-	session.select_team(0);player._physics_process(DT)
+	# The pending-class predicate reads authority before its ACK reaches this
+	# replica. Actual Main retries retained menu intents every physics frame;
+	# this manually driven controller must do so too when the clock/stream waits.
+	var request_before: int = client._request_sequence
+	session.select_team(0)
+	var intent_deadline := Time.get_ticks_msec()+4000
+	while session._intent.team != -1 and Time.get_ticks_msec()<intent_deadline:
+		player._physics_process(DT)
+		if session._intent.team != -1: await pump()
+	check(session._intent.team==-1 and client._request_sequence==request_before+1,"retained team intent crosses fresh-stream gate exactly once")
 	await wait_until(func():return session.team == 0 and session.spawn_generation > previous_generation,"authority team spawn advances life generation")
 	player._physics_process(DT)
 	check(player._network_generation == client.get_owner_state().spawn_generation and player.global_position == client.get_owner_state().feet(),"new life adopts authoritative generation/feet without local respawn")

@@ -3,6 +3,12 @@
 Source baseline: OpenSpades v0.1.3, commit `dcf449c845d509bbde9d79239b32d201c1389961`.
 This document records the current offline implementation and its limits; it does not certify complete OpenSpades parity or multiplayer readiness.
 
+Scoreboard #IDs share LabMap's source32-color palette and ModifyColor calculation.
+The existing per-player map-color preference updates minimap, large map and
+scoreboard together, including live checkbox/console changes and saved settings.
+Disabled IDs are white; following name/score text retains local/alive/dead tint.
+Network IDs stay canonical while palette lookup wraps modulo32.
+
 Graphics controls expose optional float HDR and its native minimum/maximum/adaptation-speed settings. The connected path has47 numeric,32 exposure GPU,79 color GPU and63 actual-Main GPU checks, plus exported WebGL32/79 checks; see ADR0004 for source formulas, pyramid budgets and later post-effect ordering. Color correction and bloom do not run twice while HDR is active.
 
 ## Source contracts and implementation

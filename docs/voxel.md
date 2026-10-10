@@ -8,6 +8,12 @@ Godot coordinates are `(x east, y up, z south)`, with one unit per block. Blocks
 
 `get_block(Vector3i)` returns 0 for air or out-of-bounds. Solid values are `0x01RRGGBB`, so opaque black remains solid. Use `VoxelWorld.pack_color(Color)` and `block_color(int)` at interface boundaries. This differs from OpenSpades' internal `0xHHBBGGRR` which combines color and per-block damage.
 
+Surviving damaged blocks use a separate World mask. Chunk RGB is exactly
+`(RGB & 0xfefefe) >> 1`; recovery restores intrinsic RGB. Only the mesh containing
+the changed color is dirtied; AO, geometry, collider, minimap, VXL and map journal
+are unaffected. Controller/confirmed network events own latest-hit expiry and
+edits/reset clear the mask. See [ADR0009](decisions/0009-block-damage-presentation.md).
+
 Original VXL `(x, y, z)` maps to Godot `(x, 63-z, y)`. The original 512 × 512 × 64 map fits in a 64 MiB `PackedInt32Array`; the vertical column is contiguous. `VXLReader.decode` checks spans, upper/lower colors, hidden solid interiors, truncated inputs and z=62→63 floor duplication. VXL does not store colors inside solid spans; newly exposed interior uses a fixed earth color rather than native randomized interior colors.
 
 ## Public boundary

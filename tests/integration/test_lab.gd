@@ -642,6 +642,9 @@ func test_grenade_pipeline() -> bool:
 	action("primary", false)
 	check(grenades_in_scene().is_empty(), "quick release waits until pin is pulled")
 	session.update(0.16)
+	# Source SetWeaponInput retains the effective press during pin pull. Advance
+	# the actual controller so it observes the released physical input afterward.
+	await frames(1)
 	check(grenades_in_scene().size() == 1 and session.grenades == starting_stock - 1,
 		"quick release eventually spawns one projectile rather than losing grenade")
 	session.update(3.1)

@@ -28,7 +28,8 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
 - Published client source: `31c513d0aa182aaf42db51146b83a7aa22d1cd2c`, committed/pushed.
 - Subsequent documentation records do not change the published binaries. Specialist
-  handoffs and release are complete; no engine/specialist lease remains.
+  handoffs and the mobile release are complete. Current fidelity-repair ownership is
+  recorded below; root now owns the engine/release lease.
 
 ## Frozen validation
 
@@ -147,19 +148,81 @@ the user's chosen deployment scope is Docker/configuration preparation.
   `.cache/previews/mobile-fps-31c513d0aa18-browser.json` and accompanying JPEGs.
 
 - Neither iteration is fully accepted; use the ledger's evidence-bound statuses.
+- Block damage presentation audit (2026-10-10, user requested discussion only): pinned
+  OpenSpades `Sources/Draw/GLMapChunk.cpp:247-252` halves each terrain RGB channel
+  whenever block health is below100; `Client/World.cpp:102-115,190-195` restores100HP
+  ten seconds after the latest hit. This is a binary darkened state, not progressive
+  cracks or a health bar. Current offline `game/gameplay/player_controller.gd:802-812`
+  stores partial health separately without updating terrain appearance; network
+  `game/main.gd:1079-1084` presents hit particles/audio without persistent darkening.
+  W07 therefore has a confirmed presentation gap; the follow-up audit below corrects
+  its earlier IMPLEMENTED status. Read-only source searches/line inspection completed;
+  no game/test/export changes or engine checks for this audit. Next action: discuss
+  source-matching darkening and await the user's implementation instruction.
+- Follow-up fidelity audit (2026-10-10, discussion only): root coordinated three
+  specialists, read-only ownership split into gameplay feedback, renderer/effects,
+  and UI/audio. Confirmed W07 missing darkening, P15 offline held-grenade/forced-release
+  input discrepancy (also present in published96), and U05 missing map-linked scoreboard
+  ID colors. Source paths, tests and documented adaptations are in
+  [acceptance gaps](acceptance-gaps.md#discussion-only-fidelity-audit-2026-10-10).
+  W07/P15/U05 are partial and reset to NOT_STARTED per the ledger's complete-code rule;
+  existing subsystem test evidence is preserved. This limited audit is not an
+  exhaustive parity pass. Changed files: `docs/status.md`, `docs/parity.md`,
+  `docs/acceptance-gaps.md`; read-only rg/Get-Content/git log/git show inspection and
+  documentation `git diff --check` passed. No game/test/export edits or engine runs
+  were made by this audit; unrelated in-progress workspace edits belong to other work.
+  Next action: discuss findings and audit source-visible state transitions before
+  implementing repairs under a later user instruction.
 - Continue integrated original-map/optional-effects and browser gesture/export acceptance.
 - Queued fidelity repairs (2026-10-10): user authorized implementation of the three
   confirmed omissions W07/P15/U05 after the previous chat finishes its mobile FPS work.
   Dependency: Codex thread `01a12458-d660-7c80-814f-2b4c0b641c15`, title
-  `Проверить запуск кода в web`, host local. It is still active and owns integration
-  and the engine/release lease; this task has not started game edits or engine checks.
+  `Проверить запуск кода в web`, host local. Its final response and idle status were
+  confirmed after the mobile31 publication. Implementation started from source
+  `309eda544a5cfc5e79ef4504164932ce11aa6957`, preserving that mobile release.
   Current-thread heartbeat automation `blockfield` was created ACTIVE to check every
   five minutes, wait for completion/lease release, then implement/test/browser-check
   and publish the three fixes without further approval. Disable it after verified
   completion. Scope: damaged-block darkening/color recovery (offline/network), source
   offline grenade press/forced-release behavior, and minimap-linked scoreboard ID colors.
-  Read-only thread/status inspection completed; docs-only diff check passed. Next action:
-  await dependency completion, reread current contracts and agree file ownership.
+  Root owns Main network presentation, network integration fixture, build registration,
+  shared contracts/docs, engine validation and release. `renderer_fidelity_audit` owns
+  only World/Chunk and new world damage fixtures; `gameplay_feedback_audit` owns
+  Controller/LocalSession and source/session/offline grenade fixtures;
+  `ui_audio_fidelity_audit` owns HUD/Scoreboard and UI/color fixtures. Specialists do
+  not run the engine or publish. Existing protocol/server rules stay unchanged.
+  Next action: integrate confirmed-event damage expiry, review specialist handoffs,
+  then run parser and behavioral/browser validation. No new verification claim yet.
+- Fidelity handoff milestone: specialists returned all files/leases to root. Initial
+  parser/import, World damage31/0, session166/0, source parity186/0 and UI284/0 passed.
+  A final source pin-minimum refinement adds temporary denial/re-entry coverage;
+  repeated source parity189/0 passed. The first network fixture used a noncanonical
+  direct-helper source event ID, causing codec rejection/remote close; its diagnostic
+  also tried mutating a frozen event. Failed logs remain `.cache/logs/fidelity-network-
+  damage*.log`; the fixture now supplies canonical action IDs and mutable copies,
+  and has a bounded recovery wait. Production codec/authority were not changed.
+  A separate test-only actual-Main Web probe is being prepared for visible timed
+  damage/recovery and held-grenade input; it is excluded from the Pages game.
+  Full validation/export/browser/publication remain pending.
+- Integration follow-up: lab119/0, mobile controls2381/0 and touch-look/settings144/0
+  passed. Lab's immediate quick-release assertion needed one real controller frame
+  after advancing the pin timer, consistent with original SetWeaponInput. A network
+  controller fixture timed out1249/2 after reading pending-class authority before
+  the client ACK/fresh-stream barrier. Its manually driven controller now retries
+  the retained team intent as actual Main does, and verifies one request cursor
+  advance. No input clock, admission, network or server production changes.
+  Failed logs are retained; corrected fixture/native GPU checks are pending.
+- Coherent fidelity code checkpoint: import clean; world31/0, session166/0,
+  source189/0, UI284/0, actual socket/Main damage32/0, lab119/0, mobile2381/0,
+  look144/0, network controller511/0 and shared rules144/0 passed on Godot
+  `4.7.2.stable.official.ed1daf0bf`. Native Compatibility damage5/0 changed10,568
+  pixels and restored with zero pixel difference; scoreboard23/0 verifies source
+  palette glyphs, live/saved preference and canonical network slots. Logs
+  `.cache/logs/fidelity-*`; PNGs `.cache/previews/{block-damage,scoreboard-colors}`.
+  W07/U05 are IMPLEMENTED; P15 stays partial for the additional shared gate case
+  documented in acceptance-gaps. Next: freeze this source, complete registered
+  checks/Web export, interact with separate actual-Main Web probe and production
+  export, publish/verify Pages, then disable automation. No new browser proof yet.
 - Saved browser downloads, subjective listening, sustained original-map performance and
   32-client60Hz capacity remain open. Separate native/probe evidence from browser acceptance.
 - Keep offline lab usable without a server; retain owner privacy, fixed authority, bounded

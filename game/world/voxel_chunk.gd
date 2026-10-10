@@ -60,7 +60,7 @@ func rebuild(world: Node3D, material: Material, rebuild_collision: bool = true) 
 				if packed == 0:
 					continue
 				var local_cell := Vector3(local_x, local_y, local_z)
-				var color := Color(float((packed >> 16) & 255) / 255.0, float((packed >> 8) & 255) / 255.0, float(packed & 255) / 255.0)
+				var color: Color = world.get_render_color(base + Vector3i(local_x, local_y, local_z), packed)
 				var render_voxel := not (water and base.y + local_y == 0 and blocks[index + 1] == 0)
 				for face in range(6):
 					var air_index := index + HALO_FACE_OFFSETS[face]

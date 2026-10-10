@@ -48,7 +48,7 @@ portrait/small-screen evidence, plus hardware limits, are recorded in
 | P12 | Aim down sights, half spread, crouch recoil reduction, viewmodel sway/bob and gun recoil | `Player.cpp:558,754`; `Client_Input.cpp:435`; `ClientPlayer.cpp:412,443` | 1+2 | IMPLEMENTED |
 | P13 | Distinct head/torso/arm/leg hit volumes, occlusion and horizontal hit range | `Player.cpp:542,1316`; `World.cpp:WeaponRayCast`; `PhysicsConstants.h:55` | 1+2 | IMPLEMENTED |
 | P14 | Spade primary melee/single-block damage and secondary three-block vertical dig | `Player.cpp:816,856,1250`; `NetClient.cpp:1142` | 1+2 | IMPLEMENTED |
-| P15 | Grenades: stock, pull pin, cook, throw/drop on death, inherited velocity, bounce, water and explosion | `Player.cpp:136,492,783`; `Grenade.cpp:49,63,82`; `NetClient.cpp:1156` | 1+2 | IMPLEMENTED |
+| P15 | Grenades: stock, press-edge pin pull, cook, manual/forced throw distinction, drop on death, inherited velocity, bounce, water and explosion | `Player.cpp:136,147-159,492,783`; `Grenade.cpp:49,63,82`; `NetClient.cpp:1156` | 1+2 | NOT_STARTED |
 | P16 | Weapon/team switching, all four tool hotkeys, wheel and last-tool selection | `LimboView.cpp`; `Client_Input.cpp:53,471,513,576`; `Player.cpp:1387` | 1+2 | IMPLEMENTED |
 
 ## Voxel world and modes
@@ -61,7 +61,7 @@ portrait/small-screen evidence, plus hardware limits, are recorded in
 | W04 | Right-button drag line, cube-line ordering, stock limit and invalid-line feedback | `Player.cpp:173`; `World.cpp:CubeLine`; `NetClient.cpp:1167` | 1+2 | IMPLEMENTED |
 | W05 | Delayed block placement while jumping; cancel after landing or loss of stock | `Player.cpp:436` | 1+2 | IMPLEMENTED |
 | W06 | Palette selection and eyedropper capture from existing map block | `PaletteView.cpp`; `Client_Input.cpp:374,534` | 1 | IMPLEMENTED |
-| W07 | Block health, weapon/spade damage and 10-second recovery of damaged surviving blocks | `Player.cpp:674,917`; `World.cpp:96,191` | 1+2 | IMPLEMENTED |
+| W07 | Block health, weapon/spade damage, damaged-block darkening and 10-second health/color recovery | `Player.cpp:674,917`; `World.cpp:96,191`; `Sources/Draw/GLMapChunk.cpp:247-252` | 1+2 | IMPLEMENTED |
 | W08 | Dig removes vertical 3 cells; grenade removes 3×3×3; bedrock rules match baseline | `NetClient.cpp:1122`; `World.cpp:328` | 1+2 | IMPLEMENTED |
 | W09 | Unsupported structures detach, fall as clusters, collide and generate fragments/sounds | `GameMapWrapper.cpp`; `World.cpp:281`; `FallingBlock.cpp`; `Client_LocalEnts.cpp` | 1+2 | IMPLEMENTED |
 | W10 | Save/export edited map as VXL | `GameMap.cpp:93`; `Client_Input.cpp:562`; `Client_Draw.cpp:TakeMapShot` | 1 | IMPLEMENTED |
@@ -78,7 +78,7 @@ portrait/small-screen evidence, plus hardware limits, are recorded in
 | U02 | Limbo team/weapon chooser, pause menu, setup and return-to-game | `LimboView.cpp`; `Resources/Scripts/Gui/Client/Menu.as` | 1 | IMPLEMENTED |
 | U03 | HUD: HP, clip/stock, block/grenade stocks, crosshair, hit indicator, reload/cook states | `Client_Draw.cpp:393,446,764`; `ClientPlayer.cpp:Draw2D` | 1 | IMPLEMENTED |
 | U04 | Minimap + large map, scale/zoom, coordinate grid, players, teams, bases/intel/territories | `MapView.cpp:172,178,239,549,585`; `Client_Input.cpp:536` | 1+2 | IMPLEMENTED |
-| U05 | Scoreboard, team score, players/kills, spectator list and match result messages | `ScoreboardView.cpp`; `CenterMessageView.cpp`; `Client_NetHandler.cpp` | 1+2 | IMPLEMENTED |
+| U05 | Scoreboard, team score, players/kills, map-linked player ID colors, spectator list and match result messages | `ScoreboardView.cpp:278,291-298`; `CenterMessageView.cpp`; `Client_NetHandler.cpp` | 1+2 | IMPLEMENTED |
 | U06 | Kill feed, alerts, hurt overlay, names under crosshair and TC progress bar | `ChatWindow.cpp`; `HurtRingView.cpp`; `TCProgressView.cpp`; `Client_Draw.cpp:288,675,790` | 1+2 | IMPLEMENTED |
 | U07 | Global/team chat, input history and scrollable log; offline event log for test sessions | `Resources/Scripts/Gui/Client/ChatSayWindow.as`; `FieldWithHistory.as`; `ChatLogWindow.as` | 1+2 | IMPLEMENTED |
 | U08 | Free spectator, first/third-person following, dead-player camera and third-person debug view | `ClientCameraMode.h`; `Client_Scene.cpp`; `Client_Input.cpp:327` | 1+2 | IMPLEMENTED |
@@ -134,6 +134,34 @@ Each row is accepted only after recording: implementation file(s), verification 
 Iteration 1 release gate: all iteration-1 and offline portions of `1+2` rows verified, with any agreed platform adaptation explicitly documented; T01–T06 and B01–B04 verified; deployed URL tested. Iteration 2 release gate: multiplayer portions verified, two independent browser clients tested against deployed server, including join-after-destruction and reconnect.
 
 ## Subsystem evidence log
+
+2026-10-10 authorized three-gap repair: W07 cosmetic mask uses exact source integer
+RGB halving without changing VXL/minimap/occupancy/collision/journal; offline and
+confirmed network adapters own recovery and edit/reset cleanup (ADR0009). World
+mesh31/0 and actual native sockets/Main damage32/0 passed. Source/controller189/0
+and session166/0 cover effective grenade edges, held automatic throw, manual-only
+cooldown, pin minimum and temporary input denial. UI284/0 and native GPU23/0 cover
+actual ID glyph colors, live/saved option and canonical network IDs. Damage GPU5/0
+changed10,568 pixels and recovered with zero pixel difference. Lab119/0,
+mobile2381/0, touch-look144/0, network controller511/0 and shared rules144/0 passed.
+W07/U05 return to IMPLEMENTED; full row/browser acceptance is still separate.
+P15 stays partial/NOT_STARTED because the separate shared raw-button cooldown
+gate remains open, documented in acceptance-gaps. Logs `.cache/logs/fidelity-*`;
+browser/frozen release/publication pending at this checkpoint.
+
+2026-10-10 discussion-only fidelity audit: W07/P15/U05 have partial implementations
+and are returned to NOT_STARTED under this ledger's complete-code rule. This does
+not erase their recorded passing subsystem checks. W07 lacks surviving-hit terrain
+darkening; block-recovery tests assert occupancy, not color. P15 offline input can
+start another cook while primary remains held after forced release, and its release
+helper always adds a0.5s cooldown; the shared network rules already preserve the
+source press edge and automatic/manual distinction. The same offline paths were
+confirmed in published source96 with git show. U05 omits the native per-player ID
+palette link to the minimap when that option is enabled. All three are source/code
+findings, not new browser reproductions. Documented terrain-interior/water/debris,
+audio and extension adaptations are separate from these omissions. See
+[fidelity audit](acceptance-gaps.md#discussion-only-fidelity-audit-2026-10-10).
+No game/test/export changes or engine runs were made for this audit.
 
 2026-10-10 unpublished final integration: native source-ray APIs377/0 preserve CastRay2 binary32/ties/step counts and legacy CastRay1024/wrapping/sky behavior. Root consumers use the corresponding families for weapons/build/spade/camera/focus, legacy eyedropper and audio; metric queries remain for authored unrelated rules. Actual Main offline lifecycle19/0 covers moving death bodies,16/6 corpse budgets, complete CTF/TC wins and reset. UI247/0, console76/0 and connection menu72/0 cover source gain/EFX controls, far eyedropper/fog fallback, preparation and exact first-person/follow OBB hottracking. Source wireframes pass6216/0 standalone plus6221/0 native GPU, with actual HUD name-independent gates checked. Camera rays11/0 and actual source input31/0 cover source nearest/flags, opposing keys, ADS audio, tool alerts, map sounds and slash chat; API reload gates bring session157/0. The progressive map image/upload-state check is headless, not texture readback. Environmental DSP has explicit adaptations in audio.md; native PCM134/81 and actual Web113/64 pass with clean diagnostics (audio-web-proof.md). These facts do not yet accept entire feature rows or subjective browser listening.
 

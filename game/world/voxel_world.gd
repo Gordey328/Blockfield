@@ -69,6 +69,7 @@ var _blocks: PackedInt32Array:
 var _chunks: Dictionary = {}
 var _dirty: Dictionary = {}
 var _collision_dirty: Dictionary = {}
+var _damaged_blocks: Dictionary[Vector3i, bool] = {}
 var _streaming := false
 var _view_chunk := Vector3i(-1000, 0, -1000)
 var _spawn := Vector3(48.5, 5.0, 70.5)
@@ -131,6 +132,33 @@ func is_in_bounds(cell: Vector3i) -> bool:
 func get_block(cell: Vector3i) -> int:
 	return data.get_block(cell)
 
+func set_block_damaged(cell: Vector3i, damaged: bool) -> void:
+	# Damage is a presentation state; authoritative RGB/occupancy and map history
+	# remain unchanged. The adapter owns health and the source recovery deadline.
+	if damaged and get_block(cell) == 0:
+		return
+	if damaged == _damaged_blocks.has(cell):
+		return
+	if damaged:
+		_damaged_blocks[cell] = true
+	else:
+		_damaged_blocks.erase(cell)
+	# Only this cell's colors change. Neither AO neighbors nor collision change.
+	_dirty[_chunk_of(cell)] = true
+
+func is_block_damaged(cell: Vector3i) -> bool:
+	return _damaged_blocks.has(cell)
+
+func clear_block_damage() -> void:
+	for cell: Vector3i in _damaged_blocks:
+		_dirty[_chunk_of(cell)] = true
+	_damaged_blocks.clear()
+
+func get_render_color(cell: Vector3i, packed: int) -> Color:
+	# GLMapChunk halves each byte with an integer shift, including odd RGB values.
+	var rgb: int = ((packed & 0xfefefe) >> 1) if _damaged_blocks.has(cell) else packed
+	return block_color(rgb)
+
 func clip_box(position: Vector3) -> bool:
 	return data.clip_box(position)
 
@@ -159,6 +187,7 @@ func _present_transaction(transaction: Dictionary) -> void:
 	var changes: Array = []
 	for change: Dictionary in transaction.changes:
 		var cell: Vector3i = change.cell
+		_damaged_blocks.erase(cell)
 		if _irradiance != null:
 			_irradiance.invalidate(cell)
 		if _topdown_image != null:
@@ -386,6 +415,7 @@ func clear_world(size: Vector3i) -> void:
 	_clear_world_visuals()
 
 func _clear_world_visuals() -> void:
+	_damaged_blocks.clear()
 	_irradiance = null
 	if _material != null:
 		_material.set_shader_parameter("irradiance_enabled", false)

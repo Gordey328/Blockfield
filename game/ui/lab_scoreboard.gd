@@ -3,6 +3,7 @@ extends PanelContainer
 ## ScoreboardView.cpp: team columns sorted by score, dead gray, local highlight.
 var session: LocalSession
 var main: Node3D
+var per_player_colors: bool = true
 var _columns: Array[RichTextLabel]=[]
 var _spectators: Label
 var _title: Label
@@ -57,8 +58,14 @@ func _process(_delta: float) -> void:
 		label.pop()
 		for row in rows:
 			if int(row.team)!=team_index:continue
+			# Native ScoreboardView shares the map palette for IDs; disabling it
+			# makes IDs white independently of the following name/death tint.
+			var id_color: Color=LabMap.modify_color(Color(LabMap.PLAYER_PALETTE[posmod(int(row.id),32)])) if per_player_colors else Color.WHITE
+			label.push_color(id_color)
+			label.add_text("#%02d"%int(row.id))
+			label.pop()
 			label.push_color(Color("f1e6ad") if bool(row.local) else (Color.WHITE if bool(row.alive) else Color("78848b")))
-			label.add_text("#%02d   %s   %d\n"%[row.id,row.name,row.score])
+			label.add_text("   %s   %d\n"%[row.name,row.score])
 			label.pop()
 	var names:=PackedStringArray()
 	for row in rows:

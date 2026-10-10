@@ -68,6 +68,7 @@ var _last_view_front := Vector3.FORWARD
 var _line_start := Vector3i(-1, -1, -1)
 var _block_secondary_held:=false
 var _grenade_cooking := false
+var _grenade_primary_held: bool = false
 var _native_velocity := Vector3.ZERO
 var _motion: SourcePlayerMotion.State
 var _pending_cell := Vector3i(-1, -1, -1)
@@ -187,10 +188,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Inputs below invoke offline authority. In multiplayer their button edges
 	# reach the shared rules through the fixed input command instead.
 	if session is NETWORK_SESSION: return
-	if event.is_action_pressed("primary") and session.current_tool == 3 and can_use_tool():
-		_begin_grenade_cook()
-	if event.is_action_released("primary") and _grenade_cooking:
-		_throw_grenade()
+	if event.is_action("primary"):
+		_update_offline_grenade_input(event.is_action_pressed("primary"))
 	if event.is_action_pressed("secondary") and session.current_tool == 1 and can_use_tool():
 		_begin_block_line()
 		_block_secondary_held=true
@@ -214,6 +213,7 @@ func _physics_process(delta: float) -> void:
 	if session.health <= 0.0 and session.team < 2: _death_elapsed += delta
 	_sync_camera_mode()
 	if session.team >= 2:
+		_update_offline_grenade_input(false)
 		session.set_trigger_held(false)
 		crouching = false
 		sprinting = false
@@ -226,6 +226,7 @@ func _physics_process(delta: float) -> void:
 	_sync_motion_state()
 	wading = SourcePlayerMotion.get_wade(world,_motion)
 	if not controls_enabled or session.health <= 0:
+		_update_offline_grenade_input(false)
 		session.set_trigger_held(false)
 		aiming = false
 		sprinting = false
@@ -306,7 +307,7 @@ func _physics_process(delta: float) -> void:
 		_line_start=Vector3i(-1,-1,-1)
 	_block_secondary_held=block_secondary
 	session.set_trigger_held(Input.is_action_pressed("primary") and session.current_tool==2 and allowed)
-	if _grenade_cooking and not allowed:_throw_grenade()
+	_update_offline_grenade_input(Input.is_action_pressed("primary"))
 	if allowed and session.team < 2:
 		if Input.is_action_pressed("primary"):
 			match session.current_tool:
@@ -315,8 +316,6 @@ func _physics_process(delta: float) -> void:
 				1:
 					if not block_secondary:_build_single()
 				2: _shoot()
-				3:
-					if not session.is_cooking_grenade:_begin_grenade_cook()
 		if digging:
 			_spade(true)
 	if not Input.is_action_pressed("primary") or session.current_tool != 2: _dry_fire_held = false
@@ -541,6 +540,7 @@ func _observe_selection() -> void:
 		_line_start=Vector3i(-1,-1,-1)
 		_block_secondary_held=false
 		_grenade_cooking=false
+		_grenade_primary_held=false
 		_dig_held=false
 		_tool_clock=0.0
 		_was_reloading=false
@@ -701,6 +701,8 @@ func _connect_skin_signals() -> void:
 
 func _clear_action_state() -> void:
 	_block_health.clear()
+	if world != null and not session is NETWORK_SESSION:
+		world.clear_block_damage()
 	_clear_input_state()
 
 func _clear_input_state() -> void:
@@ -715,6 +717,7 @@ func _clear_input_state() -> void:
 	_line_start = Vector3i(-1, -1, -1)
 	_block_secondary_held=false
 	_grenade_cooking = false
+	_grenade_primary_held = false
 	_dig_held = false
 	_dig_first=true
 	_tool_clock = 0.0
@@ -735,6 +738,7 @@ func _restore_block_health() -> void:
 	for cell in _block_health.keys():
 		if session.session_time - float(_block_health[cell].time) >= 10.0:
 			_block_health.erase(cell)
+			world.set_block_damaged(cell,false)
 
 func _shoot() -> void:
 	if session is NETWORK_SESSION: return
@@ -839,6 +843,7 @@ func _damage_block(cell: Vector3i, damage: float, allow_destroy: bool = true) ->
 		return true
 	else:
 		_block_health[cell] = {"health":maxf(0.0, health),"time":session.session_time}
+		world.set_block_damaged(cell,health < 100.0)
 	return false
 
 func _spade(dig: bool) -> void:
@@ -1019,6 +1024,27 @@ func _cube_line(start: Vector3i, end: Vector3i, limit: int) -> Array[Vector3i]:
 		cell[axis] += step[axis]
 		next_crossing[axis] += increment[axis]
 	return cells
+
+func _update_offline_grenade_input(primary: bool) -> void:
+	if session == null or session is NETWORK_SESSION:
+		return
+	var allowed: bool = session.current_tool == LocalSession.Tool.GRENADE and can_use_tool()
+	var next: bool = primary and allowed and session.grenade_cooldown <= 0.0 \
+		and (session.grenades > 0 or session.unlimited_ammo)
+	# Source SetWeaponInput retains the held input until the pin is pulled,
+	# including input denied by sprint/menu gates during that initial interval.
+	if _grenade_primary_held and session.is_cooking_grenade and session.grenade_cook_time < 0.15:
+		next = true
+	if next != _grenade_primary_held:
+		_grenade_primary_held = next
+		if next:
+			_begin_grenade_cook()
+		elif session.is_cooking_grenade:
+			_throw_grenade()
+	elif not allowed and session.is_cooking_grenade and session.grenade_cook_time >= 0.15:
+		_throw_grenade()
+	# An automatic throw leaves _grenade_primary_held true, so a continuous
+	# press cannot pull the next pin. A release and a new press are required.
 
 func _begin_grenade_cook() -> void:
 	if session is NETWORK_SESSION: return

@@ -39,7 +39,7 @@ func _run() -> void:
 	world=app.get_node("VoxelWorld")
 	await frames(4)
 	check(hud.is_menu_open() and not player.controls_enabled,"startup menu owns input")
-	for scenario in ["test_bindings","test_input_chat","test_resources_and_events","test_hottracked_follow","test_map_objectives","test_team_metadata_and_target_spawn","test_native_palette","test_native_reticle_alerts","test_target_animation_controls","test_console_chat","test_settings","test_mobile_bridge"]:
+	for scenario in ["test_bindings","test_input_chat","test_resources_and_events","test_hottracked_follow","test_map_objectives","test_team_metadata_and_target_spawn","test_scoreboard_colors","test_native_palette","test_native_reticle_alerts","test_target_animation_controls","test_console_chat","test_settings","test_mobile_bridge"]:
 		var completed: Variant=await call(scenario)
 		check(completed==true,"scenario reaches completion: "+scenario)
 	LabInputBindings.release_actions()
@@ -311,6 +311,73 @@ func test_resources_and_events() -> bool:
 	hud._process(0)
 	check(hud._intel_icon.visible,"carried intel displays source icon")
 	session.set_mode("sandbox")
+	return true
+
+func test_scoreboard_colors() -> bool:
+	app.reset_lab()
+	var saved_colors: bool=hud._map_player_colors
+	var saved_name: String=app.player_name
+	var saved_targets: Array[Dictionary]=session.targets.duplicate(true)
+	var saved_score: int=session.score
+	var saved_team: int=session.team
+	var saved_health: int=session.health
+	var saved_touch_mode: int=hud.touch_controls_mode
+	var board: LabScoreboard=hud._scoreboard
+	app.player_name="Local [b]"
+	session.team=0
+	session.health=100
+	session.score=30
+	session.targets.assign([
+		{"id":7,"name":"Alive [b]","team":0,"score":20,"deaths":0,"alive":true},
+		{"id":3,"name":"Dead","team":1,"score":10,"deaths":1,"alive":false},
+		{"id":38,"name":"Observer","team":2,"score":0,"deaths":0,"alive":false}
+	])
+	hud.set_console_setting("minimap_player_colors",true)
+	board.show()
+	board._process(0)
+	var first_text: String=board._columns[0].get_parsed_text()
+	var second_text: String=board._columns[1].get_parsed_text()
+	check(first_text.contains("#00   Local [b]   30\n") and first_text.contains("#07   Alive [b]   20\n"),"real scoreboard label keeps canonical offline IDs, scores and literal names when splitting ID color runs")
+	check(second_text.contains("#03   Dead   10\n") and board._spectators.text.contains("#38 Observer"),"real scoreboard preserves dead and spectator entries")
+	check(board.per_player_colors and hud._map.per_player_colors and hud._large_map.per_player_colors,"native ID-color preference reaches scoreboard and both map views")
+	var checkbox: CheckButton=hud._ui_settings_controls.minimap_player_colors
+	checkbox.button_pressed=false
+	board._process(0)
+	check(not board.per_player_colors and not hud._map.per_player_colors and not hud._large_map.per_player_colors,"actual settings checkbox disables ID colors live in scoreboard and both maps")
+	check(board._columns[0].get_parsed_text()==first_text and board._columns[1].get_parsed_text()==second_text,"ID-color setting never changes row text, ordering or literal-name parsing")
+	hud._send_chat("/cg_minimapPlayerColor 1")
+	check(board.per_player_colors and checkbox.button_pressed and hud._map.per_player_colors and hud._large_map.per_player_colors,"actual chat cvar re-enables ID colors and refreshes checkbox")
+	check(hud.set_console_setting("minimap_player_colors",false),"typed setting accepts the shared ID-color switch")
+	hud._map_player_colors=true
+	hud._apply_map_settings()
+	hud._load_ui_settings()
+	check(not board.per_player_colors and not checkbox.button_pressed and not hud._map.per_player_colors and not hud._large_map.per_player_colors,"saved disabled ID-color preference reloads into real scoreboard, maps and widget")
+	check(hud.touch_controls_mode==saved_touch_mode,"loading ID-color preference preserves mobile mode")
+
+	# Exercise the real network identity adapter without sockets or authority:
+	# local slot35 must use its stable ID, never the offline slot0 convention.
+	var replica:=BlockfieldClientReplica.new()
+	replica.actor_id=35
+	var network_view:=NetworkSession.new()
+	network_view.bind_replica(replica)
+	network_view.team=1
+	network_view.health=100
+	network_view.score=99
+	network_view.targets.assign([{"id":7,"name":"Remote canonical","team":1,"score":4,"deaths":0,"alive":true}])
+	board.session=network_view
+	board._process(0)
+	var network_text: String=board._columns[1].get_parsed_text()
+	check(network_text.contains("#35   Local [b]   99\n") and network_text.contains("#07   Remote canonical   4\n") and not network_text.contains("#00"),"real NetworkSession scoreboard uses canonical owner and remote identities instead of offline slot0")
+	check(int(board.get_rows()[0].id)==35 and bool(board.get_rows()[0].local),"scoreboard score sorting preserves canonical network owner identity")
+	board.session=session
+	network_view.free()
+	board.hide()
+	session.targets.assign(saved_targets)
+	session.score=saved_score
+	session.team=saved_team
+	session.health=saved_health
+	app.player_name=saved_name
+	hud.set_console_setting("minimap_player_colors",saved_colors)
 	return true
 
 func test_hottracked_follow() -> bool:

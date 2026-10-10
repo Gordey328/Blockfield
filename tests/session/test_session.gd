@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_reload_tool_gate()
 	_test_selection_transitions()
 	_test_grenades_and_stocks()
+	_test_grenade_automatic_release()
 	_test_targets_and_life_cycle()
 	_test_ctf()
 	_test_tc()
@@ -249,6 +250,36 @@ func _test_grenades_and_stocks() -> void:
 	s.restock()
 	check(s.magazine == 4 and s.reserve == 50 and s.grenades == 3 and s.blocks == 50,
 		"resupply replenishes reserve and tools without magically filling magazine")
+	s.free()
+
+
+func _test_grenade_automatic_release() -> void:
+	# Player.cpp:147-151 adds .5s after manual release; :490-494 uses a
+	# strict >2.9s forced throw and does not change nextGrenadeTime.
+	var s := new_session()
+	var throws: Array[Dictionary] = []
+	s.grenade_thrown.connect(func(data: Dictionary) -> void: throws.append(data))
+	s.select_tool(SESSION.Tool.GRENADE)
+	check(s.begin_grenade_cook(), "automatic fixture pulls its first pin")
+	s.update(2.9)
+	check(s.is_cooking_grenade and throws.is_empty(), "exact2.9 seconds retains the cooked grenade")
+	s.update(0.001)
+	check(throws.size() == 1 and bool(throws[0].get("automatic",false)) and not s.is_cooking_grenade,
+		"only strictly later than2.9 seconds forces one automatic throw")
+	check(is_zero_approx(s.grenade_cooldown) and s.begin_grenade_cook(),
+		"automatic throw permits an immediate new press without manual cooldown")
+	s.update(0.15)
+	var manual := s.release_grenade()
+	check(not manual.is_empty() and not bool(manual.get("automatic",true)) and is_equal_approx(s.grenade_cooldown,0.5),
+		"manual throw still starts the full half-second cooldown")
+	s.update(0.499)
+	check(not s.begin_grenade_cook(), "manual cooldown rejects a pin before its deadline")
+	s.update(0.0011)
+	check(s.begin_grenade_cook(), "manual cooldown admits a pin when the deadline passes")
+	check(s.release_grenade().is_empty(), "new manual release still observes minimum pin time")
+	s.update(3.01)
+	check(throws.size() == 3 and not bool(throws[2].get("automatic",true)) and is_equal_approx(s.grenade_cooldown,0.5),
+		"a queued manual release keeps manual cooldown even across a long update")
 	s.free()
 
 

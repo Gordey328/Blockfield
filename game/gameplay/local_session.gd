@@ -291,8 +291,10 @@ func update(delta: float) -> void:
 	_update_reload(delta)
 	if is_cooking_grenade:
 		grenade_cook_time += delta
-		if grenade_cook_time >= 2.9 or (_grenade_release_pending and grenade_cook_time >= 0.15):
+		if _grenade_release_pending and grenade_cook_time >= 0.15:
 			release_grenade()
+		elif grenade_cook_time > 2.9:
+			_release_grenade(true)
 	_update_objectives(delta)
 
 
@@ -429,6 +431,10 @@ func begin_grenade_cook() -> bool:
 
 
 func release_grenade() -> Dictionary:
+	return _release_grenade(false)
+
+
+func _release_grenade(automatic: bool) -> Dictionary:
 	if not is_cooking_grenade:
 		return {}
 	if grenade_cook_time < 0.15 and health > 0:
@@ -437,7 +443,7 @@ func release_grenade() -> Dictionary:
 	var grenade: Dictionary = {
 		"id": _next_grenade_id, "position": player_position,
 		"fuse": maxf(0.0, 3.0 - grenade_cook_time), "cook_time": grenade_cook_time,
-		"drop": health <= 0, "team": team
+		"drop": health <= 0, "team": team, "automatic": automatic
 	}
 	_next_grenade_id += 1
 	if not unlimited_ammo:
@@ -445,7 +451,10 @@ func release_grenade() -> Dictionary:
 	is_cooking_grenade = false
 	_grenade_release_pending = false
 	grenade_cook_time = 0.0
-	grenade_cooldown = 0.5
+	# Player::SetWeaponInput adds .5s only for a manual release. The forced
+	# throw in Player::Update calls ThrowGrenade without changing that clock.
+	if not automatic:
+		grenade_cooldown = 0.5
 	live_grenades.append(grenade)
 	grenade_thrown.emit(grenade)
 	changed.emit()

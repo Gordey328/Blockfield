@@ -7,6 +7,10 @@ var _network_resume := PackedByteArray()
 var _network_objective_signature := ""
 var _network_status := ""
 var _impact_colors: Dictionary[Vector3i,int] = {}
+const BLOCK_DAMAGE_RECOVERY_TICKS := 600
+var _network_block_damage_ticks: Dictionary[Vector3i,int] = {}
+var _network_block_edit_ticks: Dictionary[Vector3i,int] = {}
+var _network_damage_baseline_tick := -1
 var _network_raise_key := ""
 var _network_raise := 1.0
 
@@ -962,6 +966,10 @@ func _clear_network_views() -> void:
 	for node: Node3D in _grenade_nodes.values(): node.queue_free()
 	_grenade_nodes.clear()
 	_impact_colors.clear()
+	_network_block_damage_ticks.clear()
+	_network_block_edit_ticks.clear()
+	_network_damage_baseline_tick = -1
+	if world != null: world.clear_block_damage()
 	_network_raise_key = ""
 	_network_raise = 1.0
 	_network_objective_signature = ""
@@ -970,13 +978,44 @@ func _clear_network_views() -> void:
 
 func _network_install_map(data: VoxelData) -> bool:
 	_clear_network_views()
-	return world.set_map_data(data,"Network map",true) == OK
+	if world.set_map_data(data,"Network map",true) != OK: return false
+	_network_damage_baseline_tick = data.last_tick
+	return true
 
 func _network_apply_map(transaction: Dictionary) -> bool:
+	if not world.apply_map_transaction(transaction).ok: return false
 	for change: Dictionary in transaction.changes:
 		if change.before != 0: _impact_colors[change.cell] = change.before
+		_network_block_damage_ticks.erase(change.cell)
+		# Deltas precede queued effects. A hit on an earlier incarnation of this
+		# voxel must not darken a replacement, including edits in the same tick.
+		if change.after != 0: _network_block_edit_ticks[change.cell] = int(transaction.tick)
+		else: _network_block_edit_ticks.erase(change.cell)
 	while _impact_colors.size() > 4096: _impact_colors.erase(_impact_colors.keys()[0])
-	return bool(world.apply_map_transaction(transaction).ok)
+	return true
+
+func _network_mark_block_damage(event: Dictionary) -> void:
+	if event.get("dig",false) or event.get("predicted",false): return
+	var cell: Vector3i = event.cell
+	var hit_tick: int = event.tick
+	var confirmed_tick: int = (session as NETWORK_SESSION).confirmed_tick
+	if cell.y <= 1 or world.get_block(cell) == 0 \
+			or hit_tick <= _network_damage_baseline_tick \
+			or hit_tick <= _network_block_edit_ticks.get(cell,-1) \
+			or confirmed_tick > hit_tick + BLOCK_DAMAGE_RECOVERY_TICKS: return
+	_network_block_damage_ticks[cell] = maxi(hit_tick,_network_block_damage_ticks.get(cell,-1))
+	world.set_block_damaged(cell,true)
+
+func _network_restore_block_colors() -> void:
+	var confirmed_tick: int = (session as NETWORK_SESSION).confirmed_tick
+	for cell: Vector3i in _network_block_damage_ticks.keys():
+		if confirmed_tick > _network_block_damage_ticks[cell] + BLOCK_DAMAGE_RECOVERY_TICKS \
+				or world.get_block(cell) == 0:
+			world.set_block_damaged(cell,false)
+			_network_block_damage_ticks.erase(cell)
+	for cell: Vector3i in _network_block_edit_ticks.keys():
+		if confirmed_tick > _network_block_edit_ticks[cell] + BLOCK_DAMAGE_RECOVERY_TICKS:
+			_network_block_edit_ticks.erase(cell)
 
 func _poll_network() -> void:
 	network_client.poll()
@@ -1008,6 +1047,7 @@ func _poll_network() -> void:
 
 func _network_update_views() -> void:
 	if network_client.status != "live": return
+	_network_restore_block_colors()
 	var owner := network_client.get_owner_state()
 	if owner != null and owner.is_alive():
 		var key := "%d:%d:%d:%d" % [owner.match_epoch,owner.spawn_generation,owner.displayed_tool,owner.displayed_weapon]
@@ -1083,6 +1123,7 @@ func _network_present_event(event: Dictionary, already_played: bool) -> void:
 			else: audio.flesh_hit(event.position,false)
 		"tracer": effects.tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
 		"block_hit", "spade_block_hit":
+			_network_mark_block_damage(event)
 			var color: int = world.get_block(event.cell)
 			if color == 0: color = _impact_colors.get(event.cell,0x016f6f6f)
 			effects.block_hit(event.position,Vector3(event.normal),VoxelWorld.block_color(color),event.position.y < world.water_level)

@@ -38,7 +38,7 @@ func _run() -> void:
 	app.set_process(false)
 	player.set_physics_process(false)
 	app.hud.set_menu_visible(false)
-	for scenario in ["test_jump_order", "test_movement_friction", "test_build_contracts", "test_block_recovery", "test_tool_depletion", "test_ray_occlusion", "test_melee_contract", "test_match_reset"]:
+	for scenario in ["test_jump_order", "test_movement_friction", "test_build_contracts", "test_block_recovery", "test_offline_grenade_input", "test_tool_depletion", "test_ray_occlusion", "test_melee_contract", "test_match_reset"]:
 		var completed: Variant = await call(scenario)
 		check(completed == true, "scenario reaches completion: " + scenario)
 	release_actions()
@@ -327,19 +327,27 @@ func test_block_recovery() -> bool:
 	app.reset_lab()
 	player.set_physics_process(false)
 	var cell := Vector3i(40,4,40)
-	var color := VoxelWorld.pack_color(Color.GRAY)
+	var color := VoxelWorld.pack_color(Color8(255,128,65))
 	world.set_block(cell,color)
 	player._damage_block(cell,35)
+	check(world.is_block_damaged(cell) and world.get_block(cell) == color,
+		"first surviving hit marks visual damage without modifying canonical RGB")
+	check(world.get_render_color(cell,color).is_equal_approx(Color8(127,64,32)),
+		"damaged color uses the source byte mask and integer half on every RGB channel")
 	session.update(9.0)
 	player._damage_block(cell,35)
 	session.update(2.0)
 	player._restore_block_health()
+	check(world.is_block_damaged(cell), "latest hit refreshes both damage appearance and recovery deadline")
 	player._damage_block(cell,50)
 	check(world.get_block(cell) == 0, "block recovery deadline is refreshed by latest hit rather than first hit")
+	check(not world.is_block_damaged(cell), "destruction clears the damaged-block appearance")
 	world.set_block(cell,color)
 	player._damage_block(cell,35)
-	session.update(10.01)
+	session.update(10.0)
 	player._restore_block_health()
+	check(not world.is_block_damaged(cell) and world.get_render_color(cell,color).is_equal_approx(Color8(255,128,65)),
+		"exact ten-second recovery restores the original appearance")
 	player._damage_block(cell,70)
 	check(world.get_block(cell) != 0, "surviving damaged block regains full100HP after ten seconds")
 	player._damage_block(cell,35)
@@ -347,8 +355,169 @@ func test_block_recovery() -> bool:
 	world.set_block(cell,color)
 	player._damage_block(cell,35)
 	world.set_block(cell,VoxelWorld.pack_color(Color.RED))
+	check(not world.is_block_damaged(cell), "replacement clears the old voxel's damaged appearance")
 	player._damage_block(cell,70)
 	check(world.get_block(cell) != 0, "external cell replacement clears stale health from previous voxel")
+	check(world.is_block_damaged(cell), "new replacement voxel gets its own damaged state")
+	player._clear_action_state()
+	check(not world.is_block_damaged(cell) and world.get_block(cell) == VoxelWorld.pack_color(Color.RED),
+		"offline action reset clears damage appearance while retaining base voxel color")
+	player._damage_block(cell,70)
+	check(world.get_block(cell) != 0, "offline reset clears the previous logical damage as well as appearance")
+	return true
+
+func grenade_action(pressed: bool) -> void:
+	# Exercise the actual controller event path and the corresponding held Input
+	# state. The same InputEventAction is emitted by the mobile action bridge.
+	if pressed:
+		Input.action_press("primary")
+	else:
+		Input.action_release("primary")
+	var event := InputEventAction.new()
+	event.action = "primary"
+	event.pressed = pressed
+	player._unhandled_input(event)
+
+func ready_offline_grenade() -> void:
+	release_actions()
+	session.respawn()
+	session.select_tool(LocalSession.Tool.GRENADE)
+	player.respawn_at(world.get_spawn_position())
+	app.hud.set_menu_visible(false)
+	for tick in 90:
+		player._physics_process(1.0/60.0)
+		if player.can_use_tool():
+			break
+	check(player.can_use_tool(), "offline grenade fixture raises the actual tool before input")
+
+func test_offline_grenade_input() -> bool:
+	# Source SetWeaponInput starts a cook on the effective press edge; Update's
+	# automatic throw retains that held edge and omits manual-release cooldown.
+	app.reset_lab()
+	player.set_physics_process(false)
+	session.unlimited_ammo = false
+	var was_invulnerable: bool = session.invulnerable
+	session.invulnerable = true
+	var throws: Array[Dictionary] = []
+	var observe_throw: Callable = func(data: Dictionary) -> void: throws.append(data)
+	session.grenade_thrown.connect(observe_throw)
+	ready_offline_grenade()
+	grenade_action(true)
+	check(session.is_cooking_grenade and session.grenades == 3, "actual primary press pulls one pin without consuming stock")
+	session.update(2.9)
+	player._physics_process(1.0/60.0)
+	check(session.is_cooking_grenade and throws.is_empty(), "actual controller retains a held grenade at exactly2.9 seconds")
+	session.update(0.001)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 1 and bool(throws[0].get("automatic",false)) and session.grenades == 2,
+		"held primary creates exactly one automatic throw after the strict boundary")
+	for tick in 240:
+		session.update(1.0/60.0)
+		player._physics_process(1.0/60.0)
+	check(throws.size() == 1 and not session.is_cooking_grenade and session.grenades == 2,
+		"continuing the same held press cannot cook or throw another grenade")
+	ready_offline_grenade()
+	grenade_action(true)
+	session.update(2.901)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 2 and bool(throws[1].get("automatic",false)), "immediate-new-press fixture reaches an automatic throw")
+	grenade_action(false)
+	grenade_action(true)
+	check(session.is_cooking_grenade and is_zero_approx(session.grenade_cooldown),
+		"release plus immediate new press after automatic throw can pull the next pin")
+	session.update(0.2)
+	grenade_action(false)
+	check(throws.size() == 3 and not bool(throws[2].get("automatic",true)) and is_equal_approx(session.grenade_cooldown,0.5),
+		"actual manual release starts the original half-second cooldown")
+	grenade_action(true)
+	session.update(0.499)
+	player._physics_process(1.0/60.0)
+	check(not session.is_cooking_grenade and throws.size() == 3, "held new press is denied before the manual deadline")
+	session.update(0.0011)
+	player._physics_process(1.0/60.0)
+	check(session.is_cooking_grenade, "press held during manual cooldown begins when its effective edge becomes available")
+	grenade_action(false)
+	session.update(0.149)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 3 and session.is_cooking_grenade, "quick controller release retains the grenade until pin minimum")
+	session.update(0.0011)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 4 and not session.is_cooking_grenade and session.grenades == 0,
+		"pin minimum completes one manual release and consumes only one grenade")
+
+	ready_offline_grenade()
+	grenade_action(true)
+	session.update(0.05)
+	session.select_tool(LocalSession.Tool.WEAPON)
+	session.update(3.1)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 4 and not session.is_cooking_grenade and session.grenades == 3,
+		"tool change cancels the held edge and grenade without delayed throw")
+
+	ready_offline_grenade()
+	grenade_action(true)
+	session.update(0.05)
+	app.hud.set_menu_visible(true)
+	player._physics_process(1.0/60.0)
+	check(session.is_cooking_grenade and throws.size() == 4,
+		"brief denied input retains the source primary state before pin minimum")
+	session.update(0.03)
+	app.hud.set_menu_visible(false)
+	grenade_action(true)
+	session.update(0.081)
+	player._physics_process(1.0/60.0)
+	check(session.is_cooking_grenade and session.grenade_cook_time >= 0.15 and throws.size() == 4,
+		"fresh press before pin minimum keeps the same cook after brief input denial")
+	session.select_tool(LocalSession.Tool.WEAPON)
+
+	ready_offline_grenade()
+	grenade_action(true)
+	session.update(0.05)
+	session.invulnerable = false
+	session.damage_player(100.0)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 5 and bool(throws[4].drop) and session.grenades == 2,
+		"death during pin pull drops exactly one grenade before the minimum")
+	session.damage_player(100.0)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 5, "dead-controller input cannot drop a second grenade")
+	session.invulnerable = true
+
+	ready_offline_grenade()
+	grenade_action(true)
+	session.update(0.05)
+	app.hud.set_menu_visible(true)
+	player._physics_process(1.0/60.0)
+	session.update(0.101)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 6 and not session.is_cooking_grenade and not player.controls_enabled,
+		"opening the menu releases a held grenade once while respecting pin minimum")
+	session.update(1.0)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 6, "disabled menu input cannot begin the next cook")
+	app.hud.set_menu_visible(false)
+	grenade_action(true)
+	check(session.is_cooking_grenade, "fresh press works after closing the menu without a stale held edge")
+	session.select_tool(LocalSession.Tool.WEAPON)
+
+	ready_offline_grenade()
+	grenade_action(true)
+	session.update(0.05)
+	app.hud._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	player._physics_process(1.0/60.0)
+	session.update(0.101)
+	player._physics_process(1.0/60.0)
+	check(throws.size() == 7 and not session.is_cooking_grenade and not Input.is_action_pressed("primary"),
+		"focus loss releases the cook and physical action without repeating it")
+	session.update(0.5)
+	player._physics_process(1.0/60.0)
+	app.hud._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+	grenade_action(true)
+	check(session.is_cooking_grenade, "focus return accepts a new primary press")
+	session.select_tool(LocalSession.Tool.WEAPON)
+	session.grenade_thrown.disconnect(observe_throw)
+	session.invulnerable = was_invulnerable
+	release_actions()
 	return true
 
 func test_tool_depletion() -> bool:
