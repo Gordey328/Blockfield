@@ -147,7 +147,11 @@ mobile2381/0, touch-look144/0, network controller511/0 and shared rules144/0 pas
 W07/U05 return to IMPLEMENTED; full row/browser acceptance is still separate.
 P15 stays partial/NOT_STARTED because the separate shared raw-button cooldown
 gate remains open, documented in acceptance-gaps. Logs `.cache/logs/fidelity-*`;
-browser/frozen release/publication pending at this checkpoint.
+Frozen validation chain0898d6c→dcee15f completed, with test-only07b3a1b audio cleanup;
+actual exported WebGL probe8/0 checked darkening/recovery, grenade holds and ID colors.
+Public dcee15f metadata/HTML/PCK match bundle812b316. Regular local/public scenes
+were exercised with preserved mobile controls and Title.vxl. This evidence accepts
+the three specific repairs, not every feature in these rows. [Fidelity evidence](fidelity-repairs.md).
 
 2026-10-10 discussion-only fidelity audit: W07/P15/U05 have partial implementations
 and are returned to NOT_STARTED under this ledger's complete-code rule. This does

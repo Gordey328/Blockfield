@@ -1,6 +1,6 @@
 # Project status
 
-Updated: 2026-10-10 (Europe/Moscow). This page is the authoritative current entry point.
+Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
 ## Recover context
@@ -26,13 +26,19 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `31c513d0aa182aaf42db51146b83a7aa22d1cd2c`, committed/pushed.
+- Published client source: `dcee15f0b7bcb4bf15bf70a638935bcd973d49f4`, committed/pushed.
 - Subsequent documentation records do not change the published binaries. Specialist
   handoffs and the mobile release are complete. Current fidelity-repair ownership is
   recorded below; root now owns the engine/release lease.
 
 ## Frozen validation
 
+- Fidelity repairs: recorded frozen0898d6c successful full prefix through mobile-controls;
+  dcee15f import/mobile-look144/0/damage31/0; test-only07b3a1b socket-damage32/0;
+  dcee15f shaped latency459/0, runtime/server-launcher smoke and Web export. `game/`
+  bytes are identical across this chain. Full suites did not rerun on dcee15f; original
+  cleanup diagnostics and manifest are retained. Actual exported WebGL probe8/0 plus
+  regular local/public gameplay checks passed. [Detailed evidence](fidelity-repairs.md).
 - Mobile FPS: complete79 behavioral/latency checks, parser/import, runtime/server-launcher
   smoke and Web export passed on frozen3c408e818859. Exact subsequent UI-only diffs
   move building feedback, keep captions readable, shorten the grenade caption and
@@ -59,11 +65,12 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Published artifacts
 
-- [Pages development build](https://gordey328.github.io/Blockfield/) serves the verified31 export.
-  Bundle `e28bfddd165209defbc388e398c9fc35d5bfae84`; public metadata confirms clean31 source.
+- [Pages development build](https://gordey328.github.io/Blockfield/) serves the checked dcee15f export.
+  Bundle `812b31680bd84c06be42ccfed64e9551bc77ceaa`; public metadata confirms clean dcee15f source.
 - Public `index.pck` equals the local export, SHA256:
-  `7be6d3864fe75fa089082d0b4ad4cf1c99f350940ff1284b9592af675a0356bd` (16,167,776bytes).
-  Public HTML also hash-matches; report `.cache/previews/public-mobile-fps-31c513d0aa18.json`.
+  `4ad38a3f478501eff4b166c5c8410e31fc8abb3da5813d07a760da0dac4e099f` (16,170,288bytes).
+  Public HTML also hash-matches; report `.cache/previews/public-fidelity-dcee15f0b7bc.json`.
+  Previous mobile31 publication/hash evidence remains in mobile-controls/history.
 - [Server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740)
   ZIP publicly downloaded/hash-verified:29,332,846bytes; SHA256:
   `054a6c9dc437cbe7d17541fc4f9428ada190cb410dab356ac833c4e0180d0974`.
@@ -225,6 +232,28 @@ the user's chosen deployment scope is Docker/configuration preparation.
   export, publish/verify Pages, then disable automation. No new browser proof yet.
 - Saved browser downloads, subjective listening, sustained original-map performance and
   32-client60Hz capacity remain open. Separate native/probe evidence from browser acceptance.
+- Fidelity frozen-chain milestone (2026-10-11 local): full0898d6c prefix through mobile
+  controls passed; mobile-look144/0 then reported two Vorbis resources at exit. Verbose
+  diagnostics identify the Limbo/Select playback, not gameplay failures. The fixture
+  now drains200ms real mixer time, like existing lab/UI tests, rather than200ms virtual
+  fixed-FPS time. Root owns the engine/release lease. Frozen dcee15f0b7bc has byte-identical
+  `game/` and unchanged prefix fixtures compared with0898d6c; only test-only probe and
+  mobile-look cleanup differ. Import/look144/0/damage31/0 passed; remaining suffix/export
+  and actual browser/public verification are in progress. Initial failures are preserved;
+  no claim that the entire suite reran on dcee15f. Details: [fidelity repairs](fidelity-repairs.md).
+- Fidelity completion (2026-10-11 local): all three authorized repairs are implemented
+  and checked in the separate actual-Main WebGL probe8/0: source shot darkening,
+  original RGB recovery after10s, held automatic grenade/new press/manual cooldown,
+  ID palette ON/OFF. Ordinary local export ran with preserved mobile controls,
+  Shotgun/target kill and drag-look; public dcee15f loaded original Title.vxl with
+  terrain, HUD, rifle/minimap and drag fallback. IAB pointer lock reported
+  WrongDocumentError; drag-look remains usable. No broad performance/audio/phone
+  acceptance is implied. Published metadata/HTML/PCK match the exact frozen export.
+  Automation `blockfield` is PAUSED after completion. Specialists and engine/release
+  leases are returned to root; temporary probe/local tabs and HTTP helpers are stopped.
+  W07/U05 remain IMPLEMENTED; P15's separate shared raw-button gate remains open.
+  No remaining action in this authorized three-fix task. Next project work: remaining
+  source fidelity and integrated acceptance under the existing scope.
 - Keep offline lab usable without a server; retain owner privacy, fixed authority, bounded
   input/history/map queues and same-time terrain/player rewind. [Multiplayer contracts](multiplayer-plan.md).
 - GitHub Actions account billing blocks runs before steps (run38031633237); local frozen

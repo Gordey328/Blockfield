@@ -51,8 +51,10 @@ and extension decisions do not explain or authorize the newly confirmed omission
 
 ## Authorized fidelity repair 2026-10-10
 
-Implementation follow-up: the three specific omissions above are now repaired in
-the current workspace; release evidence is recorded in status/parity after checks.
+Implementation follow-up: the three specific omissions above are repaired and
+published as client dcee15f0b7bc. Native checks, actual exported WebGL probe8/0,
+public Title.vxl interaction and exact metadata/HTML/PCK hashes are recorded in
+[fidelity evidence](fidelity-repairs.md). Mobile changes are preserved.
 World's separate mesh-color mask and offline/confirmed-network expiry are specified
 in [ADR0009](decisions/0009-block-damage-presentation.md). Offline grenade input
 preserves effective press edges, pin minimum and manual-only cooldown. Scoreboard
