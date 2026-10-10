@@ -17,6 +17,9 @@ func _ready() -> void:
 	app.set_locale("en")
 	app.hud.set_mobile_controls_mode(2)
 	app.hud.set_menu_visible(false)
+	# Browser clicks operate the fixture buttons. Scripted action holds below
+	# drive the actual controller without those UI clicks firing an extra shot.
+	InputMap.action_erase_events("primary")
 	app.session.invulnerable = true
 	app.session.unlimited_ammo = false
 	for soldier: Node3D in app._target_nodes: soldier.queue_free()

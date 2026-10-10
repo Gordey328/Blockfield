@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import shutil
+import hashlib
 import build
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--release', required=True, type=Path)
+    parser.add_argument('--fixture', type=Path, help='Explicit separately committed test-only fixture override')
     args = parser.parse_args()
     source = args.release.resolve()
     if source.parent != ROOT/'.cache' or not source.name.startswith('release-'):
@@ -18,7 +20,9 @@ def main():
     shutil.copytree(source/'game', destination/'game', ignore=shutil.ignore_patterns('.godot'))
     probe = destination/'game'/'__probe'
     probe.mkdir()
-    shutil.copy2(source/'tests'/'browser'/'fidelity_probe.gd',probe/'fidelity.gd')
+    fixture = args.fixture.resolve() if args.fixture else source/'tests'/'browser'/'fidelity_probe.gd'
+    shutil.copy2(fixture,probe/'fidelity.gd')
+    print('Fixture SHA256: '+hashlib.sha256(fixture.read_bytes()).hexdigest(),flush=True)
     (probe/'fidelity.tscn').write_text('[gd_scene load_steps=2 format=3]\n[ext_resource type="Script" path="res://__probe/fidelity.gd" id="1"]\n[node name="FidelityProbe" type="Node"]\nscript=ExtResource("1")\n',encoding='utf-8')
     config = destination/'game'/'project.godot'
     text = config.read_text(encoding='utf-8')
