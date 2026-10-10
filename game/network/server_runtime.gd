@@ -42,7 +42,7 @@ var _chat_times: Dictionary[int,Array] = {}
 var _chat_intents: Dictionary[int,int] = {}
 var _request_intents: Dictionary[int,int] = {}
 var _request_times: Dictionary[int,Array] = {}
-var _totals := {"steps":0,"admissions":0,"resumes":0,"input_rejections":0,"closed":0,"map_resyncs":0,"snapshots":0,"chat":0}
+var _totals := {"steps":0,"admissions":0,"resumes":0,"input_rejections":0,"stale_inputs":0,"closed":0,"map_resyncs":0,"snapshots":0,"chat":0}
 
 func configure(match_simulation: MatchSimulation, build_hash: PackedByteArray, rules_hash: PackedByteArray) -> bool:
 	if running or match_simulation == null or not _supported_map_water(match_simulation.data): return false
@@ -144,7 +144,7 @@ func _new_stream(job: RefCounted, welcome: P.Packet, phase: String = "prepare") 
 	return {"phase":phase,"started":Time.get_ticks_msec(),"queued_at":Time.get_ticks_msec(),"job":job,"sender":null,"end_job":null,
 		"welcome":welcome,"pending":[],"changes":0,"bytes":0,"delta_sender":null,"delta_packet":null,
 		"map_sequence":simulation.data.map_sequence,"barrier_sequence":-1,"end_packet":null,"bulk_packet":null,"latest_snapshot":null,
-		"event_packets":[],"event_bytes":0}
+		"event_packets":[],"event_bytes":0,"bulk_window":TRANSFER.BulkWindow.new()}
 
 func start(game_port: int = 0, map_port: int = 0, bind_address: String = "127.0.0.1") -> Dictionary:
 	if running or simulation == null: return {"ok":false,"error":"runtime not configured or already active"}
@@ -306,8 +306,15 @@ func _game_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) 
 		_: _close_game(connection,"invalid client packet direction",now)
 
 func _bulk_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) -> void:
-	if registry.owner_of_bulk(connection) != 0:
-		map_transport.close(connection,1008,"bulk channel is server to client")
+	var owner: int = registry.owner_of_bulk(connection)
+	if owner != 0:
+		# ACK body carries no actor ID. Authenticated socket ownership selects
+		# exactly one active snapshot; another owner's credit cannot be changed.
+		if packet.kind!=P.Kind.MAP_CHUNK_ACK or not _streams.has(owner) or _streams[owner].phase not in ["baseline","barrier","waiting","live"]:
+			_close_game(registry.session_view(owner).game,"invalid map acknowledgment",now)
+			return
+		var acknowledged: Dictionary = _streams[owner].bulk_window.acknowledge(packet)
+		if not acknowledged.ok: _close_game(registry.session_view(owner).game,"invalid map acknowledgment",now)
 		return
 	if not _pending_bulk.has(connection) or packet.kind != P.Kind.HELLO:
 		map_transport.close(connection,1008,"bulk HELLO required")
@@ -343,7 +350,7 @@ func _queued_count() -> int:
 	return count
 
 func _release_stream(stream: Dictionary) -> void:
-	for key in ["job","sender","end_job","delta_sender"]:
+	for key in ["job","sender","end_job","delta_sender","bulk_window"]:
 		if stream.get(key) != null: stream[key].cancel()
 	stream.clear()
 
@@ -396,6 +403,9 @@ func _poll_stream(id: int, now: int) -> void:
 		if not progress.done: return
 		s.sender = s.job.take_sender().sender
 		s.job = null
+		if not s.bulk_window.reset(s.sender.begin_packet()).ok:
+			_close_game(view.game,"map receive window initialization failed",now)
+			return
 		var renewed := registry.refresh_bulk_token(id,now)
 		if not renewed.ok:
 			_close_game(view.game,"bulk capability unavailable",now)
@@ -409,6 +419,10 @@ func _poll_stream(id: int, now: int) -> void:
 	if s.phase == "baseline" and view.bulk != 0:
 		for work in range(2):
 			if s.bulk_packet == null:
+				var credit: Dictionary = s.bulk_window.get_stats()
+				# Still allow the once-only end-of-sender probe after the final
+				# queued chunk, even when its cumulative ACK is on the other socket.
+				if credit.sent_chunks<credit.chunk_count and not s.bulk_window.can_send(): break
 				var chunk: Dictionary = s.sender.next_chunk()
 				if not chunk.ok:
 					_close_game(view.game,"map chunk failed",now)
@@ -424,6 +438,9 @@ func _poll_stream(id: int, now: int) -> void:
 					break
 				s.bulk_packet = chunk.packet
 			if not map_transport.send(view.bulk,s.bulk_packet).ok: break
+			if not s.bulk_window.mark_sent(s.bulk_packet).ok:
+				_close_game(view.game,"map receive window invariant failed",now)
+				return
 			s.bulk_packet = null
 	if s.phase == "barrier" and s.end_job != null:
 		var progress: Dictionary = s.end_job.advance(2)
@@ -504,6 +521,11 @@ func step_once() -> bool:
 		if taken.clear_controls:
 			simulation.clear_controls(id)
 			_shot_ticks.erase(id)
+		if taken.discarded > 0:
+			# These exact authenticated sequence IDs were retired, never simulated.
+			# The owner snapshot removes them from replay without refilling anything.
+			actor.consumed_input_sequence = maxi(actor.consumed_input_sequence,taken.retired_ack)
+			_totals.stale_inputs += taken.discarded
 		if taken.command != null:
 			commands[id] = taken.command
 			_shot_ticks[id] = mini(taken.input_tick,simulation.tick)
@@ -667,5 +689,10 @@ func _player_request(id: int, packet: BlockfieldProtocol.Packet, now: int) -> vo
 	else: simulation.set_block_color(id,packet.payload.value)
 
 func get_stats() -> Dictionary:
+	var bulk_windows: Array[Dictionary] = []
+	for id: int in _streams:
+		var credit: Dictionary = _streams[id].bulk_window.get_stats()
+		credit["actor_id"]=id; credit["phase"]=_streams[id].phase
+		bulk_windows.append(credit)
 	return {"running":running,"tick":simulation.tick if simulation != null else -1,"registry":registry.get_stats(),"loading":_loading_count(),"queued":_queued_count(),
-		"streams":_streams.size(),"totals":_totals.duplicate(),"game":game_transport.get_stats(),"map":map_transport.get_stats()}
+		"streams":_streams.size(),"bulk_windows":bulk_windows,"totals":_totals.duplicate(),"game":game_transport.get_stats(),"map":map_transport.get_stats()}

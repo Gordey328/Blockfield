@@ -7,9 +7,10 @@ const TRANSFER = preload("res://network/map_transfer.gd")
 const PREDICTION = preload("res://network/client_prediction.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const COMPATIBILITY = preload("res://network/compatibility.gd")
+const INPUT_CLOCK = preload("res://network/client_input_clock.gd")
 const STATE_KIND := 14
 const MAX_EVENTS := 512
-const CLOSE_REASONS := ["ping timeout","idle timeout","handshake timeout","heartbeat backpressure","transport stopped","socket send failed","invalid protocol frame","invalid input stream","input clock needs resync","connection lost","map connection lost","HELLO rejected","HELLO timeout","admission unavailable","map join timeout","map preparation queue timeout","invalid map readiness","gameplay before map readiness","invalid client packet direction","transport event overflow"]
+const CLOSE_REASONS := ["ping timeout","idle timeout","handshake timeout","heartbeat backpressure","transport stopped","socket send failed","invalid protocol frame","invalid input stream","input clock needs resync","connection lost","map connection lost","HELLO rejected","HELLO timeout","admission unavailable","map join timeout","map preparation queue timeout","invalid map readiness","invalid map acknowledgment","gameplay before map readiness","invalid client packet direction","transport event overflow"]
 var game := TRANSPORT.new()
 var bulk := TRANSPORT.new()
 var transfer := TRANSFER.new()
@@ -39,6 +40,7 @@ var _predicted_effects: Dictionary[String,int] = {}
 var _predicted_order: Array[String] = []
 var _last_snapshot_tick := -1
 var _last_input_tick := -1
+var _input_clock := INPUT_CLOCK.new()
 var _snapshot_time_ms := 0
 var _install_map: Callable
 var _apply_map: Callable
@@ -96,6 +98,7 @@ func close() -> void:
 	_predicted_order.clear()
 	_last_snapshot_tick = -1
 	_last_input_tick = -1
+	_input_clock.reset()
 	status = "closed"
 
 func _fail(message: String) -> void:
@@ -130,7 +133,9 @@ func poll() -> void:
 				if not game.send(_game_id,_hello()).ok: _fail("HELLO send failed")
 				else: status = "joining"
 			"packet": _game_packet(event.packet)
+			"rtt": _input_clock.observe_rtt(float(event.rtt_ms))
 			"closed", "timeout", "protocol_error", "overflow": _fail(terminal_error("game",event))
+	var accepted_chunk := false
 	for event: Dictionary in bulk.drain_events():
 		if status == "failed": break
 		match event.type:
@@ -138,9 +143,20 @@ func poll() -> void:
 				if _welcome == null or not bulk.send(_bulk_id,_hello(true)).ok: _fail("bulk HELLO failed")
 			"packet":
 				if status != "loading" or event.packet.kind != P.Kind.MAP_CHUNK: _fail("invalid bulk packet direction")
-				elif not transfer.consume(event.packet).ok: _fail("map chunk rejected")
+				else:
+					var consumed := transfer.consume(event.packet)
+					if not consumed.ok: _fail("map chunk rejected: "+str(consumed.error))
+					else: accepted_chunk = true
 			"closed", "timeout", "protocol_error", "overflow":
 				if status == "loading": _fail(terminal_error("map",event))
+	if accepted_chunk and status == "loading":
+		var acknowledged := transfer.get_chunk_ack()
+		if not acknowledged.ok:
+			_fail("map acknowledgment unavailable: "+str(acknowledged.error))
+		else:
+			var sent := bulk.send(_bulk_id,acknowledged.packet)
+			if not sent.ok: _fail("map acknowledgment send failed: "+str(sent.error))
+			else: bulk.flush_outgoing()
 	if status == "loading":
 		var progress := transfer.poll(-1,2)
 		if not progress.ok:
@@ -207,6 +223,7 @@ func _discard_epoch_stream(new_epoch: int) -> void:
 	_predicted_effects.clear(); _predicted_order.clear()
 	_last_snapshot_tick = -1; _snapshot_time_ms = 0
 	_last_input_tick = -1
+	_input_clock.reset()
 	_welcome = null
 	last_error = ""
 
@@ -310,6 +327,8 @@ func _apply_snapshot(packet: P.Packet) -> void:
 	var old_owner := prediction.get_state()
 	if old_owner == null or old_owner.spawn_generation != p.owner_state.spawn_generation or status == "synchronizing":
 		_last_input_tick = packet.tick
+		_input_clock.reset()
+		_input_clock.sent_tick = packet.tick
 	if old_owner != null and old_owner.spawn_generation != p.owner_state.spawn_generation: _request_sequence = 0
 	if status == "synchronizing": result = prediction.reset(p.owner_state,p.tick,p.map_sequence)
 	else:
@@ -324,6 +343,7 @@ func _apply_snapshot(packet: P.Packet) -> void:
 	_confirmed = p
 	_event_cursor = maxi(_event_cursor,p.event_sequence)
 	_last_snapshot_tick = packet.tick
+	_input_clock.observe(packet.tick,Time.get_ticks_usec())
 	_snapshot_time_ms = Time.get_ticks_msec()
 	status = "live"
 	var present: Dictionary[int,bool] = {}
@@ -338,6 +358,9 @@ func _apply_snapshot(packet: P.Packet) -> void:
 			_remote.erase(id)
 
 func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: int = 255, weapon: int = 255) -> Dictionary:
+	# A budgeted poll may leave old snapshots in the ordered socket. Do not
+	# stamp intent from that partial batch before reaching its newest state.
+	if game.has_pending_incoming(): return {"ok":false,"error":"awaiting fresh authority stream"}
 	if status != "live" or prediction.get_status().needs_rebase: return {"ok":false,"error":"client state not ready"}
 	if prediction.get_status().map_sequence != data.map_sequence: return {"ok":false,"error":"waiting for matching terrain state"}
 	var owner := prediction.get_state()
@@ -352,7 +375,8 @@ func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: i
 	command.weapon = weapon
 	# Replay retimes pending commands for local prediction. It must never move
 	# the transmitted command clock forward again on every authority snapshot.
-	var input_tick := maxi(_last_input_tick+1,_last_snapshot_tick+1)
+	var input_tick := _input_clock.next_tick(Time.get_ticks_usec())
+	if input_tick < 0: return {"ok":false,"error":"awaiting fresh authority clock"}
 	var record := {"input_sequence":command.sequence,"input_tick":input_tick,"buttons":buttons,"tool":tool,"weapon":weapon,
 		"move_x":move.x,"move_z":move.y,"yaw":yaw,"pitch":pitch}
 	var packet := P.make_packet(P.Kind.INPUT_BATCH,{"records":[record]},epoch,record.input_tick,command.spawn_generation)
@@ -363,6 +387,10 @@ func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: i
 		_fail("input send failed: "+str(sent.error))
 		return {"ok":false,"error":last_error}
 	_last_input_tick = input_tick
+	_input_clock.commit(input_tick)
+	# Dispatch before this frame's rendering/map work. Queued intent from a
+	# previous frame must not age through another slow frame before socket send.
+	game.flush_outgoing()
 	var result := prediction.predict(command,data)
 	if not result.ok:
 		_fail(result.error)
@@ -393,11 +421,14 @@ func request_block_color(color: int) -> bool:
 	return _send_request(1,color)
 
 func _send_request(action: int, value: int) -> bool:
-	if status != "live": return false
+	if status != "live" or game.has_pending_incoming(): return false
 	var owner := prediction.get_state()
-	var packet := P.make_packet(P.Kind.PLAYER_REQUEST,{"action":action,"value":value,"request_sequence":_request_sequence+1},epoch,maxi(0,owner.last_tick),owner.spawn_generation)
+	var request_tick := _input_clock.request_tick(Time.get_ticks_usec())
+	if request_tick < 0: return false
+	var packet := P.make_packet(P.Kind.PLAYER_REQUEST,{"action":action,"value":value,"request_sequence":_request_sequence+1},epoch,request_tick,owner.spawn_generation)
 	if not P.encode(packet).ok or not game.send(_game_id,packet).ok: return false
 	_request_sequence += 1
+	game.flush_outgoing()
 	return true
 
 func resume_token() -> PackedByteArray: return _resume.duplicate()

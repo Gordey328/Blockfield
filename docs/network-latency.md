@@ -1,6 +1,8 @@
 # Local delayed TCP acceptance
 
-`tools/latency_proxy.py` runs one owned native Godot process with `tests/network/test_network_latency.gd` and two raw TCP relays. The actual `BlockfieldServerRuntime` and two actual `BlockfieldClientReplica` instances use their production WebSocket transports, codecs, map barriers, prediction and authenticated input admission. The test never loads Main, preferences, renderer or audio. No production networking changes were needed.
+`tools/latency_proxy.py` runs one owned native Godot process with `tests/network/test_network_latency.gd` and two raw TCP relays. The actual `BlockfieldServerRuntime` and two actual `BlockfieldClientReplica` instances use their production WebSocket transports, codecs, map barriers, prediction and authenticated input admission. The test never loads Main, preferences, renderer or audio.
+
+The current fixture targets the newly authored `authority-4` stale-input retirement policy. Its updated 350 ms recovery scenario passes **460 assertions / 0 failures**, Godot exit0 and clean diagnostics, in the native run recorded below. The measured `authority-3` results are historical: they expected a late-input disconnect and two resumes, and do not verify the new policy.
 
 This is local native transport acceptance with artificial delay and stopped forwarding. It is not WAN, TLS, browser, 32-client capacity or sustained 60 Hz acceptance.
 
@@ -45,7 +47,39 @@ When a retained byte/segment limit is reached, the relay stops reading that dire
 
 The authority uses a 24×16×24 map (36,864 canonical bytes), source profile `0.75`, sandbox rules and real-clock 60 Hz scheduled steps with at most four catch-up steps per process frame. Map edits and deterministic combat poses are trusted fixture setup; clients still send genuine bounded input/chat packets and never supply authoritative damage, positions or edits. Compatibility comes from the production `BlockfieldCompatibility` hashes, including the source-ray rule revision `authority-3` used in the recorded run.
 
-## Recorded acceptance
+## Current stale-input recovery contract
+
+The executable input/rewind age remains at most 15 closed authority ticks, future input remains at most 8 ticks, and the pending queue remains at most 32 commands. Authenticated, fully validated, contiguous and strictly increasing input records aged 16..120 ticks may be retired with an ACK without execution. Older-than-120 input, schema/owner/epoch/generation violations, gaps/replay, future overflow and capacity violations remain terminal failures. This is authored server behavior, not original OpenSpades server behavior.
+
+The 350 ms case retains the existing actual game connection and spawn generation:
+
+1. Drain existing transmitted input and save authority resources, horizontal position and confirmed combat-event counts.
+2. Send one real `PRIMARY|RELOAD` plus rightward movement command. Assert it predicts an armed shot locally; immediately ask the owned relay to stall the first game connection. The relay's ordinary 40 ms delivery deadline gives its runner a chance to apply this control before forwarding the command. An early delivery or a probe which does not become stale fails this scenario; the test cannot count that as recovery evidence.
+3. Continue neutral input and edit terrain during the 350 ms pause. Require `stale_inputs` to increase, prediction to receive an ACK covering the probe, and both maps to converge. The same socket/actor/generation must remain live, with zero input rejections, timeouts or resumes.
+4. Require unchanged authority ammo/reserve/blocks/grenades/health, reload/cook/tool/weapon state, last-shot tick, victim health and horizontal position. Confirmed shot/reload/hit/hurt counts must not increase. Retained prediction commands must all follow the retired probe; after draining neutral input, the predicted owner must again match authority resources and pose.
+5. Independently exercise the 1,500 ms idle stall with shortened heartbeat timing. This must still time out and require the only resume of the run, preserving stable ID/profile and exact terrain. Final cleanup stops every owned socket/process.
+
+Temporary `awaiting fresh authority clock/stream` results are normal throttling, not failed transport. The initial combat command remains armed until it is successfully sent, so clock throttling cannot silently omit its mandatory shot check. Event identities still undergo the existing deduplication checks. These checks do not permit late actions to execute, enlarge hit history, or turn replay into authority.
+
+Result JSON now records `backlog_recovery_ms`, `stale_probe_sequence`, `retired_probe_ack`, the retirement policy, `expected_input_rejections=0` and actual server totals. It no longer reports the old expected backlog failure duration. Assertion count includes one check per real authority step and is therefore scheduling-dependent; required scenario outcomes are explicit checks. No new timing/count claim should be copied from the historical run.
+
+## Authority-4 native acceptance
+
+Godot4.7.2 `ed1daf0bf`, Windows native loopback, `.cache/benchmarks/network-latency-retirement.json` and sibling `.log`: **460/0**, engine/runner exit0, empty error list and **7.344s** total runner time. Its owned Godot process and all relay/server sockets were cleaned; the subsequent process inventory found no Godot processes. This is the tested working-tree checkpoint, not a frozen release/browser acceptance.
+
+| Scenario | Actual observation |
+|---|---|
+| Initial shot/private routing, chat and edits | Both source0.75 replicas pass the existing real join/hash, one confirmed shot, owner-only hit/victim-only hurt, no public inventory, event deduplication and exact ordered terrain checks. |
+| 75ms stall | Relay release78ms; same live peers and exact maps after601ms of observation. |
+| 350ms stale-input recovery | Relay release359ms; ACK/map recovery observed444ms after relay control acknowledgement. Server retired2 inputs; probe sequence37 was covered by ACK38. Same actual game socket/ID/generation remained live; authority and reconciled prediction kept exact stock/reload/cook state and pose, and no stale shot/reload/hit/hurt was confirmed. No reconnect, heartbeat timeout or input rejection occurred in this phase. |
+| Separate1,500ms heartbeat stall | Relay release1,500ms; terminal timeout observed575ms after control acknowledgement. Heartbeat may already have an outstanding ping when this pause begins, so this observation is not a newly started650ms timer. Healthy peer remained live; the only resume retained actor ID/profile and exact edited terrain. |
+| Final bounds/cleanup | Peak pending prediction10/256, transport queued frames2/32 and queued plus Godot-buffered bytes32,768/131,072. Three game and three map connections were accepted and closed across initial joins and the one heartbeat resume; both relays ended with zero connections. |
+
+Runtime totals:2 admissions,1 resume,1 closed owner,0 input rejections,2 stale inputs,0 map resyncs and1 chat. This small fixture's `step_once` mean0.854ms/p951.934ms/max5.559ms excludes separate polling/publication costs and proves neither original-map performance nor sustained60Hz capacity. Relay peak retained game bytes21,282/map bytes36,990. One raw game socket `OSError` occurred during the deliberate timeout/disconnect; no claim of zero raw TCP errors is made.
+
+The first attempt, preserved as `.cache/benchmarks/network-latency-retirement-initial-failed.{json,log}`, failed262/2 before the350ms scenario: Windows rejected removal of `request.json` during concurrent Python reading, so the second stall request was never delivered. This was a harness control-file failure with `stale_inputs=0` and `input_rejections=0`, not a production retirement failure. Removing delete/rename publication then passed459/0 in7.375s (`network-latency-retirement-write-repair.{json,log}`). The final460/0 run includes the additional bounded opening retry described below. Counts can also vary with retained-pending checks and scheduling; all mandatory phases remain explicit.
+
+## Historical authority-3 acceptance
 
 Godot 4.7.2 `ed1daf0bf`, Windows native loopback: `.cache/benchmarks/network-latency-final.json` reports **502 assertions / 0 failures**, Godot exit 0, 8.094 seconds total runner time. A bookkeeping check after the result was serialized printed 503 in the original stdout; the fixture now omits that post-serialization success check so JSON and stdout counts agree in future runs. The recorded 502 assertions already include gameplay and socket cleanup.
 
@@ -71,6 +105,6 @@ in the502-check handoff. The fixture adds an assertion per real simulation step;
 the fixed remainder63 and required stages/admissions/two resumes/late rejection
 are identical. Assertion count is scheduling-dependent, not an omitted gate.
 
-The relay does not model packet loss/reordering, bandwidth limits, TLS proxy behavior, WAN jitter, browser scheduling or large-map memory pressure. TCP preserves order; calling a stream unreliable cannot bypass its head-of-line blocking. A 350 ms held input backlog is intentionally rejected under the current authored admission policy. Supporting longer interruptions would require an explicit server policy change, not relaxing validation in this fixture.
+The relay does not model packet loss/reordering, bandwidth limits, TLS proxy behavior, WAN jitter, browser scheduling or large-map memory pressure. TCP preserves order; calling a stream unreliable cannot bypass its head-of-line blocking. The historical 350 ms backlog was intentionally rejected by authority-3. Authority-4 instead requires ACK-only retirement within its explicit 120-tick bound; its current acceptance status is recorded above. A longer/background interruption can still legitimately require reconnect, and no timeout or queue limit is disabled by the fixture.
 
-The runner's task-local JSON is trusted control only. Python publishes with `os.replace`; the GDScript writer removes the previous task-local destination then renames its complete temporary file because Windows rename cannot overwrite it. Readers retry a missing or invalid file. This service-file fix does not change network packet handling or project configuration.
+The runner's task-local JSON is trusted control only. Python publishes with `os.replace`. The GDScript writer truncates and writes one complete small JSON document, flushes and closes it; it does not delete a path which Python may hold open. A sharing failure during opening is retried in1ms increments for at most20ms, then explicitly fails the fixture. This synchronous wait is confined to test control, below the configured40ms relay delay, and is not production game behavior. Both readers retry missing/empty/invalid JSON; Python accepts a request only at the next expected sequence and validates its action/channel/bounds. The runner reads final result JSON only after the owned engine exits, catches malformed JSON, and requires a valid result plus exit0/zero failures to report success. No partial result can pass. These control-file changes do not alter packet handling or preferences.

@@ -1,6 +1,6 @@
 # Ordered map transfer and transaction assembly
 
-`game/network/map_transfer.gd` supplies pure `BlockfieldMapTransfer`, `TransactionAssembler`, `BaselineSender`, `DeltaSender` and incremental preparation helpers using [BlockfieldProtocol](network-protocol.md) and `VoxelData`. It has no socket, scene, timer, renderer, preference or active-world reference. It prepares a joining map independently and emits it only at a verified barrier. Match/connection authentication, actor snapshots, rendering installation and deployed multiplayer remain coordinator work.
+`game/network/map_transfer.gd` supplies pure `BlockfieldMapTransfer`, `TransactionAssembler`, `BulkWindow`, `BaselineSender`, `DeltaSender` and incremental preparation helpers using [BlockfieldProtocol](network-protocol.md) and `VoxelData`. It has no socket, scene, timer, renderer, preference or active-world reference. It prepares a joining map independently and emits it only at a verified barrier. The separate Runtime and ClientReplica integrate authentication, actor snapshots and installation; deployment/browser acceptance remain separate from this helper.
 
 ## Receiver API
 
@@ -12,6 +12,7 @@
 | `poll(now_ms=-1,max_chunks=1)` | Checks monotonic clock and join/partial-transaction deadlines, then performs one work phase with budget `1..32`. Caller must invoke regularly. |
 | `cancel(reason="cancelled")` | Releases baseline, staging, complete/partial deltas, barrier and unclaimed ready data. Use on disconnect. Explicit reset required afterwards. |
 | `take_ready()` | Once: `{ok,error,data:VoxelData,epoch,snapshot_id,map_sequence,tick,hash}`. Does not adopt into a World or spawn a player. |
+| `get_chunk_ack()` | `{ok,error,packet?}`: owned copy of the latest accepted cumulative MAP_CHUNK_ACK. Tiny metadata survives ready handoff, and clears on failure/cancel/reset. Caller sends once per drained bulk batch. |
 | `get_stats()` | Status/error, expected epoch/snapshot, baseline/staged/ready map bytes, next chunk, retained encoded-delta counts, `pending_work`, `work_phase`, decoded cells, apply records and final hash chunks. |
 
 Normal states are `idle → receiving → ready → consumed`. A malformed/gapped/over-budget/timed-out join becomes terminal `failed` and releases everything. Cancellation is terminal `cancelled`. New BEGIN requires `reset()`; it cannot silently overwrite a partial transfer. Ready buffers also release on cancel/reset. `take_ready()` is a single ownership handoff, followed by another explicit reset before reuse.
@@ -28,10 +29,13 @@ The helper adds family semantics to the existing 24-byte protocol header; it doe
 |---|---|---|---|
 | BEGIN | Positive match epoch | Frozen baseline `last_tick` | Baseline `map_sequence` |
 | CHUNK | Same as BEGIN | Same as BEGIN | Same as BEGIN |
+| CHUNK_ACK | Same as BEGIN | Same as BEGIN | Same as BEGIN |
 | DELTA | Bound match epoch | Transaction tick | Transaction `map_sequence`, identical across fragments |
 | END | Same match epoch | Barrier tick | Barrier `map_sequence` |
 
 BEGIN pins snapshot ID, dimensions `(x,y,z)`, raw size, chunk count, baseline sequence/tick and SHA256. CHUNK must match the snapshot/epoch/size/tick/sequence and have the next contiguous index starting at `0`. Duplicate or out-of-order chunks require resync. Reliable per-socket ordering makes a reorder buffer unnecessary.
+
+After accepted CHUNK bytes, `get_chunk_ack()` identifies the contiguous received prefix; it never grants credit for a rejected chunk. Final baseline hash failure clears the ACK along with other state. `BulkWindow` implements an eight-chunk send/receipt window; Runtime selects it through authenticated bulk-socket ownership. Its checks and cross-channel final ACK policy are documented in [map-backpressure.md](map-backpressure.md). The work budget two is for later decode/apply/hash, not a two-chunk incoming queue limit.
 
 DELTA transactions must advance map sequence exactly by one and never regress tick. Each transaction's fragments begin at `0`, arrive contiguously and keep epoch, map sequence, transaction ID, tick, actor ID, action ID, dimensions, fragment count and total changes identical. Duplicate cells across fragments are rejected. The full transaction also rejects floor edits, no-op records and invalid authoritative collapse flags. After complete assembly, before colors are checked by the bounded private loading job or the live map's atomic `apply_transaction()`, depending on ownership.
 
@@ -147,4 +151,6 @@ Godot 4.7.2 `ed1daf0bf`: **799 assertions, 0 failures**, `.cache/logs/map-transf
 
 Read-only regression of `tests/network/test_server_runtime.gd` after optimization: **103 assertions / 0 failures**, two actual game/bulk WebSocket clients, `.cache/logs/server-runtime-transfer-performance.log`. This demonstrates compatibility with that native coordinator test, not public WSS/browser acceptance.
 
-The 64MiB maximum descriptor is validated without a giant allocation; the optional probe measures isolated allocation/range/whole-decode/apply costs, not a complete maximum-map socket join or browser memory. This helper does not establish authenticated sender direction, a server-wide snapshot budget, journal-gap retry policy, client state-barrier installation or exported mid-round WSS/latency/TCP-stall acceptance. Those are coordinator and release concerns; this helper alone does not complete N04 acceptance or the multiplayer iteration.
+The 64MiB maximum descriptor is validated without a giant allocation; the optional probe measures isolated allocation/range/whole-decode/apply costs, not a complete maximum-map socket join or browser memory. The separate Runtime/Replica now handle authenticated direction, two concurrent joins and state-barrier installation. Exported mid-round WSS/browser acceptance remains a release concern; this helper alone does not complete N04 acceptance or the multiplayer iteration.
+
+Receive-credit slice: current pure transfer suite **958/0**, protocol **1759/0**, Runtime **103/0**; actual larger-than-window native fixture **39/0**. Logs `.cache/logs/map-window-{transfer,protocol,runtime}.log` and `map-window-backpressure-replica.log`. These extend the historical performance checks above without changing the measured encoding/decode algorithms. See [map-backpressure.md](map-backpressure.md) for exact scenarios and limits.

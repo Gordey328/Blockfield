@@ -12,10 +12,118 @@ current callback, then schedules the next at `now + 1/24 s`; it does not replay
 missed render callbacks immediately. The process-frame driver and OS timer add
 jitter, so 24 Hz is the requested callback rate, not a measured rendering rate.
 
-## Fault and repair under test
+## Current clock and authority policy
+
+`ClientInputClock` timestamps wire intent independently of prediction/replay.
+It samples a strictly newer authority snapshot and advances a monotonic 60Hz
+wall-time anchor through missed callbacks. Its estimate is
+`anchor_tick + floor(max(0, now_us-anchor_us)*60/1_000_000) + transit_ticks`.
+The transit reserve accounts for the complete measured RTT: the snapshot travels
+downstream and its resulting command travels upstream. It is
+`clamp(ceil(rtt_ms*0.06), 3, 7)` ticks; it starts at 3, and negative/nonfinite
+RTT samples are ignored. This is a bounded scheduling reserve, not a latency
+measurement or a guarantee that delayed input will arrive in time.
+
+The next input tick is the maximum of `last_sent_tick+1`, `latest_tick+1` and
+`estimate+1`. A next candidate beyond `latest_tick+8` waits for fresh authority;
+waiting consumes no input sequence and adds no predicted command. A strictly
+newer snapshot received after that wait resamples the anchor, even if the
+authority paused; duplicate/older snapshots cannot recover it. Committed wire
+ticks remain monotonic after reanchoring. Epoch/generation reset clears the
+clock; same-life mode changes retain the transmitted sequence ACK barrier.
+Team/color request timestamps use the same estimate/wait gate without
+advancing the input sequence.
+
+Replica polls before input and refuses to stamp input while transport incoming
+events/socket packets remain, so a budgeted partial snapshot batch cannot become
+the clock sample used for new intent. After successful `send`, it commits the
+wire tick and calls `flush_outgoing()` before rendering. This flush does not
+receive/reconcile packets halfway through prediction.
+
+Authority identity `blockfield-source-v0.1.3-authority-4` intentionally separates
+**receive admission** from **execution/rewind admission**. For the latest closed
+authority tick `S`:
+
+- INPUT_BATCH receive admission remains owner-bound, exact-schema,
+  epoch/generation-bound, contiguous in sequence and strictly increasing in
+  tick, with at most 32 pending records. Future ticks may not exceed `S+8`.
+- `MAX_STALE_TICKS=120` permits ordered records as old as `max(0,S-120)` to enter
+  that bounded queue solely so their exact sequence IDs can be acknowledged and
+  retired. Records older than that still reject the stream. This changes the
+  earlier receive-late-15 policy; it does not expand the shot-history window.
+- On `take(S+1)`, the queue discards its bounded prefix with `input_tick < S-15`
+  before selecting an executable command. Exactly `S-15` remains eligible at
+  `S+1`; `S-16..S-120` is not executed or supplied to firearm rewind.
+- `retired_ack` advances the actor's consumed-input cursor, removes those
+  records from owner replay, clears held controls/shot-clock state and increments
+  Runtime `stale_inputs`. Retired records cannot initiate movement, tool/class
+  changes, firing, reload, building, damage or grenade actions. Ordinary fixed
+  simulation continues, and a following fresh contiguous sequence executes
+  normally. At most one executable record is selected per fixed step.
+
+This retirement policy applies to INPUT_BATCH only. PLAYER_REQUEST retains
+strict late-15/future-8 admission and its separate contiguous intention counter;
+the six-tick held-input lease, queue bounds and heartbeat limits are unchanged.
+It does not promise survival of arbitrary pauses or background tabs.
+
+## Current evidence and acceptance limits
+
+Clock fixtures passed **69/0** and actual controller integration **510/0**.
+The RTT-accounted native report
+`.cache/benchmarks/client-schedule-rtt-accounted.json` passed **47/0**: 130
+callbacks, 339 sent inputs and 21 explicit clock-wait steps, zero dropped elapsed
+steps; wire lead 1..7, peak pending 8 and wall time 6.618s. Waiting steps do not
+spend a sequence or promise one command for every scheduled physics interval.
+The previous fixture incorrectly required all 360 steps to submit; its retained
+`client-schedule-rtt.json` reported **47 assertions / 2 failures**, 344 submitted
+inputs and zero dropped steps. It is not a passing run. The corrected accounting
+distinguishes sent inputs, deliberate clock waits and dropped elapsed time.
+
+Two actual RTT-reserved Web clients completed both map barriers, each receiver
+cumulatively ACKed **73/73 baseline chunks** and reached live; normal observed
+wire lag was -2..2 ticks. The chunk total is not a test assertion count.
+Entering/rendering the scene then caused a late-16 rejection, recorded without
+credentials in `.cache/previews/browser-clock-rtt-stall-failure.log`.
+That browser failure preceded the new ACK-retirement policy. It does not verify
+authority-4 recovery or full browser play.
+
+Actual-socket Runtime **223/0** verifies the new policy: a stale record with all
+seven buttons set (`buttons=127`), movement, grenade-tool and shotgun-class
+intent advances its ACK without changing resources/tool/class/pose, damaging another actor, editing
+terrain or creating a grenade; fresh contiguous sequence 3 then executes.
+These are focused native checks, not a new frozen export/publication, public
+WSS/TLS, Docker/Linux execution, WAN conditions, original-map or 32-player
+capacity acceptance. Exact frozen-release Web acceptance remains open.
+
+## Partial authority-4 browser evidence
+
+A later dirty-workspace diagnostic Web export used PCK SHA256
+`4581f1740b767e459158b29a2c15b42ed12a5f413374eeaac7bea8346600241b`.
+Both actual clients entered/rendered CTF with 100HP, rifle 10/50 and three
+grenades. Chat sent by the first appeared on the other; block-tool palette and
+blue→spectator→shotgun-class→blue respawn were exercised while connected,
+returning 100HP and 6/48. Regular observed FPS was 10–11 with two running engines
+on this workstation, not a performance pass.
+
+Approximately three minutes of actual gameplay completed. Explicit disconnect
+and reconnect of the first client preserved actor1, installed fresh map snapshot ID3
+with 73/73 chunks acknowledged, and the UI showed Connected followed by Enter
+with the same shotgun 6/48 and 100HP. Final native counters: admissions2,
+resumes1, closed1 (the explicit disconnect), stale_inputs4, input_rejections0,
+map_resyncs0, timeouts0 and backpressure0. Both browser logs contained only IAB
+pointer-lock `WrongDocumentError`, no engine/other errors. Screenshot:
+`.cache/previews/browser-network-retirement.jpg`. Those browsers/server were
+stopped; the earlier RTT-stall failure remains preserved separately.
+
+This is partial evidence for these foreground gameplay/respawn/resume paths on
+the diagnostic PCK. It does not accept a frozen release, Pages publication,
+public WSS/TLS, Docker/Linux execution, background tabs, sustained performance
+or multiplayer completion.
+
+## Historical fault and first repair
 
 `ClientPrediction.reconcile` retimes retained commands to the authority snapshot
-tick plus their replay index (`client_prediction.gd:175`). That replay timeline
+tick plus their replay index. That replay timeline
 is suitable for local motion, but using its final tick to timestamp new network
 commands can repeatedly add unacknowledged replay work to the wire clock.
 
@@ -29,12 +137,12 @@ the existing eight-tick future bound, rather than evidence of a full queue.
 The diagnostic log contains clock integers and constant reasons, without
 capabilities or packet payloads.
 
-The repaired `ClientReplica.submit_input` uses
+The first repair (c55 →0ec) used
 `max(last_successfully_sent_tick + 1, last_snapshot_tick + 1)`
-(`client_replica.gd:355`) and advances that clock only after a successful send.
+and advanced that clock only after a successful send.
 Close, epoch change, initial synchronization and generation change reset it.
-Prediction/replay remains separate. `InputQueue` retains its eight-tick future
-and fifteen-tick late bounds (`input_queue.gd:7`). Main also polls before the
+Prediction/replay remained separate. At that stage `InputQueue` enforced an
+eight-tick future and fifteen-tick receive-late bound. Main also polls before the
 controller's physics callback; this isolated fixture tests the equivalent
 poll-before-burst ordering, not Main's scene execution.
 
@@ -60,7 +168,7 @@ Runner ownership, relay bounds and shutdown are described in
 [network-latency.md](network-latency.md). Only the two fixture clients/listeners
 are stopped; resume capabilities stay in memory and are never serialized.
 
-## Final measurements
+## Historical measurements before the wall-clock/RTT policy
 
 Windows Godot 4.7.2 `ed1daf0bf`, quiet host, final fixture using the exact
 `now + 1/24 s` callback deadline. All runs use source profile 0.75 and a
@@ -121,7 +229,21 @@ The repaired replica SHA256 is
 each report also pins prediction, input queue and transport hashes. Sibling
 logs retain the matching assertion totals and clean engine exits.
 
-## Clock sensitivity and remaining limits
+## Historical clock sensitivity and remaining limits
+
+The subsequent integrated change added `client_input_clock.gd`: a monotonic60Hz wall
+anchor advances through missed callbacks; snapshots can move its anchor forward
+without adding prediction history. An estimate beyond the newest snapshot's
+unchanged8tick future window waits for fresh authority and leaves the input
+sequence untouched. A genuinely newer snapshot after waiting reanchors clock
+time, allowing recovery when the authority itself paused; duplicates cannot do
+so and transmitted ticks remain monotonic. Epoch/life reset clears that clock.
+Its earlier 44 deterministic checks covered frame gaps, delayed/duplicate
+snapshots, same-frame bursts and waiting. Input also added transport
+`flush_outgoing()` before render work; this
+does not receive/reconcile packets halfway through prediction. The native
+schedule measurements above predate these changes and are retained as history.
+Later RTT/ACK-retirement evidence and pending acceptance are recorded above.
 
 Earlier artifacts are retained separately. The first shaped attempt used an
 incomplete callback model that did not account for missed physics steps and
@@ -138,4 +260,5 @@ This proves the listed small-map native scenarios under the measured schedules.
 It does not prove browser background-tab survival, refreshed Web build behavior,
 TLS/WSS, WAN conditions, original-map joins, 32-player capacity or sustained
 60 Hz performance. Exported foreground browser verification remains necessary;
-long pauses can exceed unchanged admission or heartbeat limits.
+long pauses can still exceed bounded admission or heartbeat limits. The current
+receive-retirement and execution limits are distinct, as documented above.

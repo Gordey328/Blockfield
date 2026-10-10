@@ -88,6 +88,8 @@ def main():
     suites += [('hottracked-player','tests/presentation/test_hottracked_player.gd')]
     suites += [('source-rays','tests/world/test_source_rays.gd'),('audio-environment','tests/audio/test_environment.gd'),('audio-environment-pcm','tests/audio/render_environment.gd')]
     suites += [('client-schedule','tests/network/test_client_schedule.gd')]
+    suites += [('client-input-clock','tests/network/test_client_input_clock.gd')]
+    suites += [('map-backpressure','tests/network/test_map_backpressure.gd')]
     for name,path in suites:
         path=ROOT/path
         if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','offline-lifecycle','source-input') else [])+['--script',str(path)],timeout=300)

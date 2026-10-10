@@ -6,6 +6,7 @@ const DATA = preload("res://world/voxel_data.gd")
 const MAX_BUFFERED_BYTES: int = 8 * 1024 * 1024
 const MAX_BUFFERED_CHANGES: int = 32768
 const MAX_TRANSACTIONS: int = 128
+const BULK_WINDOW_CHUNKS: int = 8
 const MAX_CLOCK_MS: int = 0x7ffffffffffe0000
 const APPLY_RECORDS: int = 512
 
@@ -117,6 +118,44 @@ class TransactionAssembler extends RefCounted:
 		return accepted
 	func get_stats() -> Dictionary:
 		return {"armed":_armed,"epoch":_epoch,"map_sequence":_sequence,"tick":_tick,"partial":not _identity.is_empty(),"pending_sequence":_identity.get("map_sequence",0),"pending_tick":_identity.get("tick",0),"changes":_changes.size(),"wire_bytes":_wire_bytes,"next_fragment":_next_fragment,"error":_error}
+
+class BulkWindow extends RefCounted:
+	## Cumulative receive credit only; socket ownership belongs to Runtime.
+	## At most8 full frames can be queued/sent without an accepted ACK.
+	var _descriptor: Dictionary = {}
+	var _sent: int = 0
+	var _acked: int = 0
+	func reset(begin: PROTOCOL.Packet) -> Dictionary:
+		if begin==null or begin.kind!=PROTOCOL.Kind.MAP_BEGIN or not PROTOCOL.encode(begin).ok or begin.epoch==0 or begin.sequence!=begin.payload.map_sequence or begin.payload.compression!=0:
+			return Helpers.result(false,"invalid bulk window baseline")
+		_descriptor={"epoch":begin.epoch,"tick":begin.tick,"sequence":begin.sequence,"snapshot_id":begin.payload.snapshot_id,"size":begin.payload.uncompressed_size,"chunk_count":begin.payload.chunk_count}
+		_sent=0; _acked=0
+		return Helpers.result(true)
+	func can_send() -> bool:
+		return not _descriptor.is_empty() and _sent<int(_descriptor.chunk_count) and _sent-_acked<BULK_WINDOW_CHUNKS
+	func mark_sent(chunk: PROTOCOL.Packet) -> Dictionary:
+		if not can_send(): return Helpers.result(false,"bulk receive window exhausted")
+		if chunk==null or chunk.kind!=PROTOCOL.Kind.MAP_CHUNK or not PROTOCOL.encode(chunk).ok or not _identity(chunk) or chunk.payload.index!=_sent or chunk.payload.total_size!=_descriptor.size:
+			return Helpers.result(false,"bulk sent chunk does not match window")
+		_sent+=1
+		return Helpers.result(true)
+	func _identity(packet: PROTOCOL.Packet) -> bool:
+		return packet.epoch==_descriptor.epoch and packet.tick==_descriptor.tick and packet.sequence==_descriptor.sequence and packet.payload.snapshot_id==_descriptor.snapshot_id
+	func acknowledge(packet: PROTOCOL.Packet) -> Dictionary:
+		if _descriptor.is_empty(): return Helpers.result(false,"bulk window is not armed")
+		if packet==null or packet.kind!=PROTOCOL.Kind.MAP_CHUNK_ACK or not PROTOCOL.encode(packet).ok or not _identity(packet):
+			return Helpers.result(false,"bulk acknowledgment identity mismatch")
+		var next: int = packet.payload.next_chunk
+		if next>_sent or next>int(_descriptor.chunk_count) or packet.payload.received_bytes!=mini(next*PROTOCOL.CHUNK_BYTES,int(_descriptor.size)):
+			return Helpers.result(false,"bulk acknowledgment ahead or byte count mismatch")
+		var duplicate: bool = next<=_acked
+		if not duplicate: _acked=next
+		var accepted: Dictionary = Helpers.result(true); accepted["duplicate"]=duplicate; accepted["advanced"]=not duplicate
+		return accepted
+	func cancel() -> void:
+		_descriptor={}; _sent=0; _acked=0
+	func get_stats() -> Dictionary:
+		return {"armed":not _descriptor.is_empty(),"snapshot_id":_descriptor.get("snapshot_id",0),"chunk_count":_descriptor.get("chunk_count",0),"sent_chunks":_sent,"acked_chunks":_acked,"outstanding_chunks":_sent-_acked,"window_chunks":BULK_WINDOW_CHUNKS}
 
 class BaselineSender extends RefCounted:
 	var _data: DATA
@@ -343,6 +382,7 @@ var _buffered_bytes: int = 0
 var _buffered_changes: int = 0
 var _end: Dictionary = {}
 var _ready: Dictionary = {}
+var _chunk_ack: PROTOCOL.Packet
 var _last_clock: int = -1
 var _started_ms: int = -1
 var _config: Dictionary = {"max_buffered_bytes":MAX_BUFFERED_BYTES,"max_buffered_changes":MAX_BUFFERED_CHANGES,"max_transactions":MAX_TRANSACTIONS,"timeout_ms":240000,"incremental":true}
@@ -367,7 +407,7 @@ func cancel(reason: String = "cancelled") -> void:
 	_clear(); _state="cancelled"; _error=reason.left(256)
 
 func _clear() -> void:
-	_descriptor={}; _bytes=PackedByteArray(); _hash_context=null; _next_chunk=0; _stage=null
+	_descriptor={}; _bytes=PackedByteArray(); _hash_context=null; _next_chunk=0; _stage=null; _chunk_ack=null
 	if _decode_job!=null: _decode_job.cancel()
 	if _final_hash_job!=null: _final_hash_job.cancel()
 	if _apply_job!=null: _apply_job.cancel()
@@ -432,6 +472,7 @@ func _chunk(packet: PROTOCOL.Packet) -> Dictionary:
 	if _bytes.size()+payload.data.size()>_descriptor.size: return _fail("baseline size exceeded")
 	_bytes.append_array(payload.data); _next_chunk+=1
 	if _hash_context.update(payload.data)!=OK: return _fail("hash update failed")
+	_chunk_ack=PROTOCOL.make_packet(PROTOCOL.Kind.MAP_CHUNK_ACK,{"snapshot_id":_descriptor.snapshot_id,"next_chunk":_next_chunk,"received_bytes":_bytes.size()},_descriptor.epoch,_descriptor.tick,_descriptor.map_sequence)
 	if _next_chunk<_descriptor.chunk_count: return Helpers.result(true,"",_state)
 	if _bytes.size()!=_descriptor.size or _hash_context.finish()!=_descriptor.hash: return _fail("baseline length or SHA256 mismatch")
 	_hash_context=null; _decode_job=SnapshotDecodeJob.new()
@@ -508,6 +549,14 @@ func _advance(max_chunks: int) -> Dictionary:
 func take_ready() -> Dictionary:
 	if _state!="ready" or _ready.is_empty(): return Helpers.result(false,"no ready map",_state)
 	var result: Dictionary = _ready; _ready={}; _state="consumed"
+	return result
+
+func get_chunk_ack() -> Dictionary:
+	# A last cumulative acknowledgment may still need sending after decode or
+	# READY because the two sockets have no cross-channel ordering guarantee.
+	if _chunk_ack==null: return Helpers.result(false,"no accepted chunk to acknowledge",_state)
+	var result: Dictionary = Helpers.result(true,"",_state)
+	result["packet"]=PROTOCOL.make_packet(_chunk_ack.kind,_chunk_ack.payload.duplicate(true),_chunk_ack.epoch,_chunk_ack.tick,_chunk_ack.sequence)
 	return result
 
 func get_stats() -> Dictionary:

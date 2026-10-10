@@ -24,7 +24,7 @@ Every message is one complete binary frame. Integers are unsigned **big-endian**
 | --- | --- | --- |
 | 0 | u32 | Magic `0x42464E57`, bytes `42 46 4E 57` = `BFNW` |
 | 4 | u16 | Protocol version `1` |
-| 6 | u8 | Kind `1..16` from the table below |
+| 6 | u8 | Kind `1..18` from the table below |
 | 7 | u8 | Reserved, must equal `0` |
 | 8 | u32 | Payload length, exactly `frame_size - 24` |
 | 12 | u32 | Match epoch |
@@ -76,10 +76,11 @@ Fields in each row occur in the listed order. Sizes exclude the common 24-byte e
 | 15 | GAME_EVENTS | Typed public/owner event batches; [events-codec.md](events-codec.md) |
 | 16 | PLAYER_REQUEST | `action:u8, value:u32, request_sequence:u32` |
 | 17 | MATCH_PREPARING | `actor_id:u32, spawn_generation:u32, profile:u8` |
+| 18 | MAP_CHUNK_ACK | `snapshot_id:u32, next_chunk:u32, received_bytes:u32` |
 
 HELLO roles: `0` player, `1` spectator, `2` bulk map connection. Role2 requires a 32-byte bulk token; roles0/1 require it empty. Optional resume token has zero or 32 bytes. Role/player names need not contain Latin characters. WELCOME actor ID is a stable positive ID, **not** a network peer ID; spawn generation permits zero during initial loading. Server rate is `1..240`, snapshot rate `1..server_hz`, profile `0` = 0.75, `1` = 0.76. REJECT code is `1..65535`; application-specific codes are not yet assigned.
 
-CHAT channel is `0` global or `1` team. A client request uses sender0; confirmed messages may have a positive sender ID. The codec accepts both directions and does **not** authenticate this field; the server must reject/overwrite forged sender IDs and assign message IDs. PING/PONG millisecond counters are u32 and can wrap; a future clock service computes wrap-safe differences and bounded clock estimates. Their payload is 8/12 bytes.
+CHAT channel is `0` global or `1` team. A client request uses sender0; confirmed messages may have a positive sender ID. The codec accepts both directions and does **not** authenticate this field; the server must reject/overwrite forged sender IDs and assign message IDs. PING/PONG millisecond counters are u32 and can wrap; their payload is 8/12 bytes. Transport measures RTT from a matching pending nonce and local monotonic microseconds, not by subtracting peer clock timestamps. Replica uses that RTT only for its bounded input-clock reserve; this is not remote-clock synchronization.
 
 ### INPUT_BATCH: commands only
 
@@ -100,6 +101,57 @@ The payload dictionary is `{records: Array[Dictionary]}`. Each record has exactl
 Button bits0..6 are jump, crouch, sprint, sneak, primary, secondary, reload. Movement is in the player's horizontal basis: +X right and -Z forward. The rounded move vector must satisfy `x²+z² <= 1.000001`; the tolerance permits float32 normalization error, not faster diagonal input. Yaw/pitch use the port's Godot-radian convention. Each subsequent record must have input sequence and tick exactly one greater than the preceding record; a single batch cannot duplicate/reorder/gap/wrap them. Cross-batch sequencing and button-edge/action processing are the runtime's responsibility.
 
 There is no client actor ID, position, velocity, hit victim, damage, ammo, capture, kill or client delta-time in this layout. Extra authoritative fields cause encoding failure. Passing the codec does not authorize weapon changes, firing, movement speed or timeline claims.
+
+### Runtime input admission and stale ACK retirement
+
+This is the authority-4 application policy; it adds no bytes or optional fields
+to INPUT_BATCH. Runtime derives the actor from the authenticated game binding,
+requires the bound epoch and spawn generation, exact schema, contiguous input
+sequence across batches and strictly increasing cross-batch ticks. Envelope tick
+must equal the last record's tick. A batch is validated atomically before any
+record enters the queue; at most eight records per batch and 32 pending records
+are allowed. Stale records have the same validation/capacity cost as fresh ones;
+the policy cannot be used to skip identity, sequence or resource authority.
+
+Let `S` be the latest **closed** authority tick when a packet arrives:
+
+| Bound | Receive / execution meaning |
+| --- | --- |
+| `MAX_FUTURE_TICKS=8` | Reject any received record later than `S+8` |
+| `MAX_STALE_TICKS=120` | Reject any received record earlier than `max(0,S-120)` |
+| `MAX_LATE_TICKS=15` | On `take(S+1)`, discard records earlier than `S-15`; exactly `S-15` remains executable on this next step |
+| `MAX_PENDING=32` | Includes both stale records awaiting retirement and fresh/future records |
+| `LEASE_TICKS=6` | Clear held controls if no executable command refreshes the lease |
+
+On each fixed step, `take` retires its bounded stale prefix before selecting at
+most one executable command. For received age 16..120, retirement acknowledges
+the exact ordered sequence without applying that command to MatchSimulation or
+using its tick for firearm rewind. The internal `retired_ack` promotes the
+actor's `consumed_input_sequence`, conveyed in the next private MATCH_STATE
+owner record; it is not an additional wire message. Runtime clears held controls
+and the prior shot-clock binding and increments its `stale_inputs` statistic.
+Retired movement/buttons/tool/class cannot initiate motion, shots, reload,
+build/hit/terrain/grenade effects or change/refill resources. Fixed simulation
+time continues. A following fresh contiguous command can execute normally in
+the same or a subsequent step; future commands wait until eligible.
+
+This intentionally replaces the earlier receive-late-15 rejection rule with
+bounded ACK-only retirement. It **does not extend** executable/rewound input past
+15 closed ticks or allow replay of expired actions. Older than 120, future-9,
+forged schema/owner/generation, gaps/replays and queue overflow still reject.
+PLAYER_REQUEST retains strict late-15/future-8 admission and its independent
+contiguous request counter; it has no ACK-retirement path.
+
+Client wire ticks come from the wall-time/authority `ClientInputClock`, not the
+retimed replay state. It reserves `clamp(ceil(full_rtt_ms*0.06),3,7)` ticks
+(initially 3), accounting for downstream snapshot plus upstream command travel.
+Next input uses `max(last_sent+1,latest_snapshot+1,estimate+1)` and waits if that
+candidate exceeds `latest_snapshot+8`, spending no sequence. A strictly newer
+snapshot after waiting reanchors wall time; duplicates cannot do so and committed
+ticks remain monotonic. Pending incoming packets must be drained before stamping
+intent; successful queued intent is flushed before render work. Epoch/generation
+reset and same-life sequence barriers are separate from local replay retiming.
+See [client-schedule.md](client-schedule.md) for formulas, evidence and limits.
 
 ### Map transfer
 
@@ -149,9 +201,13 @@ The current snapshot has **no** CTF flags, territories, team metadata/score, gre
 
 SNAPSHOT13 is retained for a transitional transport fixture. Production uses MATCH_STATE14 with complete private owner replay state and public actors, objectives and grenades. Envelope epoch/tick/generation must match its body. GAME_EVENTS15 implements typed effects/lifecycle/objective delivery with owner-only private feedback, strict sequence bounds and header/body identity. Predicted action effects deduplicate in Replica; arbitrary Variant bodies are unsupported.
 
-PLAYER_REQUEST16 is exactly9 bytes. Action0 requests team0..2, action1 requests canonical packed block color0x01RRGGBB. Payload `request_sequence` is a positive contiguous owner intention counter. Envelope sequence is the current owner spawn generation; envelope epoch/tick are subject to Runtime admission. Class/tool selection remains an INPUT_BATCH intention. Clients have no map/reset/mode/hit/resource authority. Discovery is the explicit direct-endpoint/favorites replacement in ADR0006. Compatibility identifiers are network-3/authority-3 with envelope version1.
+PLAYER_REQUEST16 is exactly9 bytes. Action0 requests team0..2, action1 requests canonical packed block color0x01RRGGBB. Payload `request_sequence` is a positive contiguous owner intention counter. Envelope sequence is the current owner spawn generation; envelope epoch/tick are subject to strict Runtime late-15/future-8 admission, without stale retirement. Class/tool selection remains an INPUT_BATCH intention. Clients have no map/reset/mode/hit/resource authority. Discovery is the explicit direct-endpoint/favorites replacement in ADR0006. Compatibility identifiers are network-4/authority-4 with envelope version1; the authority change makes the new INPUT_BATCH retirement policy explicit in HELLO/WELCOME hashes.
 
 MATCH_PREPARING17 is exactly9 payload bytes /33 frame bytes, without credentials. `actor_id` is positive, `spawn_generation` is exactly1 and profile is0/1. Envelope epoch is positive and sequence must equal generation1; tick is the replacement baseline's closed tick. Only the server can announce a trusted reset. A bound client requires a strictly greater epoch and the same stable actor ID; an initially joining client without an ID may bind its first announcement. It clears old prediction/maps/bulk/events immediately and exposes status `preparing`. A further greater announcement supersedes unfinished preparation. Duplicate/stale announcements fail closed. Subsequent WELCOME must exactly match announced epoch/ID/generation/profile; unannounced replacement WELCOME, premature MAP_BEGIN and mismatched future-epoch map/state packets fail closed. Initial non-reset WELCOME/resume retains its existing contract. Bulk opens only after matching WELCOME and MAP_BEGIN; the15-second one-use bulk capability is refreshed when preparation completes. See [match-preparation.md](match-preparation.md) for queue/deadline and verification details.
+
+MAP_CHUNK_ACK18 is exactly12 payload bytes /36 frame bytes, big-endian, without credentials or actor IDs. `snapshot_id` is positive, `next_chunk` is the next expected contiguous index (1..4106), and `received_bytes` is 1..64MiB. The codec requires `next_chunk == ceil(received_bytes / 16346)` and a positive header epoch. Runtime additionally requires the authenticated bulk owner and the frozen BEGIN's exact epoch/tick/map-sequence/snapshot identity, progress no later than queued chunks, and `received_bytes == min(next_chunk * 16346, baseline_size)`. Correct duplicate/older progress in the same snapshot is an accepted no-op, never additional credit; wrong context, ahead progress or byte mismatch fails without changing the window. At most8 bulk chunks may be queued/sent without acknowledged receipt. This credits raw byte reception only, not canonical-map readiness, actors or authority. Final hash/delta/barrier gates remain unchanged. MAP_END and final ACK can cross on separate sockets; valid final ACKs remain accepted after MAP_READY. See [map-backpressure.md](map-backpressure.md).
+
+The header version remains1, but network-4 compatibility is mandatory for this family: an old client cannot safely consume a large baseline without receive credit. Existing network-3 clients are rejected by the handshake hashes; there is no silent unbounded fallback.
 
 Canonical map bytes do not serialize physical water metadata. The native network Runtime therefore requires finite `water_level=1.0`, `wade_origin_level=2.0` on configure/reset, before changing authority or credentials. Receivers reconstruct those same defaults; changing them on a live network map is outside this contract. Standalone/offline query metadata is unchanged.
 
@@ -159,7 +215,7 @@ Native publication can prepare a shared validated snapshot/event capture, then a
 
 ## Verification
 
-Godot4.7.2 `ed1daf0bf`: parser check and standalone test suite **1639 assertions, 0 failures**, exit0, with no warnings, script errors or leaked-resource diagnostics in `.cache/logs/protocol-preparing-tests.log`. Reproducible commands from the workspace root:
+The earlier preparation-family verification on Godot4.7.2 `ed1daf0bf` passed parser and **1639 assertions, 0 failures**, exit0, with no warnings, script errors or leaked-resource diagnostics in `.cache/logs/protocol-preparing-tests.log`. Later cumulative-ACK protocol checks passed1759/0. Reproducible commands from the workspace root:
 
 ```powershell
 & .\.tools\godot\Godot_v4.7.2-stable_win64_console.exe --headless --path game --check-only --script res://network/protocol.gd
@@ -167,3 +223,28 @@ Godot4.7.2 `ed1daf0bf`: parser check and standalone test suite **1639 assertions
 ```
 
 The suite does not instantiate main or save preferences. It covers the original13 family roundtrips, independent envelope/float-endian and33-byte preparation goldens, every prefix truncation of representative frames, oversize/length/version/reserved errors, hostile counts, NaN/Inf, malformed/overlong UTF-8 and controls without string-conversion warnings, opaque token lengths, duplicate records/actors/cells, cell/color/fragment limits, owner state and deterministic scalar-byte mutations. Full-state/event/request-family checks also live in their focused suites. Preparation additionally rejects missing/extra/wrong-type metadata, generation0/2, profile2 and epoch/header identity mismatches. Test counts/results are handed to the coordinator; passing these tests establishes a bounded codec only, not N-row or multiplayer acceptance.
+
+Current clock69/0 and controller510/0 establish the RTT/wait integration.
+Actual-socket Runtime223/0 covers stale ACK retirement: all seven buttons set
+(`buttons=127`), movement, grenade-tool and shotgun-class intent retire without
+resource/tool/class/motion/hit/terrain/grenade effects, then fresh sequence3 acts.
+The RTT-accounted scheduler report passed47/0 with130 frames,339 sent inputs,
+21 clock waits, zero dropped steps, lead1..7 and peak pending8 in6.618s. Its older
+all-360-input expectation failed47/2 and remains preserved, not reclassified as a
+pass. Before authority-4 retirement, both Web receivers ACKed73/73 baseline chunks
+(not test assertions), with ordinary lag-2..2 before frame-entry late-16 rejection; safe trace:
+`.cache/previews/browser-clock-rtt-stall-failure.log`.
+
+A later authority-4 dirty diagnostic PCK SHA256
+`4581f1740b767e459158b29a2c15b42ed12a5f413374eeaac7bea8346600241b`
+ran two actual foreground Web clients for approximately three minutes: CTF
+entry/rendering, cross-client chat, block palette, team/spectator/class respawn
+and explicit same-actor1 reconnect with fresh map snapshot ID3/73 ACKed chunks were
+confirmed, including UI Connected→Enter and shotgun6/48/100HP. Final counters
+were admissions2/resumes1/expected closed1/stale_inputs4, with zero input
+rejection/map resync/timeout/backpressure. Both logs had only IAB pointer-lock
+WrongDocumentError, no engine/other errors; both clients/server stopped.
+Screenshot: `.cache/previews/browser-network-retirement.jpg`. See
+[client-schedule.md](client-schedule.md) for the partial proof and10–11FPS limit.
+This does not accept a frozen export/Pages publication, public WSS/TLS,
+Docker/Linux execution, background-tab survival, capacity or iteration2 completion.

@@ -29,6 +29,7 @@ var authority_errors := 0
 var client_frames := 0
 var submitted := 0
 var dropped_client_steps := 0
+var clock_wait_steps := 0
 var catchup_bursts := 0
 var submit_errors := 0
 var peak_pending := 0
@@ -167,7 +168,11 @@ func _stream() -> void:
 				var buttons := RULES.Buttons.PRIMARY if now-started_us < 3000000 else 0
 				var move := Vector2(.4, 0) if now-started_us < 1500000 else Vector2(-.4, 0) if now-started_us < 3000000 else Vector2.ZERO
 				var result := first.submit_input(buttons, move, 0, 0)
-				if not result.ok: submit_errors += 1; break
+				if not result.ok:
+					if result.error in ["awaiting fresh authority clock","awaiting fresh authority stream"]:
+						clock_wait_steps += count-_step
+					else: submit_errors += 1
+					break
 				var lead: int = first._last_input_tick-server.simulation.tick
 				minimum_input_lead = mini(minimum_input_lead, lead)
 				maximum_input_lead = maxi(maximum_input_lead, lead)
@@ -185,11 +190,11 @@ func _stream() -> void:
 	_snapshot_trajectory(started_us)
 	last_stream_error = first.last_error
 	check(first.status == "live" and observer.status == "live", "independent clocks preserve both actual connections")
-	check(submit_errors == 0, "every ordinary24Hz input burst is accepted locally")
+	check(submit_errors == 0, "ordinary24Hz input bursts send or wait for fresh authority without failure")
 	check(authority_errors == 0, "real-clock authority never rejects its fixed steps")
 	check(server.get_stats().totals.input_rejections == 0, "ordinary bursts stay inside authoritative admission window")
 	check(server.game_transport.get_stats().totals.backpressure == 0 and server.game_transport.get_stats().totals.timeouts == 0, "ordinary schedule has no authority transport pressure or timeout")
-	check(submitted+dropped_client_steps >= stream_seconds*SERVER_HZ-5, "24Hz scheduling accounts for60 physics ticks per second with explicit dropped time")
+	check(submitted+dropped_client_steps+clock_wait_steps >= stream_seconds*SERVER_HZ-5, "24Hz scheduling accounts for60 physics ticks per second with explicit dropped time and clock waits")
 	check(peak_pending < 256 and peak_queue_frames < TRANSPORT.MAX_QUEUE_FRAMES and peak_queue_bytes < TRANSPORT.MAX_OUTBOUND_BYTES, "ordinary prediction and native outbound queues remain bounded")
 	if first.status != "live": return
 	if not await _wait(func() -> bool: return int(first.prediction.get_status().input_ack) == last_sequence, "all scheduled commands acknowledged and drained"): return
@@ -231,10 +236,12 @@ func _terminal_cases() -> void:
 	if not await _resume(token, stable_id): return
 	token = first.resume_token()
 	var accepted := 0
-	# Do not poll or flush this burst: assert the real admission bound, then the
-	# terminal path drops every unsent frame rather than sending future intents.
+	# Fill the actual transport queue without dispatching. Ordinary input now
+	# flushes immediately and deliberately waits at the8-tick clock ceiling.
+	# These unsent valid chat frames test queue pressure independently of clock.
 	for _frame in range(TRANSPORT.MAX_QUEUE_FRAMES):
-		if first.submit_input(0, Vector2.ZERO, 0, 0).ok: accepted += 1
+		var packet := TRANSPORT.PROTOCOL.make_packet(TRANSPORT.PROTOCOL.Kind.CHAT,{"channel":0,"sender_id":0,"message_id":_frame+1,"text":"unsent pressure fixture"},first.epoch,server.simulation.tick,1)
+		if first.game.send(first._game_id,packet).ok: accepted += 1
 	check(accepted == TRANSPORT.MAX_QUEUE_FRAMES, "actual outgoing application queue admits exactly its32-frame bound")
 	var pressured_send := first.submit_input(0, Vector2.ZERO, 0, 0)
 	check(not pressured_send.ok and pressured_send.error == "input send failed: outbound backpressure", "true queue pressure remains distinguishable from closed socket")
@@ -250,7 +257,7 @@ func run() -> void:
 	if not relay_dir.is_empty(): stream_seconds = 20
 	Engine.max_fps = 240
 	run_started_us = Time.get_ticks_usec()
-	for path: String in ["res://network/client_replica.gd","res://network/client_prediction.gd","res://network/input_queue.gd","res://network/ws_transport.gd"]:
+	for path: String in ["res://network/client_replica.gd","res://network/client_input_clock.gd","res://network/client_prediction.gd","res://network/input_queue.gd","res://network/ws_transport.gd"]:
 		source_hashes[path] = _hash_source(path)
 	var data := DATA.new()
 	check(data.clear(Vector3i(32,16,32), 207) == OK, "bounded real canonical terrain")
@@ -293,7 +300,7 @@ func finish() -> void:
 	var result := {"assertions":assertions,"failures":failures,"errors":errors,"wall_seconds":(Time.get_ticks_usec()-run_started_us)/1000000.0,
 		"source_hashes":source_hashes,"shaped_tcp":not relay_dir.is_empty(),"source_profile":"0.75","server_hz":SERVER_HZ,"client_hz":CLIENT_HZ,
 		"stream_seconds":stream_seconds,"authority_steps":authority_steps,"client_frames":client_frames,"submitted":submitted,
-		"dropped_client_steps":dropped_client_steps,"catchup_bursts":catchup_bursts,
+		"dropped_client_steps":dropped_client_steps,"clock_wait_steps":clock_wait_steps,"catchup_bursts":catchup_bursts,
 		"peak_pending":peak_pending,"peak_queue_frames":peak_queue_frames,"peak_queue_bytes":peak_queue_bytes,
 		"minimum_input_lead":minimum_input_lead,"maximum_input_lead":maximum_input_lead,
 		"maximum_replay_clock_lead":maximum_replay_clock_lead,

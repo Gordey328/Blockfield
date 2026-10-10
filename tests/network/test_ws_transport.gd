@@ -132,6 +132,36 @@ func _test_two_clients() -> void:
 	check(_captured(b,"packet").is_empty(),"B does not receive A's private response")
 	check(_captured(a,"packet")[0].connection_id==a_id,"client event uses its local connection ID")
 	_clear_events()
+	check(a.send(a_id,_chat("before-render")).ok,"current intent queued for immediate dispatch")
+	var received_before: int = int(a.get_stats().totals.rx_frames)
+	a.flush_outgoing()
+	check(a.get_stats().peers[0].queued_frames == 0,"dispatch drains local intent before another client poll")
+	var flush_deadline := Time.get_ticks_msec()+2000
+	while _captured(server,"packet").is_empty() and Time.get_ticks_msec()<flush_deadline:
+		server.poll()
+		_events[_index(server)].append_array(server.drain_events())
+		await process_frame
+	check(_captured(server,"packet").size()==1 and _captured(server,"packet")[0].packet.payload.text=="before-render","authority receives intent without another client frame/poll")
+	check(int(a.get_stats().totals.rx_frames)==received_before,"outgoing dispatch cannot receive or reconcile state midway through input")
+	_clear_events()
+	check(not a.has_pending_incoming(),"drained transport has no stale state batch")
+	var backlog_sent := true
+	for index in range(32): backlog_sent = backlog_sent and server.send(server_a,_chat("inbound-backlog",index+1)).ok
+	check(backlog_sent,"authority sends a32frame ordered inbound backlog")
+	server.flush_outgoing()
+	var backlog_deadline := Time.get_ticks_msec()+2000
+	while _captured(a,"packet").size()<16 and Time.get_ticks_msec()<backlog_deadline:
+		server.poll()
+		a.poll()
+		_events[_index(a)].append_array(a.drain_events())
+		await process_frame
+	check(_captured(a,"packet").size()==16 and a.has_pending_incoming(),"budgeted receive detects old frames after draining first16 events")
+	var backlog_rx: int = int(a.get_stats().totals.rx_frames)
+	a.has_pending_incoming()
+	check(int(a.get_stats().totals.rx_frames)==backlog_rx,"backlog observation cannot receive more frames")
+	check(await _until(func() -> bool:return _captured(a,"packet").size()==32),"later poll drains newest inbound batch in order")
+	check(not a.has_pending_incoming(),"authority stream gate clears after final ordered batch")
+	_clear_events()
 	for sequence: int in range(1,33): check(a.send(a_id,_chat("ordered",sequence)).ok,"bounded queue accepts frame %d" % sequence)
 	check(not a.send(a_id,_chat("overflow",33)).ok,"frame-count backpressure rejects 33rd queued frame")
 	var a_peer: Dictionary = a.get_stats().peers[0]

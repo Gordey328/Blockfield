@@ -5,6 +5,7 @@ const PROTOCOL = preload("res://network/protocol.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const MAX_PENDING := 32
 const MAX_LATE_TICKS := 15
+const MAX_STALE_TICKS := 120
 const MAX_FUTURE_TICKS := 8
 const LEASE_TICKS := 6
 var epoch: int = 0
@@ -44,7 +45,7 @@ func accept(packet: BlockfieldProtocol.Packet, server_tick: int) -> Dictionary:
 		return _failure("input gap, replay or queue capacity")
 	var staged: Array[Dictionary] = []
 	for record: Dictionary in records:
-		if record.input_tick < maxi(0,server_tick-MAX_LATE_TICKS) or record.input_tick > server_tick+MAX_FUTURE_TICKS:
+		if record.input_tick < maxi(0,server_tick-MAX_STALE_TICKS) or record.input_tick > server_tick+MAX_FUTURE_TICKS:
 			return _failure("input outside admitted tick window")
 		var command := RULES.Command.from_record(record,generation)
 		if not command.valid(): return _failure("invalid command")
@@ -57,10 +58,15 @@ func accept(packet: BlockfieldProtocol.Packet, server_tick: int) -> Dictionary:
 func take(server_tick: int) -> Dictionary:
 	if epoch == 0 or needs_resync or server_tick != _last_server_tick+1 or server_tick > PROTOCOL.U32_MAX: return _failure("invalid server step")
 	_last_server_tick = server_tick
-	if not _pending.is_empty() and _pending[0].input_tick < server_tick-MAX_LATE_TICKS:
-		_pending.clear()
-		needs_resync = true
-		return _failure("input backlog expired; owner resync required")
+	# A stalled Web frame/TCP stream can deliver old, valid ordered intent.
+	# Acknowledge its bounded prefix without executing movement/actions or
+	# requesting history older than15 closed ticks. Fresh intent stays ordered.
+	var discarded := 0
+	while not _pending.is_empty() and _pending[0].input_tick < server_tick-1-MAX_LATE_TICKS:
+		var expired: Dictionary = _pending.pop_front()
+		input_ack = expired.command.sequence
+		discarded += 1
+	var retired_ack := input_ack if discarded > 0 else 0
 	var command: PlayerRules.Command = null
 	var input_tick := -1
 	if not _pending.is_empty() and _pending[0].input_tick <= server_tick:
@@ -69,7 +75,7 @@ func take(server_tick: int) -> Dictionary:
 		input_tick = admitted.input_tick
 		input_ack = command.sequence
 		_last_command_tick = server_tick
-	return {"ok":true,"error":"","command":command,"input_tick":input_tick,"clear_controls":server_tick-_last_command_tick >= LEASE_TICKS,"input_ack":input_ack}
+	return {"ok":true,"error":"","command":command,"input_tick":input_tick,"clear_controls":discarded > 0 or server_tick-_last_command_tick >= LEASE_TICKS,"input_ack":input_ack,"discarded":discarded,"retired_ack":retired_ack}
 
 func get_stats() -> Dictionary:
 	return {"pending":_pending.size(),"input_ack":input_ack,"tail_sequence":_tail_sequence,"epoch":epoch,"generation":generation,"needs_resync":needs_resync}

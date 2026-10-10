@@ -22,7 +22,7 @@ const INPUT_BUTTON_MASK: int = 0x7f # jump,crouch,sprint,sneak,primary,secondary
 const ACTOR_FLAG_MASK: int = 0xff # alive,crouch,sprint,wade,ground,connected,reload,cook
 
 enum Kind { HELLO = 1, WELCOME, REJECT, INPUT_BATCH, CHAT, PING, PONG,
-	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE, GAME_EVENTS, PLAYER_REQUEST, MATCH_PREPARING }
+	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE, GAME_EVENTS, PLAYER_REQUEST, MATCH_PREPARING, MAP_CHUNK_ACK }
 
 class Packet extends RefCounted:
 	var kind: int = 0
@@ -170,7 +170,7 @@ static func _failure(message: String) -> Result:
 
 static func encode(packet: Packet) -> Result:
 	if packet == null: return _failure("null packet")
-	if packet.kind < Kind.HELLO or packet.kind > Kind.MATCH_PREPARING: return _failure("unsupported kind")
+	if packet.kind < Kind.HELLO or packet.kind > Kind.MAP_CHUNK_ACK: return _failure("unsupported kind")
 	for value: int in [packet.epoch, packet.tick, packet.sequence]:
 		if value < 0 or value > U32_MAX: return _failure("header value out of range")
 	var payload_writer: Writer = Writer.new()
@@ -182,6 +182,7 @@ static func encode(packet: Packet) -> Result:
 		return _failure("event header/body identity mismatch")
 	if packet.kind == Kind.MATCH_PREPARING and (packet.epoch == 0 or packet.sequence != packet.payload.spawn_generation):
 		return _failure("preparing header/body identity mismatch")
+	if packet.kind == Kind.MAP_CHUNK_ACK and packet.epoch == 0: return _failure("chunk acknowledgment epoch must be positive")
 	var data: PackedByteArray = payload_writer.stream.data_array
 	var limit: int = MAX_BULK_FRAME if packet.kind == Kind.MAP_CHUNK else MAX_FRAME
 	if data.size() > limit - HEADER_SIZE: return _failure("frame exceeds limit")
@@ -204,7 +205,7 @@ static func decode(data: PackedByteArray) -> Result:
 	if _header_u32(data, 0) != MAGIC: return _failure("wrong magic")
 	if (int(data[4]) << 8 | int(data[5])) != VERSION: return _failure("unsupported version")
 	var kind: int = data[6]
-	if kind < Kind.HELLO or kind > Kind.MATCH_PREPARING: return _failure("unsupported kind")
+	if kind < Kind.HELLO or kind > Kind.MAP_CHUNK_ACK: return _failure("unsupported kind")
 	if data[7] != 0: return _failure("reserved flags must be zero")
 	if kind == Kind.MAP_CHUNK and data.size() > MAX_BULK_FRAME: return _failure("bulk frame exceeds limit")
 	if _header_u32(data, 8) != data.size() - HEADER_SIZE: return _failure("payload length mismatch")
@@ -225,6 +226,7 @@ static func decode(data: PackedByteArray) -> Result:
 		return _failure("event header/body identity mismatch")
 	if kind == Kind.MATCH_PREPARING and (_header_u32(data,12) == 0 or _header_u32(data,20) != payload.spawn_generation):
 		return _failure("preparing header/body identity mismatch")
+	if kind == Kind.MAP_CHUNK_ACK and _header_u32(data,12) == 0: return _failure("chunk acknowledgment epoch must be positive")
 	var result: Result = Result.new()
 	result.ok = true
 	result.packet = make_packet(kind, payload, _header_u32(data, 12), _header_u32(data, 16), _header_u32(data, 20))
@@ -297,6 +299,15 @@ static func _write_payload(kind: int, p: Dictionary, w: Writer) -> void:
 			if p.index >= _chunk_count(p.total_size): w.fail("chunk index exceeds transfer"); return
 			var expected: int = mini(CHUNK_BYTES, p.total_size - p.index * CHUNK_BYTES)
 			w.integer(expected, 2, 1, CHUNK_BYTES); w.raw(p.data, expected)
+		Kind.MAP_CHUNK_ACK:
+			if not _keys(p,["snapshot_id","next_chunk","received_bytes"],w): return
+			w.integer(p.snapshot_id,4,1)
+			w.integer(p.next_chunk,4,1,_chunk_count(MAX_MAP_BYTES))
+			w.integer(p.received_bytes,4,1,MAX_MAP_BYTES)
+			if not w.error.is_empty(): return
+			# The final chunk may be short; a cumulative ACK still identifies
+			# exactly this chunk boundary before transfer-specific validation.
+			if p.next_chunk != _chunk_count(p.received_bytes): w.fail("chunk acknowledgment count/bytes mismatch")
 		Kind.MAP_END, Kind.MAP_READY:
 			if not _keys(p, ["snapshot_id", "map_sequence", "hash"], w): return
 			w.integer(p.snapshot_id, 4, 1); w.integer(p.map_sequence, 4); w.raw(p.hash, 32)
@@ -413,6 +424,7 @@ static func _read_payload(kind: int, r: Reader) -> Dictionary:
 			if count != mini(CHUNK_BYTES, total_size - index * CHUNK_BYTES): r.fail("bulk chunk length mismatch"); return {}
 			return {"snapshot_id":snapshot_id, "index":index, "total_size":total_size, "data":r.raw(count)}
 		Kind.MAP_END, Kind.MAP_READY: return {"snapshot_id":r.integer(4), "map_sequence":r.integer(4), "hash":r.raw(32)}
+		Kind.MAP_CHUNK_ACK: return {"snapshot_id":r.integer(4),"next_chunk":r.integer(4),"received_bytes":r.integer(4)}
 		Kind.MAP_DELTA: return _read_delta(r)
 		Kind.SNAPSHOT: return _read_snapshot(r)
 		Kind.MATCH_STATE:

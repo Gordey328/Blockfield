@@ -20,8 +20,59 @@ func _run() -> void:
 	_test_baseline_failures()
 	_test_transaction_failures()
 	_test_budgets_and_lifecycle()
+	_test_bulk_window()
 	print("MAP_TRANSFER: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures==0 else 1)
+
+func _test_bulk_window() -> void:
+	var data: DATA = _data(Vector3i(64,16,64))
+	var sender: TRANSFER.BaselineSender = _sender(data)
+	var begin: PROTOCOL.Packet = sender.begin_packet()
+	var chunks: Array[PROTOCOL.Packet] = _chunks(sender)
+	var receiver: TRANSFER = _join(begin)
+	var window := TRANSFER.BulkWindow.new()
+	check(window.reset(begin).ok and chunks.size()>16,"bulk credit fixture exceeds two full windows")
+	check(not receiver.get_chunk_ack().ok,"no credit before any chunk is accepted")
+	for index in range(8): check(window.mark_sent(chunks[index]).ok,"initial send fits bounded receive credit")
+	check(not window.can_send() and not window.mark_sent(chunks[8]).ok and window.get_stats().outstanding_chunks==8,"ninth queued chunk waits for receiver credit")
+	var before := window.get_stats()
+	var ack := PROTOCOL.make_packet(PROTOCOL.Kind.MAP_CHUNK_ACK,{"snapshot_id":9,"next_chunk":8,"received_bytes":8*PROTOCOL.CHUNK_BYTES},begin.epoch,begin.tick,begin.sequence)
+	for change in ["epoch","tick","sequence","snapshot","ahead","bytes"]:
+		var bad := _clone(ack)
+		match change:
+			"epoch": bad.epoch+=1
+			"tick": bad.tick+=1
+			"sequence": bad.sequence+=1
+			"snapshot": bad.payload.snapshot_id+=1
+			"ahead": bad.payload.next_chunk=9; bad.payload.received_bytes=9*PROTOCOL.CHUNK_BYTES
+			"bytes": bad.payload.received_bytes-=1
+		check(not window.acknowledge(bad).ok and window.get_stats()==before,"invalid %s ACK cannot grant or remove credit" % change)
+	for index in range(8): check(receiver.consume(_wire(chunks[index]),1).ok,"paused receiver later accepts its buffered window")
+	var received := receiver.get_chunk_ack()
+	check(received.ok and received.packet.payload.next_chunk==8 and window.acknowledge(_wire(received.packet)).advanced,"accepted cumulative ACK reopens bounded sender")
+	var copied: PROTOCOL.Packet = receiver.get_chunk_ack().packet; copied.payload.next_chunk=1
+	check(receiver.get_chunk_ack().packet.payload.next_chunk==8,"caller cannot mutate retained ACK metadata")
+	var duplicate := window.acknowledge(ack)
+	check(duplicate.ok and duplicate["duplicate"] and not duplicate.advanced,"duplicate latest cumulative ACK is a no-op")
+	var older := _clone(ack); older.payload.next_chunk=1; older.payload.received_bytes=PROTOCOL.CHUNK_BYTES
+	check(window.acknowledge(older)["duplicate"] and window.get_stats().acked_chunks==8,"older valid progress in the same snapshot grants no extra credit")
+	check(receiver.consume(sender.end_packet(data).packet,2).ok and not receiver.take_ready().ok,"cross-channel END before remaining chunks cannot expose the map")
+	for index in range(8,chunks.size()):
+		if not window.can_send(): check(window.acknowledge(receiver.get_chunk_ack().packet).ok,"later full window waits for cumulative acknowledgment")
+		check(window.mark_sent(chunks[index]).ok and receiver.consume(_wire(chunks[index]),3).ok,"later chunk stays within credit and strict ordered baseline")
+	var final_ack: PROTOCOL.Packet = receiver.get_chunk_ack().packet
+	var guard := 0
+	while receiver.get_stats().pending_work and guard<100:
+		check(receiver.poll(4,2).ok,"bounded decode and barrier hash preserve final pending acknowledgment")
+		guard+=1
+	var ready := receiver.take_ready()
+	check(guard<100 and ready.ok and ready.data.blocks==data.blocks,"full windows converge at the canonical final barrier")
+	check(receiver.get_chunk_ack().packet.payload==final_ack.payload,"final ACK metadata survives ready handoff for cross-socket ordering")
+	check(window.acknowledge(final_ack).ok and window.get_stats().outstanding_chunks==0,"delayed final ACK is valid after ready handoff")
+	window.cancel(); receiver.cancel()
+	check(not window.acknowledge(final_ack).ok and not receiver.get_chunk_ack().ok,"disconnect/reset cannot retain old window or ACK metadata")
+	var reset_begin := _clone(begin); reset_begin.epoch+=1
+	check(window.reset(reset_begin).ok and not window.acknowledge(final_ack).ok,"previous-epoch progress cannot credit a fresh snapshot")
 
 func _data(size: Vector3i = Vector3i(32,8,32)) -> DATA:
 	var data: DATA = DATA.new()

@@ -144,6 +144,20 @@ func poll() -> void:
 	if _connections.is_empty() and (_mode == "client" or _stopping):
 		_mode = "idle"; _stopping = false
 
+func flush_outgoing() -> void:
+	# No receive/poll callbacks: a client can dispatch current intent immediately
+	# without applying a new snapshot halfway through prediction.
+	var now := Time.get_ticks_usec()
+	for connection: Connection in _connections.values():
+		if connection.opened and not connection.closing: _flush(connection,now)
+
+func has_pending_incoming() -> bool:
+	# This observes already-buffered packets without polling or consuming them.
+	if not _events.is_empty(): return true
+	for connection: Connection in _connections.values():
+		if connection.socket.get_available_packet_count() > 0: return true
+	return false
+
 func _accept() -> void:
 	var accepted_this_poll: int = 0
 	while _server != null and _server.is_connection_available() and accepted_this_poll < MAX_ACCEPT_PER_POLL:

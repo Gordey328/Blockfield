@@ -44,7 +44,8 @@ func _fixtures() -> Array[Dictionary]:
 		{"kind":PROTOCOL.Kind.MAP_END,"payload":{"snapshot_id":3,"map_sequence":19,"hash":_bytes(32)}},
 		{"kind":PROTOCOL.Kind.MAP_DELTA,"payload":_delta()},
 		{"kind":PROTOCOL.Kind.MAP_READY,"payload":{"snapshot_id":3,"map_sequence":19,"hash":_bytes(32)}},
-		{"kind":PROTOCOL.Kind.SNAPSHOT,"payload":_snapshot()}
+		{"kind":PROTOCOL.Kind.SNAPSHOT,"payload":_snapshot()},
+		{"kind":PROTOCOL.Kind.MAP_CHUNK_ACK,"payload":{"snapshot_id":3,"next_chunk":2,"received_bytes":PROTOCOL.CHUNK_BYTES*2}}
 	]
 
 func _run() -> void:
@@ -56,8 +57,23 @@ func _run() -> void:
 	_test_snapshots()
 	_test_hostile_mutations()
 	_test_preparing()
+	_test_chunk_ack()
 	print("PROTOCOL: %d assertions, %d failures" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
+
+func _test_chunk_ack() -> void:
+	var packet := PROTOCOL.make_packet(PROTOCOL.Kind.MAP_CHUNK_ACK,{"snapshot_id":3,"next_chunk":2,"received_bytes":32692},0x01020304,70,19)
+	var golden := PackedByteArray([0x42,0x46,0x4e,0x57,0,1,18,0,0,0,0,12,1,2,3,4,0,0,0,70,0,0,0,19,0,0,0,3,0,0,0,2,0,0,0x7f,0xb4])
+	check(PROTOCOL.encode(packet).bytes==golden,"MAP_CHUNK_ACK independent36-byte big-endian golden")
+	var decoded := PROTOCOL.decode(golden)
+	check(decoded.ok and decoded.packet.payload==packet.payload,"chunk receive credit roundtrip")
+	for count in range(golden.size()): _reject_frame(golden.slice(0,count),"truncated chunk ACK at%d" % count)
+	for change in [{"snapshot_id":0},{"next_chunk":0},{"received_bytes":0},{"received_bytes":1},{"next_chunk":4107},{"received_bytes":PROTOCOL.MAX_MAP_BYTES+1},{"next_chunk":2.0},{"actor_id":7}]:
+		var payload: Dictionary = packet.payload.duplicate(true); payload.merge(change,true)
+		_reject_encode(PROTOCOL.Kind.MAP_CHUNK_ACK,payload,"bounded exact chunk ACK schema")
+	var zero_epoch := golden.duplicate(); _put_u32(zero_epoch,12,0)
+	_reject_frame(zero_epoch,"chunk ACK cannot use an unbound epoch")
+	packet.epoch=0; check(not PROTOCOL.encode(packet).ok,"outbound chunk ACK requires positive epoch")
 
 func _test_preparing() -> void:
 	var payload := {"actor_id":43,"spawn_generation":1,"profile":1}

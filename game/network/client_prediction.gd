@@ -19,6 +19,7 @@ var _map_sequence := 0
 var _last_server_tick := -1
 var _last_ack := 0
 var _last_submitted := 0
+var _reset_ack_floor := -1
 var _needs_rebase := false
 var _map_sync := false
 var _reason := "not initialized"
@@ -99,20 +100,30 @@ func reset(owner: STATE, server_tick: int, map_sequence: int) -> Dictionary:
 	var error := _owner_error(owner, server_tick)
 	if not error.is_empty() or not _u32(map_sequence):
 		return _result(false, error if not error.is_empty() else "invalid map sequence")
+	var same_life := _state != null and owner.player_id == _state.player_id \
+		and owner.match_epoch == _state.match_epoch and owner.spawn_generation == _state.spawn_generation
+	if same_life and (server_tick < _last_server_tick or owner.consumed_input_sequence < _last_ack):
+		return _result(false, "stale same-life reset tick/input acknowledgement")
+	if same_life and owner.consumed_input_sequence > _last_submitted:
+		return _sync_failure("input acknowledgement outside retained window", false)
+	# A visual/rules reset is not an input-stream reset. Already sent commands
+	# can still be queued on authority, even after death or becoming spectator.
+	var transmitted_floor := _last_submitted if same_life else owner.consumed_input_sequence
 	_state = _owned_copy(owner)
 	_confirmed = _owned_copy(owner)
 	_map_sequence = map_sequence
 	_last_server_tick = server_tick
 	_last_ack = owner.consumed_input_sequence
-	_last_submitted = _last_ack
+	_last_submitted = transmitted_floor
+	_reset_ack_floor = transmitted_floor if _last_ack < transmitted_floor else -1
 	_history.clear()
-	_needs_rebase = false
+	_needs_rebase = _reset_ack_floor >= 0
 	_map_sync = false
-	_reason = ""
+	_reason = "same-life reset awaiting transmitted input acknowledgement" if _needs_rebase else ""
 	_position_correction = Vector3.ZERO
 	_yaw_correction = 0.0
 	_pitch_correction = 0.0
-	return _result(true)
+	return _result(not _needs_rebase, _reason)
 
 func predict(command: RULES.Command, query: DATA) -> Dictionary:
 	if _state == null:
@@ -150,10 +161,14 @@ func reconcile(owner: STATE, server_tick: int, map_sequence: int, query: DATA) -
 		return _sync_failure(error, true)
 	if _state == null:
 		return reset(owner, server_tick, map_sequence)
-	if owner.match_epoch != _state.match_epoch or owner.spawn_generation != _state.spawn_generation or owner.team != _confirmed.team or owner.weapon != _confirmed.weapon or owner.profile != _confirmed.profile or owner.is_alive() != _confirmed.is_alive() or owner.connected != _confirmed.connected:
+	if owner.match_epoch != _state.match_epoch or owner.spawn_generation != _state.spawn_generation:
 		return reset(owner, server_tick, map_sequence)
 	if owner.consumed_input_sequence > _last_submitted:
 		return _sync_failure("input acknowledgement outside retained window", false)
+	if _reset_ack_floor >= 0 or owner.team != _confirmed.team or owner.weapon != _confirmed.weapon or owner.profile != _confirmed.profile or owner.is_alive() != _confirmed.is_alive() or owner.connected != _confirmed.connected:
+		# Keep refreshing the new confirmed pose while waiting, without replaying
+		# discarded old-mode commands or clearing the barrier on an empty history.
+		return reset(owner, server_tick, map_sequence)
 	var pending: Array[Dictionary] = []
 	var expected := owner.consumed_input_sequence + 1
 	for entry: Dictionary in _history:
@@ -249,6 +264,7 @@ func get_status() -> Dictionary:
 	return {"ready":_state != null, "needs_rebase":_needs_rebase, "map_sync":_map_sync, "reason":_reason,
 		"pending":_history.size(), "history_limit":MAX_HISTORY, "input_ack":_last_ack,
 		"last_submitted":_last_submitted, "server_tick":_last_server_tick, "map_sequence":_map_sequence,
+		"reset_ack_floor":_reset_ack_floor,
 		"predicted_tick":_state.last_tick if _state != null else -1, "correction":_position_correction,
 		"epoch":_state.match_epoch if _state != null else 0, "spawn_generation":_state.spawn_generation if _state != null else 0}
 

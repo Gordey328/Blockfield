@@ -340,8 +340,8 @@ func _network_physics(delta: float) -> void:
 	if owner == null: return
 	_network_adopt(owner,replica,delta)
 	var pending: Dictionary = session.drain_intent()
-	if pending.team >= 0: replica.request_team(pending.team)
-	if pending.color >= 0: replica.request_block_color(pending.color)
+	if pending.team >= 0 and not replica.request_team(pending.team): session.select_team(pending.team)
+	if pending.color >= 0 and not replica.request_block_color(pending.color): session.request_block_color(pending.color)
 	var buttons := 0
 	var move := Vector2.ZERO
 	if owner.is_alive() and controls_enabled:

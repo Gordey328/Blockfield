@@ -29,7 +29,11 @@ var inputs_on := false
 var shot_step := -1
 var short_stall_ms := 0
 var timeout_ms := 0
-var backlog_failure_ms := 0
+var backlog_recovery_ms := 0
+var stale_probe_sequence := 0
+var retired_probe_ack := 0
+const WAIT_ERRORS := ["client state not ready","waiting for matching terrain state","awaiting fresh authority stream","awaiting fresh authority clock"]
+const CONTROL_WRITE_WAIT_US := 20000
 var proxy_first_connection := 1
 var real_ticks_started_us := 0
 var failed_messages: Array[String] = []
@@ -42,16 +46,22 @@ func check(value: bool, message: String) -> void:
 		push_error("NETWORK LATENCY: " + message)
 func write_json(name: String, value: Dictionary) -> void:
 	var path := task_dir.path_join(name)
-	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
+	# Python can hold a read handle on this path. Windows then rejects deleting
+	# or replacing it. Truncate/write the complete small trusted document instead;
+	# readers already retry empty/partial JSON and accept only the next sequence.
+	var deadline := Time.get_ticks_usec()+CONTROL_WRITE_WAIT_US
+	var file := FileAccess.open(path,FileAccess.WRITE)
+	while file == null and Time.get_ticks_usec() < deadline:
+		# Test-control only: bounded below the relay's40ms delivery floor. A
+		# persistent sharing/permission failure is reported, never waited forever.
+		OS.delay_usec(1000)
+		file = FileAccess.open(path,FileAccess.WRITE)
 	if file == null: check(false,"owned control file writable"); return
-	file.store_string(JSON.stringify(value)); file.close()
-	# Windows rename cannot replace the previous task-local control file.
-	# Readers retry a missing/partial file, so a remove+rename is safe here.
-	if FileAccess.file_exists(path):
-		if DirAccess.remove_absolute(path) != OK: check(false,"owned control file replace"); return
-	var publish_error := DirAccess.rename_absolute(path+".tmp",path)
-	if name != "result.json" or publish_error != OK:
-		check(publish_error == OK,"owned control file publish")
+	file.store_string(JSON.stringify(value))
+	file.flush()
+	var publish_error := file.get_error()
+	file.close()
+	if name != "result.json" or publish_error != OK: check(publish_error == OK,"owned control file publish")
 func read_control() -> Dictionary:
 	var path := task_dir.path_join("control.json")
 	# Atomic replacement can invalidate the path between exists/open on Windows.
@@ -99,8 +109,10 @@ func pump() -> void:
 			for index in range(clients.size()):
 				var client := clients[index]
 				if client.status != "live": continue
-				var result := client.submit_input(RULES.Buttons.PRIMARY if index == 0 and steps == shot_step else 0,Vector2.ZERO,0,-.15,2,0)
-				if not result.ok and result.error not in ["client state not ready","waiting for matching terrain state"]:
+				var shot_pending := index == 0 and shot_step >= 0 and steps >= shot_step
+				var result := client.submit_input(RULES.Buttons.PRIMARY if shot_pending else 0,Vector2.ZERO,0,-.15,2,0)
+				if result.ok and shot_pending: shot_step = -1
+				if not result.ok and result.error not in WAIT_ERRORS:
 					check(false,"unexpected prediction/admission failure: "+result.error)
 	await process_frame
 func wait_until(predicate: Callable, message: String, timeout: int = 5000, allow_failed: bool = false) -> bool:
@@ -135,6 +147,27 @@ func all_live() -> bool:
 	for client: CLIENT in clients:
 		if client.status != "live": return false
 	return true
+func inputs_drained() -> bool:
+	for client: CLIENT in clients:
+		if client.status != "live" or client.prediction.get_status().pending != 0: return false
+	return true
+func inventory(actor: SharedPlayerState) -> Dictionary:
+	return {"health":actor.health,"magazine":actor.magazine,"reserve":actor.reserve,"blocks":actor.blocks,"grenades":actor.grenades,
+		"weapon":actor.weapon,"tool":actor.tool,"reloading":actor.reloading,"cooking":actor.cooking,"last_shot_tick":actor.last_shot_tick}
+func send_stale_probe(client: CLIENT) -> Dictionary:
+	# The 40ms relay delivery floor allows the runner to stop forwarding after
+	# this immediate send. Only this one command requests movement/fire/reload;
+	# subsequent streamed commands are neutral, so any authority effect is a bug.
+	var deadline := Time.get_ticks_msec()+1500
+	while Time.get_ticks_msec() < deadline:
+		var result := client.submit_input(RULES.Buttons.PRIMARY|RULES.Buttons.RELOAD,Vector2.RIGHT,0,-.15)
+		if result.ok: return result
+		if result.error not in WAIT_ERRORS:
+			check(false,"stale probe submission failed: "+result.error)
+			return result
+		await pump()
+	check(false,"stale probe waits for bounded fresh clock")
+	return {"ok":false,"error":"probe clock timeout"}
 func connect_client(name: String) -> CLIENT:
 	var client := CLIENT.new()
 	if clients.is_empty():
@@ -179,23 +212,48 @@ func run() -> void:
 	await run_for(600); short_stall_ms = Time.get_ticks_msec()-short_started
 	check(all_live() and map_equal(),"short TCP stall recovers ordered deltas without dropping peers")
 	check(peak_prediction > 0 and peak_prediction < first.prediction.MAX_HISTORY and peak_queue_frames <= TRANSPORT.MAX_QUEUE_FRAMES and peak_queue_bytes <= TRANSPORT.MAX_OUTBOUND_BYTES,"pending prediction and transport queues stay within their real bounds")
-	# A 350 ms held input backlog exceeds the authority's 15-tick late-input
-	# admission window. This is expected rejection, not a recovery guarantee.
-	var backlog_resume_token := first.resume_token()
+	# Authored authority-4 retires validated ordered stale16..120 records by
+	# ACK only. It does not execute their actions or widen the 15-tick rewind.
+	inputs_on = false
+	if not await wait_until(inputs_drained,"pre-stall transmitted inputs fully acknowledged"): finish(); return
+	var before_inventory := inventory(actor)
+	var before_victim_health := victim.health
+	var before_feet := actor.feet()
+	var before_generation := actor.spawn_generation
+	var before_game_id := int(server.registry.session_view(first_id).game)
+	var before_stale := int(server.get_stats().totals.get("stale_inputs",0))
+	var before_shots := events_for(first,"shot").size()
+	var before_reloads := events_for(first,"reload_started").size()
+	var before_hits := events_for(first,"hit_confirmed").size()
+	var before_hurts := events_for(second,"hurt").size()
+	var probe := await send_stale_probe(first)
+	if not probe.ok: finish(); return
+	stale_probe_sequence = probe.sequence
+	check(first.get_owner_state().magazine < before_inventory.magazine,"stale probe predicts a real armed shot before authority retirement")
+	inputs_on = true
 	if not await request_stall(350): finish(); return
 	var backlog_started := Time.get_ticks_msec()
-	if not await wait_until(func():return first.status == "failed","350 ms input backlog explicitly rejects stale commands",1500,true): finish(); return
-	backlog_failure_ms = Time.get_ticks_msec()-backlog_started
-	check(server.get_stats().totals.input_rejections == 1 and first.game.get_stats().totals.timeouts == 0,"backlog failure is admitted-lateness rejection before heartbeat timeout")
-	check(second.status == "live","late-input owner failure preserves healthy peer")
+	edit(Vector3i(20,4,18),0x01aabb44)
+	if not await wait_until(func():return int(server.get_stats().totals.get("stale_inputs",0)) > before_stale \
+			and first.prediction.get_status().input_ack >= stale_probe_sequence and map_equal(),"350 ms backlog retires stale input and recovers on the same connection",2000): finish(); return
+	backlog_recovery_ms = Time.get_ticks_msec()-backlog_started
+	retired_probe_ack = first.prediction.get_status().input_ack
+	check(all_live() and first.actor_id == first_id and actor.spawn_generation == before_generation \
+			and int(server.registry.session_view(first_id).game) == before_game_id,"stale retirement preserves live owner identity, generation and actual game socket")
+	check(server.get_stats().totals.input_rejections == 0 and server.get_stats().totals.resumes == 0 \
+			and first.game.get_stats().totals.timeouts == 0,"stale retirement recovers without rejection, reconnect or heartbeat timeout")
+	check(inventory(actor) == before_inventory and victim.health == before_victim_health,"discarded input cannot consume stock, reload, cook or damage either actor")
+	check(Vector2(actor.feet().x-before_feet.x,actor.feet().z-before_feet.z).length() < .0001 \
+			and actor.input_move == Vector2.ZERO,"discarded movement is never simulated by authority")
+	check(events_for(first,"shot").size() == before_shots and events_for(first,"reload_started").size() == before_reloads \
+			and events_for(first,"hit_confirmed").size() == before_hits and events_for(second,"hurt").size() == before_hurts,"discarded shot/reload produces no confirmed combat event")
+	for command: RULES.Command in first.prediction.get_pending_commands():
+		check(command.sequence > stale_probe_sequence,"retired input is absent from retained replay history")
 	inputs_on = false
-	await run_for(650,true)
-	check(not simulation.get_actor(first_id).connected,"rejected old game socket released before resume")
-	check(first.connect_to("ws://127.0.0.1:%d/play" % control.game_port,"ws://127.0.0.1:%d/map" % control.map_port,"Backlog resume",false,backlog_resume_token).ok,"same replica resumes after admitted-lateness rejection")
-	backlog_resume_token.clear()
-	proxy_first_connection = 3
-	if not await wait_until(all_live,"late-input resume completes fresh terrain and state barrier"): finish(); return
-	check(first.actor_id == first_id and map_equal() and first.prediction.get_status().pending == 0,"backlog resume preserves identity and clears stale prediction")
+	if not await wait_until(inputs_drained,"retirement ACK clears prediction without a stream reset"): finish(); return
+	await run_for(200)
+	check(inventory(first.get_owner_state()) == inventory(actor) and first.get_owner_state().feet().distance_to(actor.feet()) < .001 \
+			and first.prediction.get_status().input_ack >= stale_probe_sequence,"authority resources and pose replace discarded local prediction without stale replay")
 	# Explicit fixture timeout, shorter than production defaults; no live settings.
 	inputs_on = false
 	await run_for(250)
@@ -214,7 +272,8 @@ func run() -> void:
 	resume_token.clear()
 	if not await wait_until(all_live,"delayed resume completes fresh map/state barrier"): finish(); return
 	check(first.actor_id == first_id and map_equal() and first.get_owner_state().profile == "0.75","stable identity and exact edited terrain survive real timeout/reconnect")
-	check(server.get_stats().totals.input_rejections == 1 and first.prediction.get_status().pending == 0,"exactly the expected backlog rejection and no stale prediction survive reconnect")
+	check(server.get_stats().totals.input_rejections == 0 and server.get_stats().totals.resumes == 1 \
+			and first.prediction.get_status().pending == 0,"only the heartbeat resumes and no stale prediction survives reconnect")
 	await run_for(150)
 	finish()
 func finish() -> void:
@@ -230,7 +289,9 @@ func finish() -> void:
 	var result := {"assertions":assertions,"failures":failures,"errors":failed_messages,"wall_seconds":wall,"steps":steps,
 		"fixed_hz":60,"peak_pending_prediction":peak_prediction,"peak_transport_queue_frames":peak_queue_frames,"peak_transport_queue_bytes":peak_queue_bytes,
 		"source_profile":"0.75","clients":2,"short_stall_observation_ms":short_stall_ms,"timeout_observation_ms":timeout_ms,
-		"backlog_failure_ms":backlog_failure_ms,"expected_input_rejections":1,"backlog_stall_ms":350,"short_stall_ms":75,"heartbeat_stall_ms":1500,
+		"backlog_recovery_ms":backlog_recovery_ms,"expected_input_rejections":0,"stale_probe_sequence":stale_probe_sequence,"retired_probe_ack":retired_probe_ack,
+		"stale_input_policy":"validated ordered stale16..120 ACK-only; executable rewind15; future8; queue32",
+		"backlog_stall_ms":350,"short_stall_ms":75,"heartbeat_stall_ms":1500,
 		"server_step_mean_ms":sum/maxi(1,ordered.size()),"server_step_p95_ms":ordered[int((ordered.size()-1)*.95)] if not ordered.is_empty() else 0,
 		"server_step_max_ms":ordered.back() if not ordered.is_empty() else 0,"server_totals":server_stats.get("totals",{})}
 	write_json("result.json",result)

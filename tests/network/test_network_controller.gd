@@ -24,6 +24,18 @@ var started := {}
 
 class TraceServer extends SERVER:
 	var close_reasons: Array[String] = []
+	var input_receipt := {}
+	func _game_packet(connection: int,packet: BlockfieldProtocol.Packet,now: int) -> void:
+		if packet.kind==P.Kind.INPUT_BATCH:
+			var id := registry.owner_of_game(connection)
+			if _inputs.has(id):
+				var current: BlockfieldInputQueue = _inputs[id]
+				var shadow := BlockfieldInputQueue.new()
+				for field in ["epoch","generation","input_ack","needs_resync","_last_server_tick","_last_command_tick","_tail_sequence","_tail_input_tick"]: shadow.set(field,current.get(field))
+				shadow._pending=current._pending.duplicate()
+				var result := shadow.accept(packet,simulation.tick)
+				input_receipt={"server_tick":simulation.tick,"input_tick":packet.tick,"sequence":packet.payload.records[0].input_sequence,"generation":packet.sequence,"queue":current.get_stats(),"error":result.error}
+		super._game_packet(connection,packet,now)
 	func _close_game(connection: int,reason: String,now: int) -> void:
 		var wire_reason := reason
 		if reason == "state serialization failed":
@@ -31,6 +43,7 @@ class TraceServer extends SERVER:
 			var result := preload("res://network/simulation_codec.gd").from_snapshot(simulation.snapshot_for(id))
 			var actor := simulation.get_actor(id)
 			reason += ": %s; fall_speed=%s, climb=%s, tick=%s" % [result.error,actor.motion.fall_speed,actor.motion.last_climb_time,actor.last_tick]
+		elif reason == "invalid input stream": reason += ": "+JSON.stringify(input_receipt)
 		close_reasons.append(reason)
 		super._close_game(connection,wire_reason,now)
 
@@ -247,7 +260,18 @@ func menu_and_intents() -> void:
 	await wait_until(func():return not simulation.grenades.is_empty(),"real authority receives cook release and creates projectile")
 	# Same wire request path used by eyedropper and palette UI.
 	check(session.request_block_color(0x01aabbcc),"queue canonical block color")
+	var held_team: int = session.team
+	session.select_team(held_team)
+	var held_sequence: int = client.prediction.get_status().last_submitted
+	var held_request: int = client._request_sequence
+	# A valid maintenance event models a partially drained transport batch.
+	client.game._emit({"type":"rtt","connection_id":client._game_id,"rtt_ms":1.0})
 	player._physics_process(DT)
+	check(client.prediction.get_status().last_submitted==held_sequence and client._request_sequence==held_request,"partial authority batch cannot commit input or request cursors")
+	check(session._intent.team==held_team and session._intent.color==0x01aabbcc,"unsent menu team/color choice survives authority-stream wait")
+	client.game.drain_events()
+	player._physics_process(DT)
+	check(session._intent.team==-1 and session._intent.color==-1,"fresh stream sends retained menu choice once")
 	await wait_until(func():return simulation.snapshot_for(client.actor_id).get("block_colors",{}).get(client.actor_id,0) == 0x01aabbcc,"typed color request reaches actual authority")
 	var buttons := InputEventAction.new();buttons.action = "primary";buttons.pressed = true
 	player._unhandled_input(buttons)
@@ -263,6 +287,7 @@ func inactive_and_identity() -> void:
 	var client := clients[0]
 	session.select_team(2);player._physics_process(DT)
 	await wait_until(func():return session.team == 2,"typed team request enters spectator on real authority")
+	await wait_until(func():return not client.prediction.get_status().needs_rebase and client.prediction.get_status().pending==0,"spectator mode acknowledges prior input before new class intent")
 	player._physics_process(DT)
 	var confirmed := client.prediction.get_confirmed_state()
 	var seq: int = client.prediction.get_status().last_submitted
@@ -312,6 +337,9 @@ func run() -> void:
 	if clients[0].status != "live" or clients[1].status != "live": finish();return
 	make_player()
 	await wait_until(func():return clients[0].prediction.get_status().pending == 0,"initial controller input acknowledged")
+	# Map installation can take real wall time while this fixture's manually
+	# stepped authority is paused. Wait for a current state as actual Main does.
+	await wait_until(func():return clients[0]._input_clock.next_tick(Time.get_ticks_usec())>=0 and not clients[0].game.has_pending_incoming(),"installed world reaches fresh authority clock")
 	authority_guards()
 	await aim_and_shared_motion()
 	if clients[0].status != "live": finish();return

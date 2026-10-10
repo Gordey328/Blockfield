@@ -27,6 +27,8 @@ class TestClient extends RefCounted:
 	var errors: Array[String] = []
 	var closed := false
 	var ready_sent := false
+	var ack_enabled := true
+	var defer_final_ack := false
 	var snapshot_count := 0
 	var role := 0
 	var resume: PackedByteArray = PackedByteArray()
@@ -78,6 +80,13 @@ class TestClient extends RefCounted:
 				"packet":
 					var result := transfer.consume(event.packet)
 					if not result.ok: errors.append(result.error)
+					elif ack_enabled:
+						var acknowledgment := transfer.get_chunk_ack()
+						if not acknowledgment.ok: errors.append(acknowledgment.error)
+						else:
+							if not defer_final_ack or acknowledgment.packet.payload.received_bytes!=event.packet.payload.total_size:
+								var sent := bulk.send(bulk_id,acknowledgment.packet)
+								if not sent.ok: errors.append(sent.error)
 		if not ready_sent:
 			var stats := transfer.get_stats()
 			if stats.status in ["receiving","preparing"]:
@@ -168,6 +177,23 @@ func _run() -> void:
 	check(b.health < 100,"actual source ray/hit volume damages other actor")
 	await pump(8)
 	check(a.input_buttons == 0 and a.input_move == Vector2.ZERO,"lost input lease neutralizes held controls")
+	await pump(100)
+	var before_stale := {"feet":a.feet(),"magazine":a.magazine,"reserve":a.reserve,"blocks":a.blocks,"grenades":a.grenades,"weapon":a.weapon,"tool":a.tool,"health":b.health,"map_sequence":data.map_sequence}
+	var stale := input_packet(first,2,127,Vector2(0,-1))
+	stale.tick = simulation.tick-16
+	stale.payload.records[0].input_tick = stale.tick
+	stale.payload.records[0].tool = 3
+	stale.payload.records[0].weapon = 2
+	check(first.game.send(first.game_id,stale).ok,"actual socket delivers validated stale action sequence")
+	await wait_until(func():return a.consumed_input_sequence == 2,"retired input acknowledged in authoritative owner state")
+	check(a.connected and b.connected and server.get_stats().totals.stale_inputs == 1 and server.get_stats().totals.input_rejections == 0,"stale owner intent is retired without disconnecting either actual peer")
+	check(a.feet().distance_to(before_stale.feet) < .001 and a.input_move == Vector2.ZERO and a.input_buttons == 0,"discarded movement/jump/crouch cannot act or remain held")
+	check(a.magazine == before_stale.magazine and a.reserve == before_stale.reserve and a.blocks == before_stale.blocks and a.grenades == before_stale.grenades and a.weapon == before_stale.weapon and a.tool == before_stale.tool and a.pending_weapon == -1,"stale fire/reload/build/grenade/class intent consumes or refills no resources")
+	check(b.health == before_stale.health and data.map_sequence == before_stale.map_sequence and simulation.grenades.is_empty(),"discarded stale actions produce no hit/terrain/grenade authority")
+	check(first.game.send(first.game_id,input_packet(first,3,0,Vector2(.2,0))).ok,"fresh contiguous sequence after stale retirement")
+	await wait_until(func():return a.consumed_input_sequence == 3,"fresh post-stall command executes normally")
+	check(a.input_move == Vector2(.2,0) and a.magazine == before_stale.magazine,"retired ACK cannot swallow the next fresh command")
+	await pump(8)
 	check(first.game.send(first.game_id,P.make_packet(P.Kind.CHAT,{"channel":0,"sender_id":0,"message_id":1,"text":"hello"},7,simulation.tick,a.spawn_generation)).ok,"owned chat intent")
 	await wait_until(func():return first.chats.size() == 1 and second.chats.size() == 1,"global chat reaches both ready actors")
 	check(second.chats[0].payload.sender_id == first_id and second.chats[0].payload.message_id == 1,"authority assigns chat sender/message ID")

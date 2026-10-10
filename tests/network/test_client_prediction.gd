@@ -4,6 +4,8 @@ const PREDICTION = preload("res://network/client_prediction.gd")
 const STATE = preload("res://simulation/player_state.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const DATA = preload("res://world/voxel_data.gd")
+const QUEUE = preload("res://network/input_queue.gd")
+const PROTOCOL = preload("res://network/protocol.gd")
 var assertions := 0
 var failures := 0
 
@@ -170,8 +172,10 @@ func authority_and_terrain_checks() -> void:
 	newer.last_tick = 2
 	check(not predictor.reconcile(newer,2,0,query).ok and predictor.get_status().map_sync,"snapshot terrain not available is explicit map sync")
 	check(not predictor.reconcile(newer,2,1,query).ok and predictor.get_status().needs_rebase,"pending inputs on missing historical terrain request rebase instead of speculative map replay")
-	check(predictor.reset(newer,2,1).ok and predictor.get_status().pending == 0,"coordinator can explicitly rebase after trusted fresh barrier")
-	check(predictor.predict(command(1),query).ok,"fresh input timeline resumes against new map barrier")
+	check(not predictor.reset(newer,2,1).ok and predictor.get_status().pending == 0 and predictor.get_status().last_submitted == 1 and predictor.get_status().needs_rebase,"same-life terrain rebase waits for transmitted1 rather than reusing it")
+	newer.consumed_input_sequence = 1
+	check(predictor.reset(newer,2,1).ok and not predictor.get_status().needs_rebase and predictor.get_status().last_submitted == 1,"coordinator rebases only after trusted ACK reaches transmitted floor")
+	check(predictor.predict(command(2),query).ok,"new map barrier resumes the existing input sequence at2")
 	var not_finite := newer.copy()
 	not_finite.next_shot_tick = NAN
 	check(not predictor.reset(not_finite,2,1).ok,"nonfinite replay deadline rejected")
@@ -218,20 +222,155 @@ func reset_and_budget_checks() -> void:
 	dead.last_tick = 1
 	dead.health = 0
 	dead.deaths = 1
-	check(predictor.reconcile(dead,1,0,query).ok and predictor.get_status().pending == 0 and predictor.get_state().health == 0,"confirmed death resets outstanding prediction")
+	check(not predictor.reconcile(dead,1,0,query).ok and predictor.get_status().pending == 0 and predictor.get_state().health == 0 and predictor.get_status().needs_rebase and predictor.get_status().last_submitted == 1,"confirmed death exposes inactive pose but retains outstanding input floor")
 	status = predictor.get_status()
 	check(not predictor.reconcile(fresh_epoch,0,0,query).ok and predictor.get_state().health == 0 and predictor.get_status() == status,"stale alive snapshot cannot resurrect confirmed death")
 	var team_change := dead.copy()
 	team_change.last_tick = 2
 	team_change.team = 2
-	check(predictor.reconcile(team_change,2,0,query).ok and predictor.get_state().team == 2,"trusted team/spectator switch resets prediction")
+	check(not predictor.reconcile(team_change,2,0,query).ok and predictor.get_state().team == 2 and predictor.get_status().last_submitted == 1,"trusted team/spectator switch refreshes inactive pose without rewinding input")
+	team_change.last_tick = 3
+	team_change.consumed_input_sequence = 1
+	check(predictor.reconcile(team_change,3,0,query).ok and not predictor.get_status().needs_rebase,"inactive snapshots clear barrier after input acknowledgement")
 	var overflow := actor(1,8)
 	overflow.last_tick = 0xffffffff
-	predictor.reset(overflow,0xffffffff,0)
-	check(not predictor.predict(command(1),query).ok and predictor.get_status().needs_rebase,"u32 fixed tick exhaustion requests rebase")
+	overflow.consumed_input_sequence = 1
+	check(predictor.reset(overflow,0xffffffff,0).ok,"u32 boundary fixture retains acknowledged same-life sequence")
+	check(not predictor.predict(command(2),query).ok and predictor.get_status().needs_rebase and "tick exhausted" in predictor.get_status().reason,"u32 fixed tick exhaustion requests rebase")
 
 func pose(tick: int, feet: Vector3, yaw: float = 0.0, generation: int = 1) -> Dictionary:
 	return {"id":9,"spawn_generation":generation,"team":0,"flags":1|16|32,"tool":2,"weapon":1,"name":"Remote","feet":feet,"native_velocity":Vector3(0.1,0,0),"yaw":yaw,"pitch":0.0,"secret_seed":9876,"health":99,"fixture_tick":tick}
+
+func mode_barrier_checks() -> void:
+	var query := map_data()
+	for mode: String in ["spectator","team","death","weapon","profile","disconnect"]:
+		var owner := actor()
+		owner.spawn_generation = 2
+		owner.last_tick = 100
+		owner.consumed_input_sequence = 19
+		var predictor := PREDICTION.new()
+		check(predictor.reset(owner,100,0).ok,mode+" initial transmitted cursor19")
+		check(predictor.predict(command(20,2,Vector2.RIGHT,RULES.Buttons.PRIMARY),query).ok,mode+" live command20 transmitted/predicted")
+		var changed := owner.copy()
+		changed.last_tick = 101
+		changed.motion.feet_position = Vector3(30.5,4.01,30.5)
+		changed.motion.eye_position = changed.motion.physics_eye()
+		changed.magazine = 7
+		match mode:
+			"spectator": changed.team = 2
+			"team": changed.team = 1
+			"death": changed.health = 0; changed.deaths = 1
+			"weapon": changed.weapon = 2
+			"profile": changed.profile = "0.76"
+			"disconnect": changed.connected = false
+		var result: Dictionary = predictor.reconcile(changed,101,0,query)
+		var status: Dictionary = predictor.get_status()
+		check(not result.ok and result.events.is_empty() and status.needs_rebase and status.last_submitted == 20 and status.input_ack == 19 and status.get("reset_ack_floor",-2) == 20,mode+" ACK19 preserves wire floor20 and blocks new input")
+		check(status.pending == 0 and predictor.get_pending_commands().is_empty(),mode+" old-mode commands are discarded, never replayed")
+		var visible := predictor.get_state()
+		check(visible.feet() == changed.feet() and visible.health == changed.health and visible.team == changed.team and visible.connected == changed.connected and visible.weapon == changed.weapon and visible.profile == changed.profile and visible.magazine == 7,mode+" new confirmed mode/pose/resources immediately visible")
+		check(predictor.sample_local_presentation().feet == changed.feet() and status.correction == Vector3.ZERO,mode+" old-mode render correction cannot retain previous active pose")
+		var blocked: Dictionary = predictor.predict(command(21,2),query)
+		check(not blocked.ok and blocked.events.is_empty() and predictor.get_status().last_submitted == 20,mode+" sequence21 waits without cursor/effects changes")
+		var waiting := changed.copy()
+		waiting.last_tick = 102
+		waiting.motion.feet_position.x += .5
+		waiting.motion.eye_position.x += .5
+		result = predictor.reconcile(waiting,102,0,query)
+		check(not result.ok and predictor.get_status().needs_rebase and predictor.get_status().last_submitted == 20 and predictor.get_status().input_ack == 19,mode+" later ACK19 snapshot cannot clear empty-history barrier")
+		check(predictor.get_state().feet() == waiting.feet() and predictor.get_state().magazine == 7 and result.events.is_empty(),mode+" waiting snapshots refresh confirmed pose without old command effects")
+		# A second mode change before ACK still belongs to the same wire timeline.
+		var twice := waiting.copy()
+		twice.last_tick = 103
+		twice.team = 2 if twice.team != 2 else 1
+		result = predictor.reconcile(twice,103,0,query)
+		check(not result.ok and predictor.get_status().get("reset_ack_floor",-2) == 20 and predictor.get_status().last_submitted == 20,mode+" repeated mode changes cannot lower transmitted floor")
+		var caught := twice.copy()
+		caught.last_tick = 104
+		caught.consumed_input_sequence = 20
+		result = predictor.reconcile(caught,104,0,query)
+		check(result.ok and result.events.is_empty() and not predictor.get_status().needs_rebase and predictor.get_status().get("reset_ack_floor",-2) == -1 and predictor.get_status().last_submitted == 20 and predictor.get_status().input_ack == 20,mode+" ACK20 closes barrier without rewinding cursor")
+		check(not predictor.predict(command(20,2),query).ok,mode+" previously transmitted20 cannot be reused")
+		var next := command(21,2)
+		next.weapon = 0
+		var oracle := caught.copy()
+		RULES.step_fixed(oracle,105,next,query,null,false)
+		result = predictor.predict(next,query)
+		check(result.ok and predictor.get_status().last_submitted == 21 and predictor.get_status().input_ack == 20,mode+" next command is21, including inactive pending class intent")
+		same_rules(predictor.get_state(),oracle,mode+" resumed shared rules")
+		check(predictor.get_state().consumed_input_sequence == 21 and predictor.get_confirmed_state().consumed_input_sequence == 20,mode+" replay consumption and confirmedACK remain distinct")
+
+	var owner := actor()
+	owner.last_tick = 100
+	owner.consumed_input_sequence = 19
+	var predictor := PREDICTION.new()
+	predictor.reset(owner,100,0)
+	predictor.predict(command(20),query)
+	var barrier := owner.copy()
+	barrier.last_tick = 101
+	barrier.health = 0
+	predictor.reconcile(barrier,101,0,query)
+	# An explicit coordinator reset cannot bypass a same-life transmitted floor.
+	check(not predictor.reset(barrier,101,0).ok and predictor.get_status().last_submitted == 20 and predictor.get_status().needs_rebase,"explicit same-life reset cannot reuse transmitted20 at ACK19")
+	var before := predictor.get_state()
+	query.set_block(Vector3i(50,4,50),0x01abcdef)
+	barrier.last_tick = 102
+	check(not predictor.reconcile(barrier,102,0,query).ok and predictor.get_status().map_sync and predictor.get_status().get("reset_ack_floor",-2) == 20 and predictor.get_state().feet() == before.feet(),"missing terrain retains model and transmitted reset floor")
+	check(not predictor.predict(command(21),query).ok,"terrain and mode barriers both block further prediction")
+	check(not predictor.reconcile(barrier,102,1,query).ok and predictor.get_status().needs_rebase and not predictor.get_status().map_sync and predictor.get_status().last_submitted == 20,"matching current terrain does not clear unacknowledged mode floor")
+	var bad_ack := barrier.copy()
+	bad_ack.last_tick = 103
+	bad_ack.consumed_input_sequence = 21
+	check(not predictor.reconcile(bad_ack,103,1,query).ok and predictor.get_status().last_submitted == 20 and predictor.get_state().health == 0,"same-life ACK beyond submitted floor cannot reset identity/mode timeline")
+	var respawn := barrier.copy()
+	RULES.spawn(respawn,104,Vector3(22.5,4.01,22.5),1,2)
+	RULES.step_fixed(respawn,104,null,query)
+	check(predictor.reconcile(respawn,104,1,query).ok and predictor.get_status().last_submitted == 0 and predictor.get_status().get("reset_ack_floor",-2) == -1,"new life discards old transmitted floor and incompatible history")
+	check(predictor.predict(command(1,2),query).ok,"new life accepts fresh sequence1")
+	var dead_again := respawn.copy()
+	dead_again.last_tick = 105
+	dead_again.health = 0
+	check(not predictor.reconcile(dead_again,105,1,query).ok and predictor.get_status().last_submitted == 1,"second life gets its own outstanding floor")
+	var new_query := map_data(8)
+	var new_match := actor(1,8)
+	check(predictor.reconcile(new_match,0,0,new_query).ok and predictor.get_status().last_submitted == 0 and predictor.get_status().get("reset_ack_floor",-2) == -1,"new epoch clears outstanding old-life floor even at restarted tick0")
+	check(predictor.predict(command(1),new_query).ok,"new epoch starts sequence1 independently")
+
+func queued_mode_change_checks() -> void:
+	# The real input queue has already accepted20, although the preceding
+	# spectator snapshot still acknowledges19. It cannot accept20 a second time.
+	var query := map_data()
+	var owner := actor()
+	owner.spawn_generation = 2
+	owner.last_tick = 100
+	owner.consumed_input_sequence = 19
+	var predictor := PREDICTION.new()
+	var queue := QUEUE.new()
+	check(predictor.reset(owner,100,0).ok and queue.reset(7,2,100,19),"mode queue fixture starts at acknowledged19")
+	var input20 := command(20,2,Vector2.RIGHT,RULES.Buttons.PRIMARY)
+	check(queue.accept(input_packet(input20,102),100).ok and predictor.predict(input20,query).ok,"actual authority queue accepts20 before delayed ownerACK")
+	owner.team = 2
+	var early: Dictionary = queue.take(101)
+	RULES.step_fixed(owner,101,early.command,query)
+	check(early.input_ack == 19 and queue.get_stats().tail_sequence == 20 and queue.get_stats().pending == 1,"future queued20 is absent from snapshotACK19")
+	check(not predictor.reconcile(owner,101,0,query).ok and predictor.get_status().last_submitted == 20,"same-generation spectator snapshot preserves queued20 floor")
+	check(not predictor.predict(command(21,2),query).ok,"new class input waits rather than duplicating accepted20")
+	var consumed: Dictionary = queue.take(102)
+	RULES.step_fixed(owner,102,consumed.command,query)
+	check(consumed.input_ack == 20 and owner.consumed_input_sequence == 20,"inactive authority consumes queued20 exactly once")
+	check(predictor.reconcile(owner,102,0,query).ok and not predictor.get_status().needs_rebase,"actual consumedACK20 releases same-life barrier")
+	var input21 := command(21,2)
+	input21.weapon = 2
+	check(queue.accept(input_packet(input21,103),102).ok and predictor.predict(input21,query).ok,"actual queue accepts next21 class intent without duplicate/gap")
+	var next: Dictionary = queue.take(103)
+	RULES.step_fixed(owner,103,next.command,query)
+	check(next.input_ack == 21 and owner.pending_weapon == 2 and owner.magazine == 30,"inactive class intent changes pending class without stock refill")
+	check(predictor.reconcile(owner,103,0,query).ok and predictor.get_status().input_ack == 21 and predictor.get_status().pending == 0,"final actual queue acknowledgement retires21 normally")
+
+func input_packet(value: RULES.Command, tick: int) -> PROTOCOL.Packet:
+	var record := {"input_sequence":value.sequence,"input_tick":tick,"buttons":value.buttons,"tool":value.tool,"weapon":value.weapon,
+		"move_x":value.move.x,"move_z":value.move.y,"yaw":value.yaw,"pitch":value.pitch}
+	return PROTOCOL.make_packet(PROTOCOL.Kind.INPUT_BATCH,{"records":[record]},7,tick,value.spawn_generation)
 
 func remote_checks() -> void:
 	var remote := PREDICTION.RemotePoseBuffer.new()
@@ -285,6 +424,8 @@ func run() -> void:
 	reconciliation_checks()
 	authority_and_terrain_checks()
 	reset_and_budget_checks()
+	mode_barrier_checks()
+	queued_mode_change_checks()
 	remote_checks()
 	check(root.get_child_count() == nodes,"prediction/interpolation never creates presentation or physics nodes")
 	print("CLIENT PREDICTION TESTS: %d assertions, %d failures" % [assertions,failures])
