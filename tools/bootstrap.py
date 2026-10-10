@@ -1,4 +1,4 @@
-"""Download the pinned standalone engine and only the web export templates."""
+"""Download the pinned standalone engine and selected export templates."""
 from __future__ import annotations
 import io
 import os
@@ -55,6 +55,26 @@ class RemoteZip(io.RawIOBase):
         self.pos += len(result)
         return result
 
+def install_templates(names=('web_nothreads_debug.zip', 'web_nothreads_release.zip')):
+    data_home = Path(os.environ['APPDATA']) if sys.platform == 'win32' else Path(os.environ.get('XDG_DATA_HOME', Path.home()/'.local/share'))
+    templates = data_home / ('Godot' if sys.platform == 'win32' else 'godot') / 'export_templates' / f'{VERSION}.stable'
+    templates.mkdir(parents=True, exist_ok=True)
+    needed = [name for name in names if not (templates/name).exists()]
+    if needed:
+        print('Reading remote template archive index', flush=True)
+        with zipfile.ZipFile(RemoteZip(BASE + f'Godot_v{VERSION}-stable_export_templates.tpz')) as source:
+            found = set()
+            for item in source.infolist():
+                name = Path(item.filename).name
+                if name in needed or name == 'version.txt':
+                    (templates/name).write_bytes(source.read(item))
+                    found.add(name)
+                    print(f'Installed template {name}: {item.file_size:,} bytes', flush=True)
+            if not set(needed).issubset(found):
+                raise RuntimeError('Requested template absent from pinned archive')
+    print('Templates: ' + str(templates), flush=True)
+    return templates
+
 def main():
     folder = ROOT / '.tools' / 'godot'
     platform = 'win64.exe' if sys.platform == 'win32' else 'linux.x86_64'
@@ -70,18 +90,6 @@ def main():
                     if sys.platform != 'win32': target.chmod(0o755)
     binary = f'Godot_v{VERSION}-stable_win64_console.exe' if sys.platform == 'win32' else f'Godot_v{VERSION}-stable_linux.x86_64'
     print('Engine: ' + str(folder / binary), flush=True)
-    data_home = Path(os.environ['APPDATA']) if sys.platform == 'win32' else Path(os.environ.get('XDG_DATA_HOME', Path.home()/'.local/share'))
-    templates = data_home / ('Godot' if sys.platform == 'win32' else 'godot') / 'export_templates' / f'{VERSION}.stable'
-    templates.mkdir(parents=True, exist_ok=True)
-    needed = [name for name in ('web_nothreads_debug.zip', 'web_nothreads_release.zip') if not (templates/name).exists()]
-    if needed:
-        print('Reading remote template archive index', flush=True)
-        with zipfile.ZipFile(RemoteZip(BASE + f'Godot_v{VERSION}-stable_export_templates.tpz')) as source:
-            for item in source.infolist():
-                name = Path(item.filename).name
-                if name in needed or name == 'version.txt':
-                    (templates/name).write_bytes(source.read(item))
-                    print(f'Installed template {name}: {item.file_size:,} bytes', flush=True)
-    print('Templates: ' + str(templates), flush=True)
+    install_templates()
 
 if __name__ == '__main__': main()

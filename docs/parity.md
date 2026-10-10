@@ -101,7 +101,7 @@ These are additions required by the user, rather than features to discover in th
 | N06 | Chat, server event log, scoreboard, spectator and team/weapon changes | Original `NetClient.cpp:1323,1505,1512,1775` | 2 | NOT_STARTED |
 | N07 | Server discovery/list, sorting/filtering/favorites or an explicitly documented replacement | `Resources/Scripts/Gui/MainScreen/ServerList.as`; `MainScreenUI.as` | 2 | NOT_STARTED |
 | N08 | Dedicated server packaging, configurable match/map, deployment, capacity and reconnect tests | New multiplayer backend requirement | 2 | NOT_STARTED |
-| N09 | Document original Ace of Spades compatibility decision; new transport is authorized but compatibility must be explicit | Original ENet 0.75/0.76 in `NetClient.cpp:395`; user permits different multiplayer engine | 2 | NOT_STARTED |
+| N09 | Document original Ace of Spades compatibility decision; new transport is authorized but compatibility must be explicit | Original ENet 0.75/0.76 in `NetClient.cpp:395`; user permits different multiplayer engine; ADR0005 documents no old-server interoperability | 2 | VERIFIED |
 
 ## Evidence rules and release gates
 

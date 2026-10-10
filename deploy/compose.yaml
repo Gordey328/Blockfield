@@ -1,0 +1,28 @@
+services:
+  blockfield:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/blockfield
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    expose: ["8765", "8766"]
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      BLOCKFIELD_DOMAIN: ${BLOCKFIELD_DOMAIN:?Set the public server domain}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [blockfield]
+volumes:
+  caddy_data:
+  caddy_config:

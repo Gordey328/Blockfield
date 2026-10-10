@@ -1,0 +1,13 @@
+{$BLOCKFIELD_DOMAIN} {
+    @game {
+        path /play
+        header Origin https://gordey328.github.io
+    }
+    @map {
+        path /map
+        header Origin https://gordey328.github.io
+    }
+    reverse_proxy @game blockfield:8765
+    reverse_proxy @map blockfield:8766
+    respond "Blockfield WebSocket endpoint" 404
+}

@@ -4,13 +4,14 @@ extends Node3D
 ## Empty blocks are 0; all solid colors use 0x01RRGGBB (black is 0x01000000).
 
 signal blocks_changed(changes: Array)
+signal map_transaction_committed(transaction: Dictionary)
 signal map_loaded(map_name: String)
 signal falling_cluster_created(cluster: Node3D)
 signal falling_cluster_finished(position: Vector3, block_count: int, reason: String)
 
 const CHUNK_SIZE := 16
 const DIRECTIONS: Array[Vector3i] = [Vector3i.DOWN, Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK, Vector3i.UP]
-const VXL_READER = preload("res://world/vxl_reader.gd")
+const VOXEL_DATA = preload("res://world/voxel_data.gd")
 const CHUNK_SCRIPT = preload("res://world/voxel_chunk.gd")
 const FALLING_CLUSTER = preload("res://world/falling_cluster.gd")
 const WATER_SHADER = preload("res://world/water.gdshader")
@@ -20,7 +21,12 @@ const WAVE_FIELD = preload("res://world/spectral_wave.gd")
 const IRRADIANCE = preload("res://world/voxel_irradiance.gd")
 const REFLECTION = preload("res://world/planar_reflection.gd")
 
-var dimensions := Vector3i(96, 32, 96)
+var data: VOXEL_DATA = VOXEL_DATA.new()
+var dimensions: Vector3i:
+	get:
+		return data.dimensions
+	set(value):
+		data.dimensions = value
 var map_name := "Blockfield Test Grounds"
 var render_radius := 4
 var rebuild_budget := 3
@@ -30,8 +36,16 @@ var ambient_occlusion_enabled := true
 var irradiance_enabled := false
 var _irradiance: RefCounted
 var _irradiance_light := Vector3.ONE
-var water_level := 1.0
-var wade_origin_level := 2.0
+var water_level: float:
+	get:
+		return data.water_level
+	set(value):
+		data.water_level = value
+var wade_origin_level: float:
+	get:
+		return data.wade_origin_level
+	set(value):
+		data.wade_origin_level = value
 var water_enabled := true
 var water_waves_enabled := true
 var water_refraction_enabled := true
@@ -46,7 +60,12 @@ var visual_effects_enabled := true
 var max_active_clusters := 24
 var fragment_limit_per_cluster := 4096
 var smoke_limit_per_cluster := 1024
-var _blocks := PackedInt32Array()
+var _blocks: PackedInt32Array:
+	# Legacy renderer/tests alias; bulk bootstrap writes go through VoxelData.
+	get:
+		return data.blocks
+	set(value):
+		data.blocks = value
 var _chunks: Dictionary = {}
 var _dirty: Dictionary = {}
 var _collision_dirty: Dictionary = {}
@@ -88,78 +107,55 @@ static func block_color(packed: int) -> Color:
 	return Color(float((packed >> 16) & 255) / 255.0, float((packed >> 8) & 255) / 255.0, float(packed & 255) / 255.0, 1.0)
 
 func _index(cell: Vector3i) -> int:
-	return cell.y + dimensions.y * (cell.x + dimensions.x * cell.z)
+	return data.index(cell)
 
 func is_in_bounds(cell: Vector3i) -> bool:
-	return cell.x >= 0 and cell.y >= 0 and cell.z >= 0 and cell.x < dimensions.x and cell.y < dimensions.y and cell.z < dimensions.z
+	return data.is_in_bounds(cell)
 
 func get_block(cell: Vector3i) -> int:
-	if not is_in_bounds(cell) or _blocks.is_empty():
-		return 0
-	return _blocks[_index(cell)]
+	return data.get_block(cell)
 
 func clip_box(position: Vector3) -> bool:
-	var cell := Vector3i(position.floor())
-	if cell.x < 0 or cell.z < 0 or cell.x >= dimensions.x or cell.z >= dimensions.z:
-		return true
-	if cell.y < 0:
-		return true
-	if cell.y >= dimensions.y:
-		return false
-	if cell.y == 0:
-		cell.y = 1
-	return get_block(cell) != 0
+	return data.clip_box(position)
 
 func clip_world(position: Vector3) -> bool:
-	var cell := Vector3i(position.floor())
-	if cell.x < 0 or cell.z < 0 or cell.x >= dimensions.x or cell.z >= dimensions.z or cell.y >= dimensions.y:
-		return false
-	if cell.y < 0:
-		return true
-	if cell.y == 0:
-		cell.y = 1
-	return get_block(cell) != 0
+	return data.clip_world(position)
 
 func is_water_floor(cell: Vector3i) -> bool:
 	return water_enabled and cell.y == 0 and get_block(cell + Vector3i.UP) == 0
 
 func set_block(cell: Vector3i, color: int) -> void:
-	if not is_in_bounds(cell) or cell.y == 0:
-		return
-	var before := get_block(cell)
-	var after := 0 if color == 0 else (color & 0x00ffffff) | 0x01000000
-	if before == after:
-		return
-	var changes: Array = []
-	_change_block(cell, after, changes)
-	if before != 0 and after == 0:
-		_collapse_neighbors([cell], changes)
-	blocks_changed.emit(changes)
+	_present_transaction(data.set_block(cell, color))
 
 func remove_blocks(cells: Array[Vector3i], protect_lower_layer: bool = false) -> void:
-	var changes: Array = []
-	var removed: Array[Vector3i] = []
-	for cell in cells:
-		if not is_in_bounds(cell) or cell.y <= (1 if protect_lower_layer else 0) or get_block(cell) == 0:
-			continue
-		_change_block(cell, 0, changes)
-		removed.append(cell)
-	if not removed.is_empty():
-		_collapse_neighbors(removed, changes)
-		blocks_changed.emit(changes)
+	_present_transaction(data.remove_blocks(cells, protect_lower_layer))
 
-func _change_block(cell: Vector3i, color: int, changes: Array, collapsed: bool = false) -> void:
-	var before := get_block(cell)
-	_blocks[_index(cell)] = color
-	if _irradiance != null:
-		_irradiance.invalidate(cell)
-	if _topdown_image != null:
-		var column := cell.x + dimensions.x * cell.z
-		var top := _topdown_heights[column]
-		if cell.y == top or (color != 0 and cell.y > top):
-			_topdown_dirty[column] = maxi(cell.y, int(_topdown_dirty.get(column, top)))
-	changes.append({"cell": cell, "before": before, "after": color, "collapsed": collapsed})
-	_mark_dirty(cell, (before == 0) != (color == 0))
+func apply_map_transaction(transaction: Dictionary) -> Dictionary:
+	var result: Dictionary = data.apply_transaction(transaction)
+	_present_transaction(result)
+	return result
+
+func _present_transaction(transaction: Dictionary) -> void:
+	# Authority has already atomically committed every block, including collapse.
+	# This adapter only invalidates cached presentation and creates cosmetic groups.
+	if not transaction.ok or not transaction.changed:
+		return
+	var changes: Array = []
+	for change: Dictionary in transaction.changes:
+		var cell: Vector3i = change.cell
+		if _irradiance != null:
+			_irradiance.invalidate(cell)
+		if _topdown_image != null:
+			var column := cell.x + dimensions.x * cell.z
+			var top := _topdown_heights[column]
+			if cell.y == top or (change.after != 0 and cell.y > top):
+				_topdown_dirty[column] = maxi(cell.y, int(_topdown_dirty.get(column, top)))
+		changes.append({"cell": cell, "before": change.before, "after": change.after, "collapsed": change.flags == 1})
+		_mark_dirty(cell, (change.before == 0) != (change.after == 0))
+	for group: Dictionary in transaction.collapse_groups:
+		_spawn_falling_cluster(group.cells, group.colors)
+	blocks_changed.emit(changes)
+	map_transaction_committed.emit(transaction)
 
 func _mark_dirty(cell: Vector3i, geometry_changed: bool = true) -> void:
 	# AO uses the eight neighbors on the exterior face plane. An edit at a
@@ -180,49 +176,6 @@ func _mark_dirty(cell: Vector3i, geometry_changed: bool = true) -> void:
 
 func _chunk_of(cell: Vector3i) -> Vector3i:
 	return Vector3i(floori(float(cell.x) / CHUNK_SIZE), floori(float(cell.y) / CHUNK_SIZE), floori(float(cell.z) / CHUNK_SIZE))
-
-func _collapse_neighbors(removed: Array[Vector3i], changes: Array) -> void:
-	# A component survives iff six-neighbor-connected to either bottom layer.
-	# Unlike the native link-tree, this performs local search, prioritizing down.
-	var checked: Dictionary = {}
-	for cell in removed:
-		for direction in DIRECTIONS:
-			var start := cell + direction
-			if get_block(start) == 0 or checked.has(start):
-				continue
-			var stack: Array[Vector3i] = [start]
-			var component: Array[Vector3i] = []
-			var visited: Dictionary = {start: true}
-			var supported := false
-			while not stack.is_empty():
-				var current: Vector3i = stack.pop_back()
-				component.append(current)
-				if current.y <= 1:
-					supported = true
-					break
-				# Reverse push order makes downward support the next pop.
-				for i in range(DIRECTIONS.size() - 1, -1, -1):
-					var neighbor := current + DIRECTIONS[i]
-					if get_block(neighbor) != 0 and not visited.has(neighbor):
-						if neighbor.y <= 1 or checked.has(neighbor):
-							supported = true
-							break
-						visited[neighbor] = true
-						stack.append(neighbor)
-				if supported:
-					break
-			if supported:
-				# Only visited cells proven connected through this searched path.
-				for member in component:
-					checked[member] = true
-			else:
-				var colors := PackedInt32Array()
-				for member in component:
-					colors.append(get_block(member))
-				for member in component:
-					checked[member] = true
-					_change_block(member, 0, changes, true)
-				_spawn_falling_cluster(component, colors)
 
 func _spawn_falling_cluster(cells: Array[Vector3i], colors: PackedInt32Array) -> void:
 	if not visual_effects_enabled or cells.is_empty():
@@ -261,13 +214,7 @@ func get_effect_stats() -> Dictionary:
 func explode(position: Vector3, _radius: float = 1.6) -> void:
 	# Native grenade terrain damage is always a centered 3 x 3 x 3 cube.
 	# Radius belongs to player damage/visuals and does not change this block set.
-	var cells: Array[Vector3i] = []
-	var center := Vector3i(position.floor())
-	for z in range(center.z - 1, center.z + 2):
-		for x in range(center.x - 1, center.x + 2):
-			for y in range(center.y - 1, center.y + 2):
-				cells.append(Vector3i(x, y, z))
-	remove_blocks(cells, true)
+	_present_transaction(data.explode(position))
 
 func explode_sphere(position: Vector3, radius: float) -> void:
 	var cells: Array[Vector3i] = []
@@ -282,36 +229,7 @@ func explode_sphere(position: Vector3, radius: float) -> void:
 	remove_blocks(cells, true)
 
 func cast_voxel(origin: Vector3, direction: Vector3, max_dist: float = 128.0) -> Dictionary:
-	var miss := {"hit": false, "cell": Vector3i.ZERO, "normal": Vector3i.ZERO, "position": origin + direction.normalized() * max_dist}
-	if direction.length_squared() < 0.000001 or max_dist < 0.0:
-		return miss
-	var ray := direction.normalized()
-	var cell := Vector3i(origin.floor())
-	var step := Vector3i(signi(roundi(ray.x * 1000000.0)), signi(roundi(ray.y * 1000000.0)), signi(roundi(ray.z * 1000000.0)))
-	var delta := Vector3(INF, INF, INF)
-	var next := Vector3(INF, INF, INF)
-	for axis in range(3):
-		if absf(ray[axis]) > 0.000001:
-			delta[axis] = absf(1.0 / ray[axis])
-			var boundary := float(cell[axis] + (1 if step[axis] > 0 else 0))
-			next[axis] = (boundary - origin[axis]) / ray[axis]
-	var traveled := 0.0
-	var normal := Vector3i.ZERO
-	# Traversal advances one grid face at a time, including from outside bounds.
-	while traveled <= max_dist:
-		if get_block(cell) != 0:
-			return {"hit": true, "cell": cell, "normal": normal, "position": origin + ray * traveled}
-		var axis := 0
-		if next.y < next.x:
-			axis = 1
-		if next.z < next[axis]:
-			axis = 2
-		traveled = next[axis]
-		next[axis] += delta[axis]
-		cell[axis] += step[axis]
-		normal = Vector3i.ZERO
-		normal[axis] = -step[axis]
-	return miss
+	return data.cast_voxel(origin, direction, max_dist)
 
 func get_spawn_position() -> Vector3:
 	return _spawn
@@ -343,14 +261,15 @@ func get_topdown_image() -> Image:
 	return _topdown_image
 
 func _column_top(column: int, from_y: int) -> Vector2i:
-	var offset := column * dimensions.y
-	for y in range(mini(from_y, dimensions.y - 1), -1, -1):
-		var packed := _blocks[offset + y]
-		if packed != 0:
-			return Vector2i(packed, y)
-	return Vector2i(0, -1)
+	return data.column_top(column, from_y)
 
 func clear_world(size: Vector3i) -> void:
+	if data.clear(size, data.epoch + 1) != OK:
+		push_warning("Invalid world reset dimensions/epoch")
+		return
+	_clear_world_visuals()
+
+func _clear_world_visuals() -> void:
 	_irradiance = null
 	if _material != null:
 		_material.set_shader_parameter("irradiance_enabled", false)
@@ -379,56 +298,23 @@ func clear_world(size: Vector3i) -> void:
 	_topdown_image = null
 	_topdown_heights.clear()
 	_topdown_dirty.clear()
-	dimensions = size
-	_blocks.resize(size.x * size.y * size.z)
-	_blocks.fill(0)
 	_view_chunk = Vector3i(-1000, 0, -1000)
 
 func generate_lab() -> void:
-	clear_world(Vector3i(96, 32, 96))
+	if data.generate_lab(data.epoch + 1) != OK:
+		push_warning("Invalid lab reset epoch")
+		return
+	_clear_world_visuals()
 	_streaming = false
 	map_name = "Blockfield Test Grounds"
 	_spawn = Vector3(48.5, 5.0, 70.5)
-	var grass := pack_color(Color("668d57"))
-	var soil := pack_color(Color("79694c"))
-	for z in range(96):
-		for x in range(96):
-			for y in range(4):
-				_blocks[_index(Vector3i(x, y, z))] = grass if y == 3 else soil
-	# Border berms, rifle/SMG/shotgun ranges and destructible bunkers.
-	_fill_box(Vector3i(0, 4, 0), Vector3i(96, 7, 2), 0x014a6254)
-	_fill_box(Vector3i(0, 4, 94), Vector3i(96, 7, 96), 0x014a6254)
-	_fill_box(Vector3i(0, 4, 2), Vector3i(2, 7, 94), 0x014a6254)
-	_fill_box(Vector3i(94, 4, 2), Vector3i(96, 7, 94), 0x014a6254)
-	for x in [14, 36, 58, 80]:
-		_fill_box(Vector3i(x, 4, 18), Vector3i(x + 8, 10, 20), 0x01b58a62)
-		_fill_box(Vector3i(x, 4, 20), Vector3i(x + 2, 10, 30), 0x01b58a62)
-		_fill_box(Vector3i(x + 6, 4, 20), Vector3i(x + 8, 10, 30), 0x01b58a62)
-		_fill_box(Vector3i(x, 10, 18), Vector3i(x + 8, 11, 30), 0x01877768)
-		_fill_box(Vector3i(x + 3, 4, 41), Vector3i(x + 5, 8, 43), 0x01cc6657)
-		_fill_box(Vector3i(x + 2, 8, 40), Vector3i(x + 6, 10, 44), 0x01dccaad)
-	# A supported bridge: cut both pillars to test disconnected collapse.
-	_fill_box(Vector3i(12, 4, 57), Vector3i(14, 11, 59), 0x016989ac)
-	_fill_box(Vector3i(28, 4, 57), Vector3i(30, 11, 59), 0x016989ac)
-	_fill_box(Vector3i(12, 11, 56), Vector3i(30, 12, 60), 0x018cb8cd)
-	# Steps and trench to exercise jumping and crouching.
-	for step_number in range(6):
-		_fill_box(Vector3i(68 + step_number * 2, 4, 58), Vector3i(70 + step_number * 2, 5 + step_number, 66), 0x018b936a)
-	_fill_box(Vector3i(38, 2, 53), Vector3i(56, 4, 56), 0)
-	# Water/wading exercise outside the central spawn and firing lanes.
-	_fill_box(Vector3i(72, 1, 72), Vector3i(88, 4, 88), 0)
 	_create_water()
 	_mark_all_chunks()
 	rebuild_now()
 	map_loaded.emit(map_name)
 
 func _fill_box(start: Vector3i, end: Vector3i, color: int) -> void:
-	for z in range(start.z, end.z):
-		for x in range(start.x, end.x):
-			for y in range(start.y, end.y):
-				var cell := Vector3i(x, y, z)
-				if is_in_bounds(cell):
-					_blocks[_index(cell)] = color
+	data.seed_box(start, end, color)
 
 func load_vxl(path: String) -> Error:
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -437,12 +323,27 @@ func load_vxl(path: String) -> Error:
 	return load_vxl_bytes(file.get_buffer(file.get_length()), path.get_file().get_basename())
 
 func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL") -> Error:
-	var decoded: Dictionary = VXL_READER.decode(bytes)
-	if decoded.error != OK:
-		push_warning("VXL import failed: %s at byte %d" % [decoded.get("message", "Invalid data"), decoded.get("offset", 0)])
-		return decoded.error
-	clear_world(decoded.size)
-	_blocks = decoded.blocks
+	var error: Error = data.load_vxl_bytes(bytes, data.epoch + 1)
+	if error != OK:
+		push_warning("VXL import failed: %s" % data.last_error)
+		return error
+	_clear_world_visuals()
+	_prepare_loaded_map(title)
+	return OK
+
+func set_map_data(validated: VOXEL_DATA, title: String = "Network map") -> Error:
+	# This adopts an already validated, uniquely coordinated writable model.
+	# No palette scan/copy: the receiver validated colors before this handoff.
+	if validated == null or validated.read_only or not VOXEL_DATA.valid_dimensions(validated.dimensions) or validated.blocks.size() != validated.dimensions.x * validated.dimensions.y * validated.dimensions.z:
+		return ERR_INVALID_DATA
+	if not VOXEL_DATA._u32(validated.epoch, true) or not VOXEL_DATA._u32(validated.map_sequence) or not VOXEL_DATA._u32(validated.last_tick) or not is_finite(validated.water_level) or not is_finite(validated.wade_origin_level):
+		return ERR_INVALID_DATA
+	data = validated
+	_clear_world_visuals()
+	_prepare_loaded_map(title)
+	return OK
+
+func _prepare_loaded_map(title: String) -> void:
 	map_name = title
 	_streaming = true
 	var center_x := dimensions.x / 2
@@ -457,10 +358,9 @@ func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL") -> E
 	set_view_position(_spawn)
 	rebuild_now()
 	map_loaded.emit(map_name)
-	return OK
 
 func encode_vxl() -> PackedByteArray:
-	return VXL_READER.encode(_blocks, dimensions)
+	return data.encode_vxl()
 
 func save_vxl(path: String) -> Error:
 	var bytes := encode_vxl()

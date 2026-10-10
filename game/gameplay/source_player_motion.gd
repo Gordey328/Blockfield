@@ -5,6 +5,8 @@ extends RefCounted
 ## copyright (c) 2011–2012 Mathias Kaerlev. See the repository LICENSE.
 ## This module clips already-integrated velocity; acceleration/gravity/friction
 ## remain with the caller. All public points and vectors use Godot axes.
+## The world query may be VoxelData or its VoxelWorld presentation wrapper:
+## dimensions, get_block(cell), water_level and wade_origin_level are required.
 
 const POSITION_SCALE: float = 32.0
 const HALF_WIDTH: float = 0.45
@@ -75,7 +77,7 @@ static func _to_native_point(point: Vector3) -> Vector3:
 static func _from_native_point(point: Vector3) -> Vector3:
 	return Vector3(point.x, NATIVE_MAP_TOP - point.z, point.y)
 
-static func _native_clip_box(world: VoxelWorld, point: Vector3) -> bool:
+static func _native_clip_box(world: Variant, point: Vector3) -> bool:
 	# GameMap.cpp:162–175,195–199: floor native coordinates BEFORE reflection.
 	# Native z=63 aliases z=62; z>=64 is solid. The authored lab may extend
 	# above native z=0, so its actual dimensions determine the empty sky.
@@ -90,10 +92,10 @@ static func _native_clip_box(world: VoxelWorld, point: Vector3) -> bool:
 		cell.y = 1
 	return world.get_block(cell) != 0
 
-static func source_clip_box(world: VoxelWorld, point: Vector3) -> bool:
+static func source_clip_box(world: Variant, point: Vector3) -> bool:
 	return _native_clip_box(world, _to_native_point(point))
 
-static func _horizontal_clear(world: VoxelWorld, x: float, y: float, z: float, native_x: bool, low: float, limit: float) -> bool:
+static func _horizontal_clear(world: Variant, x: float, y: float, z: float, native_x: bool, low: float, limit: float) -> bool:
 	var sample: float = _f32(low)
 	while sample >= _f32(limit):
 		var probe_height: float = _f32(z + sample)
@@ -107,14 +109,14 @@ static func _horizontal_clear(world: VoxelWorld, x: float, y: float, z: float, n
 		sample = _f32(sample - _f32(CROUCH_SHIFT))
 	return true
 
-static func _four_corners_blocked(world: VoxelWorld, x: float, y: float, z: float) -> bool:
+static func _four_corners_blocked(world: Variant, x: float, y: float, z: float) -> bool:
 	var half_width: float = _f32(HALF_WIDTH)
 	return _native_clip_box(world, Vector3(_f32(x-half_width), _f32(y-half_width), z)) \
 		or _native_clip_box(world, Vector3(_f32(x-half_width), _f32(y+half_width), z)) \
 		or _native_clip_box(world, Vector3(_f32(x+half_width), _f32(y-half_width), z)) \
 		or _native_clip_box(world, Vector3(_f32(x+half_width), _f32(y+half_width), z))
 
-static func clip_move(world: VoxelWorld, state: State, delta: float, time: float) -> State:
+static func clip_move(world: Variant, state: State, delta: float, time: float) -> State:
 	var result: State = state.copy()
 	result.climbed = false
 	result.vertical_collision = false
@@ -181,7 +183,7 @@ static func reposition(state: State, time: float) -> State:
 		result.eye_position.y -= _f32(_f32(native_f + CLIMB_EYE_SECONDS) / CLIMB_EYE_SECONDS)
 	return result
 
-static func try_uncrouch(world: VoxelWorld, state: State, move: bool = false) -> Dictionary:
+static func try_uncrouch(world: Variant, state: State, move: bool = false) -> Dictionary:
 	var result: State = state.copy()
 	var position: Vector3 = _to_native_point(state.physics_eye())
 	if not state.grounded and not _four_corners_blocked(world, position.x, position.y, _f32(position.z + STANDING_EYE_HEIGHT)):
@@ -193,7 +195,7 @@ static func try_uncrouch(world: VoxelWorld, state: State, move: bool = false) ->
 		return {"allowed": true, "lower_feet": false, "state": result}
 	return {"allowed": false, "lower_feet": false, "state": result}
 
-static func set_crouch(world: VoxelWorld, state: State, wanted: bool) -> State:
+static func set_crouch(world: Variant, state: State, wanted: bool) -> State:
 	# Client_Update.cpp:408–414 checks TryUncrouch(false), then SetInput.
 	# SetInput does not perform the optional TryUncrouch(true) position shift.
 	var result: State = state.copy()
@@ -209,7 +211,7 @@ static func set_crouch(world: VoxelWorld, state: State, wanted: bool) -> State:
 static func get_origin(state: State) -> Vector3:
 	return state.eye_position - Vector3.UP * ((0.45 if state.crouch else 0.9) + 0.3)
 
-static func get_wade(world: VoxelWorld, state: State) -> bool:
+static func get_wade(world: Variant, state: State) -> bool:
 	# Presentation GetWade is distinct from the physical wading friction flag.
 	return get_origin(state).y < world.wade_origin_level
 

@@ -51,10 +51,16 @@ def main():
     suites += [('console','tests/ui/test_console.gd'),('camera-effects','tests/presentation/test_camera_effects.gd')]
     suites += [('hdr-exposure','tests/presentation/test_hdr_exposure.gd'),('audio-pcm','tests/audio/render_audio.gd')]
     suites += [('protocol','tests/network/test_protocol.gd')]
+    suites += [('ws-transport','tests/network/test_ws_transport.gd'),('shared-grenade','tests/network/test_grenade_rules.gd')]
+    suites += [('voxel-data','tests/world/test_voxel_data.gd'),('voxel-adapter','tests/world/test_voxel_adapter.gd'),('player-rules','tests/network/test_player_rules.gd'),('match-objectives','tests/network/test_match_objectives.gd')]
+    suites += [('match-simulation','tests/network/test_match_simulation.gd'),('client-prediction','tests/network/test_client_prediction.gd'),('map-transfer','tests/network/test_map_transfer.gd')]
+    suites += [('session-registry','tests/network/test_session_registry.gd'),('input-queue','tests/network/test_input_queue.gd'),('server-runtime','tests/network/test_server_runtime.gd')]
+    suites += [('simulation-codec','tests/network/test_simulation_codec.gd'),('client-replica','tests/network/test_client_replica.gd')]
     for name,path in suites:
         path=ROOT/path
         if path.exists():run('test-'+name,['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
+    run('server-launcher-smoke',['--quit-after','60','--','--server','--game-port=0','--map-port=0'])
     if args.export:
         folder=ROOT/'build'/'web';folder.mkdir(parents=True,exist_ok=True)
         run('export',['--export-release','Web',str(folder/'index.html')])

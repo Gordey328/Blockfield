@@ -1,6 +1,7 @@
 class_name BlockfieldProtocol
 extends RefCounted
 ## Bounded, big-endian wire schema. No transport or multiplayer authority.
+const SIMULATION_CODEC = preload("res://network/simulation_codec.gd")
 
 const MAGIC: int = 0x42464e57 # BFNW
 const VERSION: int = 1
@@ -20,7 +21,7 @@ const INPUT_BUTTON_MASK: int = 0x7f # jump,crouch,sprint,sneak,primary,secondary
 const ACTOR_FLAG_MASK: int = 0xff # alive,crouch,sprint,wade,ground,connected,reload,cook
 
 enum Kind { HELLO = 1, WELCOME, REJECT, INPUT_BATCH, CHAT, PING, PONG,
-	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT }
+	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE }
 
 class Packet extends RefCounted:
 	var kind: int = 0
@@ -131,12 +132,14 @@ static func _failure(message: String) -> Result:
 
 static func encode(packet: Packet) -> Result:
 	if packet == null: return _failure("null packet")
-	if packet.kind < Kind.HELLO or packet.kind > Kind.SNAPSHOT: return _failure("unsupported kind")
+	if packet.kind < Kind.HELLO or packet.kind > Kind.MATCH_STATE: return _failure("unsupported kind")
 	for value: int in [packet.epoch, packet.tick, packet.sequence]:
 		if value < 0 or value > U32_MAX: return _failure("header value out of range")
 	var payload_writer: Writer = Writer.new()
 	_write_payload(packet.kind, packet.payload, payload_writer)
 	if not payload_writer.error.is_empty(): return _failure(payload_writer.error)
+	if packet.kind == Kind.MATCH_STATE and (packet.epoch != packet.payload.epoch or packet.tick != packet.payload.tick or packet.sequence != packet.payload.owner_state.spawn_generation):
+		return _failure("state header/body identity mismatch")
 	var data: PackedByteArray = payload_writer.stream.data_array
 	var limit: int = MAX_BULK_FRAME if packet.kind == Kind.MAP_CHUNK else MAX_FRAME
 	if data.size() > limit - HEADER_SIZE: return _failure("frame exceeds limit")
@@ -159,7 +162,7 @@ static func decode(data: PackedByteArray) -> Result:
 	if _header_u32(data, 0) != MAGIC: return _failure("wrong magic")
 	if (int(data[4]) << 8 | int(data[5])) != VERSION: return _failure("unsupported version")
 	var kind: int = data[6]
-	if kind < Kind.HELLO or kind > Kind.SNAPSHOT: return _failure("unsupported kind")
+	if kind < Kind.HELLO or kind > Kind.MATCH_STATE: return _failure("unsupported kind")
 	if data[7] != 0: return _failure("reserved flags must be zero")
 	if kind == Kind.MAP_CHUNK and data.size() > MAX_BULK_FRAME: return _failure("bulk frame exceeds limit")
 	if _header_u32(data, 8) != data.size() - HEADER_SIZE: return _failure("payload length mismatch")
@@ -171,6 +174,8 @@ static func decode(data: PackedByteArray) -> Result:
 	var validation: Writer = Writer.new()
 	_write_payload(kind, payload, validation)
 	if not validation.error.is_empty(): return _failure(validation.error)
+	if kind == Kind.MATCH_STATE and (_header_u32(data,12) != payload.epoch or _header_u32(data,16) != payload.tick or _header_u32(data,20) != payload.owner_state.spawn_generation):
+		return _failure("state header/body identity mismatch")
 	var result: Result = Result.new()
 	result.ok = true
 	result.packet = make_packet(kind, payload, _header_u32(data, 12), _header_u32(data, 16), _header_u32(data, 20))
@@ -233,6 +238,10 @@ static func _write_payload(kind: int, p: Dictionary, w: Writer) -> void:
 			w.integer(p.snapshot_id, 4, 1); w.integer(p.map_sequence, 4); w.raw(p.hash, 32)
 		Kind.MAP_DELTA: _write_delta(p, w)
 		Kind.SNAPSHOT: _write_snapshot(p, w)
+		Kind.MATCH_STATE:
+			var encoded: Dictionary = SIMULATION_CODEC.encode(p)
+			if not encoded.ok: w.fail(encoded.error)
+			else: w.stream.put_data(encoded.bytes)
 
 static func _write_inputs(p: Dictionary, w: Writer) -> void:
 	if not _keys(p, ["records"], w) or not _array(p.records, MAX_INPUTS, w, 1): return
@@ -336,6 +345,10 @@ static func _read_payload(kind: int, r: Reader) -> Dictionary:
 		Kind.MAP_END, Kind.MAP_READY: return {"snapshot_id":r.integer(4), "map_sequence":r.integer(4), "hash":r.raw(32)}
 		Kind.MAP_DELTA: return _read_delta(r)
 		Kind.SNAPSHOT: return _read_snapshot(r)
+		Kind.MATCH_STATE:
+			var decoded: Dictionary = SIMULATION_CODEC.decode(r.raw(r.stream.get_available_bytes()))
+			if not decoded.ok: r.fail(decoded.error); return {}
+			return decoded.payload
 	return {}
 
 static func _read_delta(r: Reader) -> Dictionary:

@@ -1,13 +1,13 @@
 # Architecture and current contracts
 
 ## Boundaries
-- VoxelWorld: packed colored solid cells, VXL import, chunk meshes/collision, edit batching, block-ray intersection and unsupported-block collapse.
-- LocalSession: authoritative offline state for players, damage/ammo/grenades, respawn, teams and mode objectives. Presentation consumes session events. Future server runs equivalent rules.
+- VoxelData: shared packed cells, source queries, VXL, edit/collapse rules, atomic ordered transactions and bounded journal. VoxelWorld adopts Data and owns chunk meshes/collision, water/GI/reflections, top-down textures and visual falling clusters. Never apply an adopted transaction to Data then World twice.
+- LocalSession: existing authoritative offline adapter for lab/presentation. SharedPlayerState, PlayerRules, GrenadeRules, MatchObjectives and MatchSimulation now provide pure fixed60Hz multi-actor authority; LocalSession/controller delegation is unfinished. No claim that extracting rules alone migrates the offline adapter.
 - PlayerController: input and movement; WeaponView/CharacterView: original models and animation; HUD/LabPanel: state display and test controls.
 - OpenSpadesAudio: per-view sound layers, environmental ray sampling and mono/stereo distance/pan routing. Main supplies the listener; presentation consumes authoritative events. See audio.md.
-- SourcePlayerMotion: native corner collision, step/climb and crouch eye geometry; controller owns acceleration and damage. SourceCameraEffects: isolated presentation noise, angular basis/FOV and radial blur; authoritative aim rays remain on the player head.
+- SourcePlayerMotion: native corner collision, step/climb and crouch eye geometry against Data or World's narrow query contract. PlayerRules owns shared acceleration/fall authority; existing offline controller remains a compatibility path. SourceCameraEffects: isolated presentation noise, angular basis/FOV and radial blur; authoritative aim rays remain on the player head.
 - LabConsole: typed allowlist of local commands and saved preferences; LabChat owns input/history/completion, with no runtime script evaluation. See console.md.
-- Transport: absent from iteration-1 execution path. Future interface delivers commands/snapshots, not direct UI callbacks.
+- BlockfieldProtocol/WSTransport: explicit bounded bytes and poll-driven socket lifecycle. SessionRegistry binds guest capabilities to stable actors; InputQueue enforces generation/epoch, bounded intent and one command per step. MapTransfer stages baseline/deltas privately before adoption. ServerRuntime wires these to MatchSimulation; ClientPrediction provides pure replay/interpolation. Full wire/replica/rendered multiplayer integration is ongoing, separately from the offline path. See decisions/0005-authoritative-multiplayer.md and server-runtime.md.
 
 ## Voxel interface
 `class_name VoxelWorld extends Node3D` in game/world/.
