@@ -11,27 +11,88 @@ actual viewport. Menus use larger buttons/dropdown rows, wrapping text and two
 columns in portrait; HP/ammo remain in the footer and the minimap clears both
 toolbar rows. The read-only original block palette sits beside the minimap,
 above the action buttons; select block colors through the Arsenal color picker.
-[ADR0007](decisions/0007-mobile-controls.md) records the decision.
+[ADR0007](decisions/0007-mobile-controls.md) records the initial overlay;
+[ADR0008](decisions/0008-mobile-fps-input.md) records the mobile FPS update.
+
+The update adds separate touch look/ADS gain and inversion, floating/fixed stick,
+fire-and-look and control size, with a reset button. `[input]` stores
+`touch_sensitivity` (0.25–3.0), `touch_ads_sensitivity` (0.25–2.0), `invert_touch`;
+`[ui]` stores `floating_stick`, `touch_control_scale` (0.8–1.4), `fire_drag_look`.
+Defaults are gain1, ADS gain1, normal Y, floating stick, size1 and fire-and-look on.
 
 ## Contract
 
 `BlockfieldMobileControls.setup(player, hud)` accepts null HUD/player for isolated component use. `set_enabled`, `release_all`, `handle_touch` and `handle_drag` are the public lifecycle/input APIs. `get_hit_regions()` returns a copied dictionary of local logical-pixel rectangles: `move`, `look`, `primary`, `secondary`, `jump`, `crouch`, `sprint`, `reload`, four `tool_*` buttons, `map`, `view_toggle`, and `menu`.
 
-Public touch indices must be nonnegative. Nonfinite coordinates/deltas are rejected. The real `_input` adapter converts viewport positions and deltas through the inverse canvas transform before using those same handlers. Touch-generated emulated mouse events are consumed while the overlay is active, avoiding a second mouse attack/look path. A forced desktop overlay supports its own mouse pointer over the designated controls/look area.
+Public touch indices must be nonnegative. Nonfinite coordinates/deltas are rejected.
+The real `_input` adapter converts viewport positions through the inverse canvas
+transform. Each accepted DOWN initializes its owner's absolute-position history;
+look uses the difference between this pointer's consecutive positions and ignores
+finite engine-relative values. The same rule applies to desktop preview drags.
+Touch-generated emulated mouse events are consumed while the overlay is active;
+mouse preview is disabled when genuine touch is detected.
 
-The joystick rectangle is 160×160 logical pixels, radius 62, radial deadzone 0.12. Outside the deadzone, strength is remapped across the remaining 0.88; diagonal magnitude stays at most 1. Negative Y means forward. The controller clamps finite `touch_movement`, rejects nonfinite values and combines it with physical-key movement through `get_source_movement_axis()`; offline and network input use that shared axis.
+The resting joystick has a 160-pixel extent and radius62 at size1. Floating mode
+accepts the left movement zone, starts neutral under the thumb and keeps its base
+fixed for that gesture. Edge-clamped bases retain a grab offset so DOWN is neutral.
+Fixed mode retains the resting activation rectangle. Radial deadzone0.12 is
+remapped once across the remaining0.88; diagonal magnitude stays at most1.
+Negative Y means forward. The controller clamps finite `touch_movement` and combines
+it with keyboard movement through `get_source_movement_axis()`; offline/network
+input use that shared axis.
 
-Exactly one finger owns the stick and one owns look. Additional touches on either region are consumed without stealing control. Each button counts its finger owners and emits only the first press/last release. Dragging out releases that button, while preserving the finger's original claim; dragging back can repress it. A button/stick finger cannot become look, and an unclaimed drag cannot rotate the camera. Look ownership survives movement across another control's rectangle.
+Exactly one finger owns the stick and one owns look. Additional touches cannot
+steal those roles. Ordinary buttons count their owners, emitting the first press
+and last release; dragging out releases and re-entry can repress the same action.
+Primary fire can claim the free look role at DOWN for a living armed player in
+their own first/third-person view. That composite gesture fires and looks until
+UP/cancel, including outside the button. If another pointer already owns look,
+primary stays an ordinary button. Spectator selection and non-firearm tools retain
+ordinary action behavior. Roles never change mid-gesture; look crossing buttons
+does not press them, and unclaimed drags cannot rotate the camera.
 
 Touch up/cancel releases that finger. `release_all`, disable, viewport resize, application/window focus loss and pause clear every claim, held action and movement vector. Pressing menu releases all controls before emitting `menu_requested`. The player permission gate also releases ownership when controls become disabled; Main/HUD owns menu/chat detection and the auto/on/off preference.
 
 ## Layout and bridge
 
-Buttons are at least 60×60 logical pixels, with separate movement/look areas and a 52-pixel bottom HUD reserve. The top toolbar splits into two rows below 492 logical pixels of width. Required logical layouts include 960×540, 854×480 and 480×854; the component also supports raw 844×390. Root's viewport policy can expand a physical 844×390 phone into a taller logical canvas. Geometry checks establish usable hit targets and separation; they do not establish rendered text readability on a physical display.
+Controls respect the size preference and a 48 CSS-pixel Web button floor, derived
+from actual canvas bounds and local canvas size. Native/headless fallback is a
+logical-pixel floor, not a claim about physical display units. The toolbar and
+action grid wrap on narrow canvases; map/palette placement follows actual toolbar
+height. Movement/look areas retain a 52-pixel bottom HUD reserve. Required layouts
+include960×540,854×480,480×854 and raw844×390, plus size0.8/1.4. Root's expanding
+viewport can turn physical844×390 into a taller logical canvas. Geometry checks
+do not establish phone text readability or OS safe-area handling.
 
-HUD connects `action_changed` to `Input.parse_input_event(InputEventAction)`, preserving the existing controller's press/release edges for reload, selection and ADS. `movement_changed` updates `player.touch_movement`; `look_moved` calls `apply_mouse_motion`; menu opens the existing HUD menu. Deactivation must release overlay-owned actions before other global input cleanup. Networking remains `NetworkSession` → shared prediction → authenticated commands → authoritative Runtime, with unchanged wire/rule limits.
+HUD connects actions to `Input.parse_input_event(InputEventAction)`, preserving
+reload, selection and ADS edges. Movement updates `player.touch_movement`; look
+calls `apply_touch_motion(delta, overlay.size)`. Both touch axes normalize by the
+overlay width: at gain1 a 30%-width swipe gives90° before weapon zoom. Touch gain
+is independent of mouse exponent/sensitivity/inversion, without frame-time gain
+or smoothing. Existing own-view ADS zoom, spectator behavior and pitch bounds
+apply. Menu opens the existing HUD menu; deactivation releases overlay actions
+before global cleanup. Networking remains the same prediction/authenticated
+command/authoritative Runtime path with unchanged wire/rule limits.
 
-## Reproducible regression
+## Mobile FPS validation
+
+Godot4.7.2 import/parser passed (`.cache/logs/mobile-fps-import.log`). Actual
+Main/Player/HUD integration passed144 assertions/0 failures
+(`mobile-fps-look.log`): swipe normalization/event segmentation, own/spectator
+camera permissions/pitch bounds, all three ADS zooms, independent desktop gain,
+real ScreenTouch/Drag routing, settings/reset callbacks, reload of Main and exact
+settings/servers restoration. Registered as `mobile-look` in `tools/build.py`.
+Isolated production controls passed2381 assertions/0 failures
+(`mobile-fps-controls-final.log`), actual HUD271/0 (`mobile-fps-ui.log`) and source
+input35/0 (`mobile-fps-source-input.log`). The first transformed finger-reuse
+expectation failed because float32 canvas round trips produced
+`(2.000061035,0.999984741)` instead of ideal`(2,1)`, exactly matching the independent
+transform calculation with two events. The fixture now checks both event count
+and that calculation, with only0.0001px tolerance against the ideal displacement.
+No production repair was needed for this fixture issue; initial/diagnostic logs
+remain saved. Frozen full release and exported browser gates are pending.
+
+## Previous checkpoint regression
 
 The new repository-root fixture is `tests/ui/test_mobile_controls.gd`, run from the Godot game project:
 

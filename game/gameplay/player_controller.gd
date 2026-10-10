@@ -22,6 +22,15 @@ var hold_aim_down_sight: bool = false
 var invert_mouse: bool = false
 var mouse_exponent: float = 1.0
 var ads_sensitivity: float = 1.0
+## Touch gain is linear and normalized to the full logical canvas width.
+## It does not inherit desktop mouse acceleration or pixel sensitivity.
+var touch_sensitivity: float = 1.0:
+	set(value):
+		touch_sensitivity = clampf(value, 0.25, 3.0) if is_finite(value) else 1.0
+var touch_ads_sensitivity: float = 1.0:
+	set(value):
+		touch_ads_sensitivity = clampf(value, 0.25, 2.0) if is_finite(value) else 1.0
+var invert_touch: bool = false
 var wheel_tool_direction: int = 1
 var eject_brass:=true
 var animations_enabled:=true
@@ -622,6 +631,27 @@ func apply_mouse_motion(relative: Vector2) -> void:
 	delta *= pow(maxf(ads_sensitivity, 0.001), _aim_down_state) * sensitivity
 	rotate_y(-delta.x)
 	head.rotation.x = clampf(head.rotation.x - delta.y * (-1.0 if invert_mouse else 1.0), -1.55,1.55)
+
+func apply_touch_motion(relative: Vector2, screen_extent: Vector2) -> void:
+	if not controls_enabled or session == null or camera_mode == CameraMode.FOLLOW_FIRST_PERSON:
+		return
+	if not relative.is_finite() or not screen_extent.is_finite() or screen_extent.x <= 0.0 or screen_extent.y <= 0.0:
+		return
+	# Both arguments are in the overlay's local canvas coordinates. Device pixel
+	# ratio and stretch therefore cancel; a 30%-width swipe gives 90deg at 1x.
+	var delta: Vector2 = relative / screen_extent.x * deg_to_rad(300.0) * touch_sensitivity
+	if not delta.is_finite():
+		return
+	var vertical: float = -1.0 if invert_touch else 1.0
+	if camera_mode in [CameraMode.DEATH, CameraMode.FREE, CameraMode.FOLLOW_THIRD_PERSON]:
+		_camera_yaw -= delta.x
+		_camera_pitch = clampf(_camera_pitch - delta.y * vertical, -PI * 0.45, PI * 0.45)
+		return
+	# Own first/third-person views retain the existing weapon zoom reduction.
+	delta /= get_aim_zoom()
+	delta *= pow(touch_ads_sensitivity, _aim_down_state)
+	rotate_y(-delta.x)
+	head.rotation.x = clampf(head.rotation.x - delta.y * vertical, -1.55, 1.55)
 
 func _connect_simulation() -> void:
 	if _spectator_view==null:

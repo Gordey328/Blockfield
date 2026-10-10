@@ -18,8 +18,18 @@ Priority: gdscript-patterns, godot-project-setup, 3d-essentials, godot-optimizat
 
 Installed 2026-10-10 using the standard skill-installer into this repository:
 `gdscript-patterns`, `godot-project-setup`, `3d-essentials`, `godot-optimization`,
-`godot-testing`, `export-pipeline`, all from the pinned commit above. The three
-original project-owned skills are authored here and versioned with the game. The multiplayer workflow adds a fourth project-owned skill (ten total).
+`godot-testing`, `export-pipeline`, all from the pinned commit above. The mobile
+FPS update adds `input-handling` and `responsive-ui` from the same pin, installed
+using `install-skill-from-github.py --repo jame581/GodotPrompter --ref
+1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218 --path skills/input-handling
+skills/responsive-ui --dest .agents/skills`. Their touch/mobile references guide
+pointer ownership and responsive targets; pinned engine behavior takes precedence
+over generic examples. Four project-owned and eight engine skills are now installed.
+
+Installed entry-point SHA256 (supporting references are committed alongside them):
+
+- `input-handling/SKILL.md`: `300bdfa2b09e417ec79f025e686b6c969ae8473775dc608ba5157ef308526bd7`.
+- `responsive-ui/SKILL.md`: `aebf482527f8b0dd130d5afaa3815ec230dfd22fa4e368be38fd7b0c0bfee7fb`.
 
 Read only the relevant SKILL.md and its requested references. Skills explain
 repeatable workflows; they are not a place to store current completion claims.

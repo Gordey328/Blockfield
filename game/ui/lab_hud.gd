@@ -69,6 +69,9 @@ var _network_menu: Control
 const MOBILE_CONTROLS=preload("res://ui/mobile_controls.gd")
 var mobile_controls: Control
 var touch_controls_mode:=0 # Auto / on / off, persisted with UI preferences.
+var floating_stick: bool = true
+var touch_control_scale: float = 1.0
+var fire_drag_look: bool = true
 var _touch_device:=false
 var _focused:=true
 var _mobile_mouse_bindings: Dictionary={}
@@ -499,6 +502,7 @@ func _build_settings(column: VBoxContainer) -> void:
 	_touch_mode_choice.select(touch_controls_mode)
 	_touch_mode_choice.item_selected.connect(set_mobile_controls_mode)
 	column.add_child(_touch_mode_choice)
+	_build_touch_settings(column)
 	column.add_child(_label("Имя игрока",15))
 	var name_field:=LineEdit.new()
 	name_field.text=main.player_name
@@ -757,6 +761,7 @@ func set_mobile_controls_mode(mode: int) -> void:
 func _refresh_mobile_mode() -> void:
 	_release_mobile_input()
 	_update_mobile_layout()
+	_apply_touch_preferences()
 	_sync_controls()
 
 func _create_mobile_controls() -> void:
@@ -765,11 +770,71 @@ func _create_mobile_controls() -> void:
 	mobile_controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(mobile_controls)
 	mobile_controls.setup(player,self)
+	mobile_controls.resized.connect(_apply_map_settings)
+	_apply_touch_preferences()
 	mobile_controls.action_changed.connect(_mobile_action_changed)
 	mobile_controls.movement_changed.connect(func(axis: Vector2):player.touch_movement=axis)
-	mobile_controls.look_moved.connect(player.apply_mouse_motion)
+	mobile_controls.look_moved.connect(func(relative: Vector2):player.apply_touch_motion(relative,mobile_controls.size))
 	mobile_controls.menu_requested.connect(func():set_menu_visible(true))
 	mobile_controls.set_enabled(false)
+
+func _apply_touch_preferences() -> void:
+	touch_control_scale = clampf(touch_control_scale, 0.8, 1.4) if is_finite(touch_control_scale) else 1.0
+	if mobile_controls == null:
+		return
+	mobile_controls.set_touch_preferences(floating_stick, touch_control_scale, fire_drag_look)
+	mobile_controls.set_mouse_preview_enabled(not _touch_device)
+	_apply_map_settings()
+
+func _build_touch_settings(column: VBoxContainer) -> void:
+	column.add_child(_ui_label("Движение слева, обзор справа. Удерживайте «Огонь» и ведите пальцем для стрельбы с обзором.","Move on the left, look on the right. Hold Fire and drag to aim while firing.",14))
+	_ui_settings_controls.touch_sensitivity = _touch_setting_slider(column,"Обзор пальцем","Touch look",0.25,3.0,player.touch_sensitivity,func(value: float):player.touch_sensitivity=value;main.save_settings())
+	_ui_settings_controls.touch_ads_sensitivity = _touch_setting_slider(column,"Обзор в прицеле","Touch ADS look",0.25,2.0,player.touch_ads_sensitivity,func(value: float):player.touch_ads_sensitivity=value;main.save_settings())
+	_ui_settings_controls.invert_touch = _ui_check(column,"Инвертировать обзор пальцем","Invert touch look",player.invert_touch,func(value: bool):player.invert_touch=value;main.save_settings())
+	_ui_settings_controls.floating_stick = _ui_check(column,"Плавающий джойстик","Floating joystick",floating_stick,func(value: bool):floating_stick=value;_apply_touch_preferences();_save_ui_settings())
+	_ui_settings_controls.fire_drag_look = _ui_check(column,"Огонь и обзор одним пальцем","Fire and look with one finger",fire_drag_look,func(value: bool):fire_drag_look=value;_apply_touch_preferences();_save_ui_settings())
+	_ui_settings_controls.touch_control_scale = _touch_setting_slider(column,"Размер кнопок и джойстика","Button and joystick size",0.8,1.4,touch_control_scale,func(value: float):touch_control_scale=value;_apply_touch_preferences();_save_ui_settings())
+	_ui_settings_controls.touch_reset = _ui_button("Сбросить мобильное управление","Reset mobile controls",_reset_touch_settings)
+	column.add_child(_ui_settings_controls.touch_reset)
+
+func _touch_setting_slider(column: VBoxContainer, ru: String, en: String, minimum: float, maximum: float, current: float, callback: Callable) -> HSlider:
+	column.add_child(_ui_label(ru,en))
+	var row := HBoxContainer.new()
+	column.add_child(row)
+	var slider := HSlider.new()
+	slider.min_value=minimum
+	slider.max_value=maximum
+	slider.step=0.05
+	slider.value=current
+	slider.custom_minimum_size=Vector2(160,60)
+	slider.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	row.add_child(slider)
+	var amount := Label.new()
+	amount.text="%d%%"%roundi(current*100)
+	amount.custom_minimum_size=Vector2(62,0)
+	row.add_child(amount)
+	slider.value_changed.connect(func(value: float):amount.text="%d%%"%roundi(value*100);callback.call(value))
+	slider.set_meta("touch_amount_label",amount)
+	return slider
+
+func _reset_touch_settings() -> void:
+	player.touch_sensitivity=1.0
+	player.touch_ads_sensitivity=1.0
+	player.invert_touch=false
+	floating_stick=true
+	touch_control_scale=1.0
+	fire_drag_look=true
+	for key: String in ["touch_sensitivity","touch_ads_sensitivity","touch_control_scale"]:
+		var slider: HSlider = _ui_settings_controls[key]
+		slider.set_value_no_signal(1.0)
+		var amount: Label = slider.get_meta("touch_amount_label")
+		amount.text="100%"
+	for key: String in ["invert_touch","floating_stick","fire_drag_look"]:
+		var button: CheckButton = _ui_settings_controls[key]
+		button.set_pressed_no_signal(bool(player.invert_touch) if key=="invert_touch" else true)
+	_apply_touch_preferences()
+	_save_ui_settings()
+	main.save_settings()
 
 func _mobile_action_changed(action: String,pressed: bool) -> void:
 	if not InputMap.has_action(action):return
@@ -1205,6 +1270,10 @@ func _load_ui_settings() -> void:
 		_map_player_colors=bool(config.get_value("ui","map_player_colors",true))
 		_hud_hidden=bool(config.get_value("ui","hidden",false))
 		touch_controls_mode=clampi(int(config.get_value("ui","touch_controls",0)),0,2)
+		floating_stick=bool(config.get_value("ui","floating_stick",true))
+		touch_control_scale=float(config.get_value("ui","touch_control_scale",1.0))
+		fire_drag_look=bool(config.get_value("ui","fire_drag_look",true))
+	_apply_touch_preferences()
 	_apply_map_settings()
 	_refresh_ui_controls()
 
@@ -1213,6 +1282,13 @@ func _apply_map_settings() -> void:
 	var map_size:=mini(_minimap_size,112) if uses_mobile_controls() else _minimap_size
 	var inset:=16 if uses_mobile_controls() else 28
 	var top: int=(184 if get_window().size.y>get_window().size.x else 86) if uses_mobile_controls() else 24
+	if uses_mobile_controls() and mobile_controls!=null:
+		var regions: Dictionary=mobile_controls.get_hit_regions()
+		# Toolbar height follows the actual control scale and portrait row count.
+		var toolbar_bottom:=0.0
+		for action: String in ["tool_spade","tool_block","tool_weapon","tool_grenade","map","view_toggle","menu"]:
+			if regions.has(action):toolbar_bottom=maxf(toolbar_bottom,regions[action].end.y)
+		if toolbar_bottom>0.0:top=ceili(toolbar_bottom+16.0)
 	_map.size=Vector2(map_size,map_size)
 	_map.offset_left=-map_size-inset
 	_map.offset_right=-inset
@@ -1231,7 +1307,7 @@ func _apply_map_settings() -> void:
 func _save_ui_settings() -> void:
 	var config:=ConfigFile.new()
 	config.load("user://settings.cfg")
-	var values: Dictionary={"touch_controls":touch_controls_mode,"minimap_size":_minimap_size,"statistics":_show_statistics,"hit_feedback":_show_hit_feedback,"alerts":_show_alerts,"player_names":_show_names,"map_weapon_icons":_map_weapon_icons,"map_player_colors":_map_player_colors,"hidden":_hud_hidden}
+	var values: Dictionary={"touch_controls":touch_controls_mode,"floating_stick":floating_stick,"touch_control_scale":touch_control_scale,"fire_drag_look":fire_drag_look,"minimap_size":_minimap_size,"statistics":_show_statistics,"hit_feedback":_show_hit_feedback,"alerts":_show_alerts,"player_names":_show_names,"map_weapon_icons":_map_weapon_icons,"map_player_colors":_map_player_colors,"hidden":_hud_hidden}
 	for key in values:config.set_value("ui",key,values[key])
 	config.save("user://settings.cfg")
 
@@ -1556,9 +1632,22 @@ func set_console_setting(key: String,value: Variant) -> bool:
 func _refresh_ui_controls() -> void:
 	for key in _ui_settings_controls:
 		var control: Control=_ui_settings_controls[key]
-		var value: Variant=get_console_setting(key)
+		var value: Variant
+		match key:
+			"touch_sensitivity":value=player.touch_sensitivity
+			"touch_ads_sensitivity":value=player.touch_ads_sensitivity
+			"invert_touch":value=player.invert_touch
+			"floating_stick":value=floating_stick
+			"touch_control_scale":value=touch_control_scale
+			"fire_drag_look":value=fire_drag_look
+			"touch_reset":continue
+			_:value=get_console_setting(key)
 		if control is CheckButton:control.set_pressed_no_signal(bool(value))
-		elif control is HSlider:control.set_value_no_signal(float(value))
+		elif control is HSlider:
+			control.set_value_no_signal(float(value))
+			if control.has_meta("touch_amount_label"):
+				var amount: Label=control.get_meta("touch_amount_label")
+				amount.text="%d%%"%roundi(float(value)*100)
 		elif control is OptionButton:control.select(int(value))
 
 func _build_native_preferences(column: VBoxContainer) -> void:

@@ -85,15 +85,18 @@ func _bridge_movement(axis: Vector2) -> void:
 
 func _bridge_look(relative: Vector2) -> void:
 	look_events.append(relative)
-	if is_instance_valid(player): player.apply_mouse_motion(relative)
+	if is_instance_valid(player): player.apply_touch_motion(relative, overlay.size)
 
-func make_overlay(size: Vector2, bound_player: PLAYER = null) -> void:
+func make_overlay(size: Vector2, bound_player: PLAYER = null, fixed_legacy: bool = true) -> void:
 	overlay = MOBILE.new()
 	root.add_child(overlay)
 	overlay.setup(bound_player, null)
 	overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	overlay.position = Vector2.ZERO
 	overlay.size = size
+	# Existing fixed-stick and ordinary-button regressions remain separate from
+	# the default floating FPS gesture tests below; their coverage is preserved.
+	if fixed_legacy: overlay.set_touch_preferences(false, 1.0, false)
 	overlay.action_changed.connect(_bridge_action)
 	overlay.movement_changed.connect(_bridge_movement)
 	overlay.look_moved.connect(_bridge_look)
@@ -159,7 +162,7 @@ func ownership() -> void:
 	await settle_input()
 	check(overlay.movement_axis.is_equal_approx(Vector2(0, -1)) and Input.is_action_pressed("primary"), "movement and held fire coexist")
 	check(overlay.handle_drag(1, primary, Vector2(12, -6)), "look owner may cross a button")
-	check(look_events == [Vector2(12, -6)] and overlay.movement_axis.is_equal_approx(Vector2(0, -1)), "look emits supplied local delta without disturbing movement")
+	check(look_events == [primary - look] and overlay.movement_axis.is_equal_approx(Vector2(0, -1)), "look emits its own absolute displacement without disturbing movement")
 	check(events_for("primary", true) == 1 and events_for("primary", false) == 0, "look crossing does not release or duplicate held fire")
 	check(overlay.handle_touch(3, move, true) and overlay.handle_touch(4, look, true), "extra stick/look touches are consumed")
 	check(overlay.handle_drag(3, look, Vector2(99, 99)) and overlay.handle_drag(4, primary, Vector2(99, 99)), "blocked owners keep their original claims")
@@ -211,6 +214,216 @@ func ownership() -> void:
 		check(not Input.is_action_pressed(action), "advertised %s button releases InputEventAction" % action)
 	overlay.free()
 	overlay = null
+
+func absolute_multitouch() -> void:
+	make_overlay(Vector2(960, 540))
+	var move := center("move")
+	var look := center("look")
+	var fire := center("primary")
+	# Either touch-list order may occur. LOOK must use the position of its
+	# claimed ID even when the engine reports another finger's displacement.
+	for order: Vector2i in [Vector2i(0, 7), Vector2i(7, 0)]:
+		clear_trace()
+		check(overlay.handle_touch(order.x, move, true) and overlay.handle_touch(order.y, look, true), "distinct IDs claim move/look in either order")
+		check(overlay.handle_touch(9, fire, true), "third finger holds fire during ID-order regression")
+		for i: int in range(4):
+			var changing_move := move + Vector2(12.0 * (i + 1), -20.0)
+			if i % 2 == 0:
+				overlay.handle_drag(order.x, changing_move, Vector2(-500, 800))
+				overlay.handle_drag(order.y, look, Vector2(800, -500))
+			else:
+				overlay.handle_drag(order.y, look, Vector2(-800, 500))
+				overlay.handle_drag(order.x, changing_move, Vector2(500, -800))
+			check(look_events.is_empty(), "stationary LOOK ignores malformed relative while MOVE changes/order alternates")
+		check(overlay.handle_touch(order.y, look + Vector2(200, 100), true), "duplicate LOOK down is consumed")
+		check(overlay.handle_drag(order.y, look + Vector2(4, -3), Vector2(900, 900)) and look_events == [Vector2(4, -3)], "duplicate down does not rebase and malformed relative cannot rotate camera")
+		check(overlay.handle_drag(order.x, fire, Vector2(1, 1)) and look_events.size() == 1, "MOVE crossing fire neither rotates nor changes held fire")
+		await settle_input()
+		check(Input.is_action_pressed("primary") and events_for("primary", true) == 1, "third finger action remains independent from both pointer orders")
+		check(not overlay.handle_drag(order.y, Vector2(INF, 0), Vector2.ZERO) and not overlay.handle_drag(order.y, look, Vector2(NAN, 0)), "nonfinite absolute/relative samples preserve camera baseline")
+		check(overlay.handle_drag(order.y, look + Vector2(5, -2), Vector2.ZERO) and look_events.back() == Vector2(1, 1), "valid drag resumes from last accepted own position")
+		check(overlay.handle_touch(order.y, look, false, true), "cancel drops only the LOOK claim")
+		check(overlay.handle_touch(order.y, look + Vector2(30, 10), true), "lifted ID acquires fresh LOOK baseline")
+		check(overlay.handle_drag(order.y, look + Vector2(32, 9), Vector2(-700, 900)) and look_events.back() == Vector2(2, -1), "reused ID never jumps from its previous gesture")
+		overlay.release_all()
+		await settle_input()
+		check(overlay.movement_axis == Vector2.ZERO and not Input.is_action_pressed("primary"), "mixed gesture release clears controls")
+	overlay.free()
+	overlay = null
+
+func floating_and_scaled_layout() -> void:
+	for size: Vector2 in [Vector2(960, 540), Vector2(854, 480), Vector2(480, 854), Vector2(844, 390)]:
+		make_overlay(size, null, false)
+		check(overlay.floating_stick and overlay.fire_drag_look and overlay.control_scale == 1.0, "default FPS touch preferences")
+		for scale: float in [0.8, 1.0, 1.4]:
+			overlay.set_touch_preferences(true, scale, true)
+			var regions := overlay.get_hit_regions()
+			check(regions.size() == BUTTONS.size() + 2, "scaled layout retains every control at %s/%s" % [size, scale])
+			for name: String in BUTTONS + ["move", "look"]:
+				var rect: Rect2 = regions[name]
+				check(rect.position.is_finite() and rect.size.x > 0 and rect.size.y > 0 and Rect2(Vector2.ZERO, size).encloses(rect), "scaled %s stays usable/in bounds" % name)
+				if name in BUTTONS: check(rect.size.x >= 48.0 and rect.size.y >= 48.0, "scaled target keeps native logical 48px floor: %s" % name)
+			for i: int in range(BUTTONS.size()):
+				var rect: Rect2 = regions[BUTTONS[i]]
+				for j: int in range(i + 1, BUTTONS.size()):
+					check(not rect.intersects(regions[BUTTONS[j]]), "scaled buttons stay separate %s/%s" % [BUTTONS[i], BUTTONS[j]])
+				check(not rect.intersects(regions.move) and not rect.intersects(regions.look), "scaled action stays outside MOVE/LOOK")
+			check((regions.move as Rect2).end.x <= size.x * 0.45 + 0.0001 and (regions.move as Rect2).size.x >= size.x * 0.3, "floating MOVE has generous left-thumb activation area")
+			check((regions.move as Rect2).end.y <= size.y - 52 and not (regions.move as Rect2).intersects(regions.look), "floating MOVE leaves HUD and independent LOOK space")
+		overlay.free()
+		overlay = null
+	make_overlay(Vector2(960, 540), null, false)
+	var move := center("move")
+	check(overlay.handle_touch(0, move, true) and overlay.movement_axis == Vector2.ZERO, "floating DOWN starts neutral anywhere in activation area")
+	check(overlay.handle_drag(0, move + Vector2(62, 0), Vector2(-100, -100)) and overlay.movement_axis.is_equal_approx(Vector2.RIGHT), "floating gesture moves from its own DOWN position")
+	check(overlay.handle_drag(0, move + Vector2(120, 0), Vector2.ZERO) and overlay.movement_axis.is_equal_approx(Vector2.RIGHT), "floating stick saturates instead of following finger")
+	check(overlay.handle_drag(0, move + Vector2(31, 0), Vector2.ZERO) and absf(overlay.movement_axis.x - (0.5 - 0.12) / 0.88) < 0.00001, "floating base stays fixed for whole gesture")
+	check(overlay.handle_touch(1, move, true) and overlay.handle_drag(1, move + Vector2(0, -62), Vector2.ONE), "second MOVE claim is consumed without stealing")
+	check(overlay.movement_axis.y == 0, "second MOVE pointer cannot change authoritative axis")
+	overlay.handle_touch(0, move, false, true)
+	check(overlay.movement_axis == Vector2.ZERO and not overlay.handle_drag(0, move, Vector2.ONE), "floating cancel releases axis and baseline")
+	check(overlay.handle_drag(1, move + Vector2(0, -62), Vector2.ONE) and overlay.movement_axis == Vector2.ZERO, "blocked MOVE does not upgrade after first owner releases")
+	overlay.release_all()
+	var edge: Vector2 = (overlay.get_hit_regions().move as Rect2).position + Vector2(2, 2)
+	check(overlay.handle_touch(0, edge, true) and overlay.movement_axis == Vector2.ZERO, "clamped floating base preserves neutral edge DOWN")
+	check(overlay.handle_drag(0, edge + Vector2(31, 0), Vector2(900, 900)) and absf(overlay.movement_axis.x - (0.5 - 0.12) / 0.88) < 0.00001, "edge grab offset preserves measured motion from original DOWN")
+	overlay.handle_touch(2, center("primary"), true)
+	await settle_input()
+	overlay.set_touch_preferences(false, 1.0, false)
+	await settle_input()
+	check(overlay.movement_axis == Vector2.ZERO and not Input.is_action_pressed("primary") and not overlay.handle_drag(0, edge, Vector2.ONE), "preference changes clear gesture/action ownership")
+	check((overlay.get_hit_regions().move as Rect2).size == Vector2(160, 160), "fixed preference restores original stick activation")
+	overlay.control_scale = -50.0
+	check(overlay.control_scale == 0.8, "control scale clamps lower bound")
+	overlay.control_scale = 50.0
+	check(overlay.control_scale == 1.4, "control scale clamps upper bound")
+	overlay.control_scale = NAN
+	check(overlay.control_scale == 1.4, "nonfinite scale preserves validated layout preference")
+	overlay.free()
+	overlay = null
+
+func composite_fire_look() -> void:
+	make_overlay(Vector2(960, 540), null, false)
+	var fire := center("primary")
+	var look := center("look")
+	var move := center("move")
+	check(overlay.handle_touch(0, fire, true), "free primary DOWN acquires composite fire/LOOK")
+	check(overlay.handle_touch(1, move, true) and overlay.handle_touch(2, look, true), "composite leaves MOVE independent and consumes competing LOOK")
+	await settle_input()
+	check(Input.is_action_pressed("primary") and events_for("primary", true) == 1 and overlay.movement_axis == Vector2.ZERO, "composite DOWN holds fire while floating MOVE starts neutral")
+	var outside := fire + Vector2(-110, -20)
+	check(overlay.handle_drag(0, outside, Vector2(900, -900)) and look_events == [outside - fire], "fire drag emits its own absolute motion outside the fire button")
+	overlay.handle_drag(1, move + Vector2(0, -62), Vector2(500, 500))
+	overlay.handle_drag(2, look + Vector2(10, 10), Vector2(10, 10))
+	await settle_input()
+	check(Input.is_action_pressed("primary") and events_for("primary", false) == 0 and overlay.movement_axis.is_equal_approx(Vector2.UP) and look_events.size() == 1, "composite latches fire across aiming while other fingers cannot steal LOOK")
+	overlay.handle_touch(0, outside, false)
+	await settle_input()
+	check(not Input.is_action_pressed("primary") and overlay.movement_axis == Vector2.UP, "composite up releases only its own fire/LOOK")
+	overlay.handle_drag(2, look + Vector2(15, 10), Vector2(5, 0))
+	check(look_events.size() == 1, "blocked LOOK cannot upgrade after composite releases")
+	overlay.release_all()
+	clear_trace()
+	# Existing LOOK forces primary to remain an ordinary ACTION for its lifetime.
+	overlay.handle_touch(3, look, true)
+	overlay.handle_touch(4, fire, true)
+	overlay.handle_drag(4, outside, Vector2(200, 200))
+	await settle_input()
+	check(not Input.is_action_pressed("primary") and look_events.is_empty(), "primary cannot steal existing LOOK; ordinary drag-off releases fire")
+	overlay.handle_touch(3, look, false)
+	overlay.handle_drag(4, fire, Vector2.ZERO)
+	overlay.handle_drag(4, outside, Vector2(200, 200))
+	await settle_input()
+	check(not Input.is_action_pressed("primary") and look_events.is_empty(), "held ordinary primary never upgrades after LOOK becomes free")
+	overlay.release_all()
+	clear_trace()
+	# Composite and ordinary owners share the same action reference count.
+	overlay.handle_touch(5, fire, true)
+	overlay.handle_touch(6, fire, true)
+	overlay.handle_drag(5, fire + Vector2(8, -4), Vector2(-999, 999))
+	overlay.handle_drag(6, fire + Vector2(5, 3), Vector2(5, 3))
+	await settle_input()
+	check(events_for("primary", true) == 1 and look_events == [Vector2(8, -4)], "one action edge and one camera owner with two fire fingers")
+	overlay.handle_touch(5, fire, false, true)
+	await settle_input()
+	check(Input.is_action_pressed("primary") and events_for("primary", false) == 0, "canceling composite preserves second ordinary fire owner")
+	overlay.handle_touch(7, look, true)
+	overlay.handle_drag(7, look + Vector2(2, 3), Vector2(600, 600))
+	check(look_events.back() == Vector2(2, 3), "fresh LOOK can acquire after composite lifetime ends")
+	overlay.handle_touch(6, fire, false)
+	await settle_input()
+	check(not Input.is_action_pressed("primary") and events_for("primary", false) == 1, "last fire owner releases exactly once")
+	for transition: String in ["disable", "resize", "focus", "preferences"]:
+		overlay.release_all()
+		overlay.set_enabled(true)
+		overlay.set_touch_preferences(true, 1.0, true)
+		clear_trace()
+		overlay.handle_touch(0, center("primary"), true)
+		await settle_input()
+		match transition:
+			"disable": overlay.set_enabled(false)
+			"resize": overlay.size = Vector2(854, 480); overlay.get_hit_regions()
+			"focus": overlay.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+			"preferences": overlay.set_touch_preferences(true, 0.8, true)
+		await settle_input()
+		check(not Input.is_action_pressed("primary") and events_for("primary", false) == 1 and not overlay.handle_drag(0, center("look"), Vector2.ONE), "%s clears composite fire/LOOK baseline" % transition)
+		overlay.set_enabled(true)
+		check(overlay.handle_touch(0, center("look"), true) and overlay.handle_drag(0, center("look") + Vector2(1, -1), Vector2(900, 900)), "%s permits fresh LOOK owner" % transition)
+		check(look_events.back() == Vector2(1, -1), "%s clean owner starts without camera jump" % transition)
+	overlay.free()
+	overlay = null
+	# Production eligibility uses actual Player/LocalSession state. This bound
+	# object is not running a simulation; only the overlay's DOWN policy reads it.
+	var gate_player := PLAYER.new()
+	var gate_session := LOCAL.new()
+	gate_player.session = gate_session
+	gate_player.controls_enabled = true
+	gate_player.camera_mode = PLAYER.CameraMode.FIRST_PERSON
+	make_overlay(Vector2(960, 540), gate_player, false)
+	for tool: int in [0, 1, 3]:
+		gate_session.current_tool = tool
+		clear_trace()
+		overlay.handle_touch(0, center("primary"), true)
+		overlay.handle_drag(0, center("primary") + Vector2(-100, 0), Vector2(-100, 0))
+		await settle_input()
+		check(look_events.is_empty() and not Input.is_action_pressed("primary"), "non-weapon tool %d retains ordinary primary semantics" % tool)
+		overlay.release_all()
+	gate_session.current_tool = 2
+	for mode: int in [PLAYER.CameraMode.INTRO, PLAYER.CameraMode.DEATH, PLAYER.CameraMode.FREE, PLAYER.CameraMode.FOLLOW_FIRST_PERSON, PLAYER.CameraMode.FOLLOW_THIRD_PERSON]:
+		gate_player.camera_mode = mode
+		clear_trace()
+		overlay.handle_touch(0, center("primary"), true)
+		overlay.handle_drag(0, center("primary") + Vector2(-100, 0), Vector2(-100, 0))
+		await settle_input()
+		check(look_events.is_empty() and not Input.is_action_pressed("primary"), "non-playing camera %d never acquires composite" % mode)
+		overlay.release_all()
+	gate_player.camera_mode = PLAYER.CameraMode.FIRST_PERSON
+	for state: String in ["dead", "spectator"]:
+		gate_session.health = 0 if state == "dead" else 100
+		gate_session.team = 2 if state == "spectator" else 0
+		clear_trace()
+		overlay.handle_touch(0, center("primary"), true)
+		overlay.handle_drag(0, center("primary") + Vector2(-100, 0), Vector2.ZERO)
+		await settle_input()
+		check(look_events.is_empty() and not Input.is_action_pressed("primary"), "%s state never acquires composite" % state)
+		overlay.release_all()
+	gate_session.health = 100; gate_session.team = 0
+	for mode: int in [PLAYER.CameraMode.FIRST_PERSON, PLAYER.CameraMode.THIRD_PERSON]:
+		gate_player.camera_mode = mode
+		clear_trace()
+		overlay.handle_touch(0, center("primary"), true)
+		overlay.handle_drag(0, center("primary") + Vector2(-100, 0), Vector2.ZERO)
+		await settle_input()
+		check(look_events == [Vector2(-100, 0)] and Input.is_action_pressed("primary"), "alive weapon camera %d acquires composite" % mode)
+		# Changing tools never transfers an already held role to a different ID.
+		gate_session.current_tool = 0
+		overlay.handle_drag(0, center("primary") + Vector2(-102, 0), Vector2.ZERO)
+		check(look_events.back() == Vector2(-2, 0), "held composite keeps own role until normal lifecycle ends")
+		overlay.release_all()
+		gate_session.current_tool = 2
+	await settle_input()
+	overlay.free(); overlay = null
+	gate_player.free(); gate_session.free()
 
 func lifecycle() -> void:
 	make_overlay(Vector2(960, 540))
@@ -287,6 +500,72 @@ func mouse_motion(position: Vector2, relative: Vector2, emulated: bool = false) 
 	root.push_input(event, true)
 	await settle_input()
 
+func screen_touch(index: int, position: Vector2, pressed: bool, canceled: bool = false) -> void:
+	var event := InputEventScreenTouch.new()
+	event.window_id = root.get_window_id()
+	event.index = index
+	event.position = overlay.get_global_transform_with_canvas() * position
+	event.pressed = pressed
+	event.canceled = canceled
+	root.push_input(event, true)
+
+func screen_drag(index: int, position: Vector2, reported_relative: Vector2) -> void:
+	var event := InputEventScreenDrag.new()
+	event.window_id = root.get_window_id()
+	event.index = index
+	var transform: Transform2D = overlay.get_global_transform_with_canvas()
+	event.position = transform * position
+	event.relative = transform.basis_xform(reported_relative)
+	root.push_input(event, true)
+
+func transformed_absolute_adapter() -> void:
+	make_overlay(Vector2(960, 540))
+	overlay.position = Vector2(19, 13)
+	overlay.scale = Vector2(1.1, 0.85)
+	overlay.rotation = 0.1
+	var move := center("move")
+	var look := center("look")
+	var fire := center("primary")
+	screen_touch(6, move, true)
+	screen_touch(3, look, true)
+	screen_touch(9, fire, true)
+	await settle_input()
+	check(Input.is_action_pressed("primary") and overlay.movement_axis == Vector2.ZERO, "transformed production adapter claims three independent fingers")
+	screen_drag(6, move + Vector2(0, -62), Vector2(300, -300))
+	screen_drag(3, look, Vector2(-300, 300))
+	await settle_input()
+	check(look_events.is_empty() and overlay.movement_axis.is_equal_approx(Vector2.UP) and Input.is_action_pressed("primary"), "viewport-to-local adapter ignores corrupt LOOK relative while MOVE changes")
+	screen_drag(3, look + Vector2(7, -5), Vector2(-500, 900))
+	screen_drag(6, move + Vector2(31, 0), Vector2(500, -900))
+	await settle_input()
+	check(look_events.size() == 1 and look_events[0].is_equal_approx(Vector2(7, -5)), "nonuniform rotated canvas emits actual local LOOK displacement exactly once")
+	check(absf(overlay.movement_axis.x - (0.5 - 0.12) / 0.88) < 0.0001 and Input.is_action_pressed("primary"), "transformed MOVE and third action remain independent")
+	screen_touch(3, look, false, true)
+	var canvas_transform: Transform2D = overlay.get_global_transform_with_canvas()
+	var canvas_inverse: Transform2D = canvas_transform.affine_inverse()
+	var roundtrip_delta: Vector2 = (canvas_inverse * (canvas_transform * (look + Vector2(32, 5)))) - (canvas_inverse * (canvas_transform * (look + Vector2(30, 4))))
+	screen_touch(3, look + Vector2(30, 4), true)
+	screen_drag(3, look + Vector2(32, 5), Vector2(100, -100))
+	await settle_input()
+	var reused_delta: Vector2 = look_events.back()
+	# Two ~744px float32 canvas round trips differ by up to 0.000061px here.
+	# Keep event count and independently calculated transform delta exact while
+	# allowing only sub-millipixel rounding against the ideal local displacement.
+	check(look_events.size() == 2 and reused_delta.is_equal_approx(roundtrip_delta) and reused_delta.distance_to(Vector2(2, 1)) < 0.0001, "real adapter reused ID starts from new absolute baseline: actual=(%.9f,%.9f) canvas_roundtrip=(%.9f,%.9f) event_count=%d" % [reused_delta.x, reused_delta.y, roundtrip_delta.x, roundtrip_delta.y, look_events.size()])
+	overlay.release_all()
+	await settle_input()
+	check(not Input.is_action_pressed("primary") and overlay.movement_axis == Vector2.ZERO, "transformed gesture cleanup releases action and movement")
+	# Public finite input can still overflow binary32 subtraction. Reject the
+	# overflowing sample without changing this pointer's last accepted position.
+	clear_trace()
+	overlay.handle_touch(0, look, true)
+	check(overlay.handle_drag(0, Vector2(3.0e38, 0), Vector2.ZERO), "finite large LOOK displacement remains owned")
+	var count := look_events.size()
+	check(not overlay.handle_drag(0, Vector2(-3.0e38, 0), Vector2.ZERO) and look_events.size() == count, "overflowing own-position subtraction cannot emit nonfinite camera motion")
+	check(overlay.handle_drag(0, Vector2(3.0e38, 0), Vector2(50, 50)) and look_events.size() == count, "overflow rejection preserves previous absolute baseline")
+	overlay.free()
+	overlay = null
+
 func desktop_pointer() -> void:
 	make_overlay(Vector2(960, 540))
 	await mouse_button(center("move") + Vector2(0, -62), true)
@@ -302,7 +581,7 @@ func desktop_pointer() -> void:
 	check(not Input.is_action_pressed("reload") and events_for("reload", false) == 1, "mouse button up emits one release")
 	await mouse_button(center("look"), true)
 	await mouse_motion(center("primary"), Vector2(10, -8))
-	check(look_events == [Vector2(10, -8)] and not Input.is_action_pressed("primary"), "designated mouse look survives crossing fire without acquiring it")
+	check(look_events == [center("primary") - center("look")] and not Input.is_action_pressed("primary"), "designated mouse look uses absolute displacement while crossing fire without acquiring it")
 	await mouse_button(center("primary"), false)
 	clear_trace()
 	await mouse_button(center("primary"), true, true)
@@ -313,6 +592,48 @@ func desktop_pointer() -> void:
 	await mouse_motion(center("look"), Vector2(8, 8))
 	check(action_events.is_empty() and look_events.is_empty(), "mouse starting outside advertised controls cannot acquire look by dragging in")
 	await mouse_button(center("look"), false)
+	overlay.free()
+	overlay = null
+
+func mouse_preview_policy() -> void:
+	make_overlay(Vector2(960, 540))
+	var look := center("look")
+	var fire := center("primary")
+	await mouse_button(look, true)
+	await mouse_motion(look + Vector2(3, 2), Vector2(-900, 900))
+	check(look_events == [Vector2(3, 2)], "desktop preview uses same absolute LOOK owner rule")
+	overlay.set_mouse_preview_enabled(false)
+	clear_trace()
+	await mouse_motion(look + Vector2(10, 10), Vector2(7, 8))
+	await mouse_button(fire, true)
+	await mouse_motion(fire + Vector2(-100, 0), Vector2(-100, 0))
+	await mouse_button(fire, false)
+	check(action_events.is_empty() and look_events.is_empty(), "disabled mouse preview cannot acquire or drag unmarked mouse pointers")
+	check(overlay.handle_touch(4, look, true) and overlay.handle_drag(4, look + Vector2(2, -1), Vector2(800, 800)), "disabling preview releases previous mouse LOOK for a real finger")
+	check(look_events == [Vector2(2, -1)], "real touch remains usable with mouse preview disabled")
+	overlay.release_all()
+	overlay.set_mouse_preview_enabled(true)
+	clear_trace()
+	await mouse_button(fire, true)
+	overlay.handle_touch(5, fire, true)
+	await settle_input()
+	check(events_for("primary", true) == 1 and Input.is_action_pressed("primary"), "preview mouse and touch share ordinary action reference count")
+	overlay.set_mouse_preview_enabled(false)
+	await settle_input()
+	check(Input.is_action_pressed("primary") and events_for("primary", false) == 0, "disabling preview releases mouse owner while preserving finger's action")
+	overlay.handle_touch(5, fire, false)
+	await settle_input()
+	check(not Input.is_action_pressed("primary") and events_for("primary", false) == 1, "last real finger releases shared action once")
+	clear_trace()
+	await mouse_button(fire, true, true)
+	await mouse_motion(look, Vector2(20, 20), true)
+	await mouse_button(fire, false, true)
+	check(action_events.is_empty() and look_events.is_empty(), "marked emulation stays suppressed even when preview disabled")
+	overlay.set_mouse_preview_enabled(true)
+	await mouse_button(look + Vector2(10, 2), true)
+	await mouse_motion(look + Vector2(11, 3), Vector2(200, 200))
+	check(look_events == [Vector2(1, 1)], "reenabled mouse preview starts a fresh absolute baseline")
+	await mouse_button(look, false)
 	overlay.free()
 	overlay = null
 
@@ -390,9 +711,13 @@ func offline_handoff() -> void:
 	check(session.current_tool == 2 and session.is_reloading, "touch weapon/reload edges reach real local authority")
 	overlay.handle_touch(3, center("reload"), false)
 	var yaw := player.rotation.y
+	var pitch := player.head.rotation.x
 	overlay.handle_touch(5, center("look"), true)
+	overlay.handle_drag(0, center("move") + Vector2(31, -20), Vector2(400, 400))
+	overlay.handle_drag(5, center("look"), Vector2(-400, -400))
+	check(player.rotation.y == yaw and player.head.rotation.x == pitch, "actual controller camera stays still when its LOOK finger is stationary and MOVE changes")
 	overlay.handle_drag(5, center("look") + Vector2(20, 0), Vector2(20, 0))
-	check(absf(angle_difference(yaw, player.rotation.y)) > 0.001, "touch look reaches actual source controller mouse transform")
+	check(absf(angle_difference(yaw, player.rotation.y)) > 0.001, "touch look reaches actual normalized controller camera transform")
 	player.controls_enabled = false
 	check(player.touch_movement == Vector2.ZERO and not overlay.handle_drag(0, center("move"), Vector2.ONE) and not Input.is_action_pressed("primary"), "menu gate clears touch movement and component claims")
 	player.controls_enabled = true
@@ -479,8 +804,13 @@ func run() -> void:
 	release_inputs()
 	for size: Vector2 in [Vector2(960, 540), Vector2(854, 480), Vector2(480, 854), Vector2(844, 390)]: geometry(size)
 	await ownership()
+	await absolute_multitouch()
+	await floating_and_scaled_layout()
+	await composite_fire_look()
 	await lifecycle()
+	await transformed_absolute_adapter()
 	await desktop_pointer()
+	await mouse_preview_policy()
 	await offline_handoff()
 	await network_handoff()
 	finish()
