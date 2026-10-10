@@ -25,6 +25,9 @@ def engine():
 
 def run(name, args, timeout=180):
     command=[str(engine()),'--headless','--path',str(ROOT/'game'),*args]
+    return run_command(name, command, timeout)
+
+def run_command(name, command, timeout=180):
     with subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                           text=True,encoding='utf-8',errors='replace') as process:
         try:
@@ -78,9 +81,21 @@ def main():
     suites += [('events-codec','tests/network/test_events_codec.gd'),('hit-history','tests/network/test_hit_history.gd'),('match-rewind','tests/network/test_match_rewind.gd'),('events-delivery','tests/network/test_events_delivery.gd'),('network-session','tests/network/test_network_session.gd'),('network-controller','tests/network/test_network_controller.gd'),('network-identity','tests/ui/test_network_identity.gd'),('network-menu','tests/ui/test_network_menu.gd'),('weapon-simulation','tests/presentation/test_weapon_simulation.gd'),('network-adversarial','tests/network/test_network_adversarial.gd'),('match-reset','tests/network/test_match_reset.gd'),('epoch-reset-contract','tests/network/test_epoch_reset_contract.gd'),('runtime-epoch','tests/network/test_runtime_epoch.gd'),('network-scene','tests/network/test_network_scene.gd')]
     suites += [('dedicated-round','tests/network/test_dedicated_round.gd'),('server-book','tests/ui/test_server_book.gd')]
     suites += [('snapshot-fanout','tests/network/test_snapshot_fanout.gd'),('hit-volume-acceleration','tests/gameplay/test_hit_volume_acceleration.gd'),('network-scene-epoch','tests/network/test_network_scene_epoch.gd')]
+    suites += [('world-preparation','tests/world/test_world_preparation.gd'),('long-reset','tests/network/test_long_reset.gd')]
+    suites += [('offline-lifecycle','tests/integration/test_offline_lifecycle.gd')]
+    suites += [('source-input','tests/integration/test_source_input.gd')]
+    suites += [('camera-target-rays','tests/gameplay/test_camera_target_rays.gd')]
+    suites += [('hottracked-player','tests/presentation/test_hottracked_player.gd')]
+    suites += [('source-rays','tests/world/test_source_rays.gd'),('audio-environment','tests/audio/test_environment.gd'),('audio-environment-pcm','tests/audio/render_environment.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','offline-lifecycle','source-input') else [])+['--script',str(path)],timeout=300)
+    latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
+    run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
+                '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)
+    latency_log=latency_report.with_suffix('.log').read_text(encoding='utf-8',errors='replace')
+    if re.search(r'SCRIPT ERROR|Parse Error|^ERROR:|FAIL:',latency_log,re.MULTILINE):
+        raise SystemExit('Network latency engine diagnostics failed; see '+str(latency_report.with_suffix('.log')))
     run('runtime-smoke',['--quit-after','120'])
     run('server-launcher-smoke',['--quit-after','60','--','--server','--game-port=0','--map-port=0'])
     if args.export:

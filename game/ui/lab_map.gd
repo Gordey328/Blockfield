@@ -107,10 +107,16 @@ func _process(delta: float) -> void:
 	if world==null:return
 	if _terrain_source==null and _clock>=.25 and _dirty:
 		_clock=0
-		_dirty=false
 		var image: Image
-		if world.has_method("get_topdown_image"):image=world.call("get_topdown_image")
+		if world.has_method("get_topdown_image_progressive"):
+			image=world.call("get_topdown_image_progressive")
+			# Preserve the last upload when completion falls between texture polls.
+			_dirty=bool(world.call("is_topdown_pending"))
+		elif world.has_method("get_topdown_image"):
+			image=world.call("get_topdown_image")
+			_dirty=false
 		else:
+			_dirty=false
 			image=Image.create(64,64,false,Image.FORMAT_RGBA8)
 			for z in 64:
 				for x in 64:

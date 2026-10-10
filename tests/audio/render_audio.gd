@@ -49,6 +49,7 @@ func _run() -> void:
 	audio = AUDIO.new()
 	host.add_child(audio)
 	audio.setup(null, camera)
+	audio.set_output_bus(BUS)
 	audio._random.seed = 328
 	await create_timer(.15).timeout
 	var quiet: Dictionary = await record("silence", func(): pass, .15, false)
@@ -59,8 +60,12 @@ func _run() -> void:
 		await record(name + "_world", func(): audio.weapon_fire(weapon, false, Vector3.ZERO, Vector3(2, 0, -4)), 1.5)
 	var head_full: Dictionary = await local_sound("head_feedback_gain_1", "Feedback/HeadshotFeedback", 1.0)
 	var head_native: Dictionary = await local_sound("head_feedback_native_gain_02", "Feedback/HeadshotFeedback", .2)
-	var gain_ratio := sqrt(float(head_native.energy) / maxf(.000000001, float(head_full.energy)))
-	check(absf(gain_ratio - .2) < .012, "head feedback measured PCM amplitude ratio is .2 (+/-6%)")
+	var head_reference: Dictionary = await local_sound("head_feedback_reference_gain_01", "Feedback/HeadshotFeedback", .1)
+	# Original full-gain PCM peaks above1, so the output limiter legitimately
+	# changes its energy. Both native.2 and reference.1 stay below the ceiling.
+	var gain_ratio := sqrt(float(head_native.energy) / maxf(.000000001, float(head_reference.energy)))
+	check(absf(gain_ratio - 2.0) < .12, "head feedback .2/.1 actual PCM amplitude ratio is2 (+/-6%)")
+	check(float(head_full.peak)<=.968,"fullgainhead feedback passes throughactualoutput limiter")
 	for entry: Array in [["chat", "Feedback/Chat"], ["menu_hover", "Feedback/Limbo/Hover"], ["menu_select", "Feedback/Limbo/Select"], ["alert", "Feedback/Alert"]]:
 		await local_sound(str(entry[0]), str(entry[1]), 1.0)
 	var mono: Dictionary = await record("mono_center", func(): audio.play_spatial("Weapons/DryFire", Vector3(0, 0, -3), 1.0, 3.0), .5)
@@ -83,7 +88,7 @@ func _run() -> void:
 		audio.play_local("Feedback/Chat"), .5, false)
 	check(int(disabled.frames) == 0, "disabling capture yields no frames despite real playback")
 	AudioServer.set_bus_effect_enabled(bus_index, 0, true)
-	var report := {"engine": Engine.get_version_info().string, "driver": driver, "mix_rate": AudioServer.get_mix_rate(), "checks": checks, "failures": failures, "head_feedback_amplitude_ratio": gain_ratio, "distance_amplitude_ratio": distance_ratio, "results": results, "browser_listening_verified": false, "wav_format": "stereo signed PCM16; per-file scale is reported, raw metrics are unscaled"}
+	var report := {"engine": Engine.get_version_info().string, "driver": driver, "mix_rate": AudioServer.get_mix_rate(), "checks": checks, "failures": failures, "head_feedback_amplitude_ratio": gain_ratio, "head_feedback_reference_gain":.1,"head_feedback_native_gain":.2,"head_feedback_expected_ratio":2.0,"distance_amplitude_ratio": distance_ratio, "results": results, "browser_listening_verified": false, "wav_format": "stereo signed PCM16; per-file scale is reported, raw metrics are unscaled"}
 	var json := FileAccess.open(output.path_join("report.json"), FileAccess.WRITE)
 	check(json != null, "PCM report can be saved")
 	if json != null:
@@ -105,13 +110,8 @@ func record(name: String, play: Callable, seconds: float, expect_sound: bool = t
 	capture.clear_buffer()
 	var discarded_before := capture.get_discarded_frames()
 	play.call()
-	# These are the real service's voices, not a copied routing implementation.
-	# Replay after selecting the bus so initial mixer scheduling cannot lose the
-	# attack. Master and probe remain muted: this acceptance process is silent.
-	for voice: Node in audio._voices:
-		voice.stop()
-		voice.bus = BUS
-		voice.play()
+	# The service's owned output sends here AFTER obstruction/early/reverb and
+	# limiting. Reassigning voices would bypass the production DSP graph.
 	var frames := PackedVector2Array()
 	var play_started := Time.get_ticks_usec()
 	var first_signal_us := -1

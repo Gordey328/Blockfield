@@ -24,7 +24,6 @@ const UNSUPPORTED: Dictionary[String, String] = {
 	"r_swnumthreads": "the native software renderer is not available",
 	"s_aldriver": "Godot owns the audio backend",
 	"s_ysrdriver": "Godot owns the audio backend",
-	"s_eax": "native EAX is replaced by the port's environmental audio",
 	"s_maxpolyphonics": "the port has a fixed bounded voice pool",
 }
 
@@ -82,7 +81,8 @@ func _init() -> void:
 	_register("r_hdrAutoExposureSpeed", "graphics", "hdr_speed", ValueKind.DECIMAL, 1.0, 0, 5)
 	_register("r_multisamples", "graphics", "msaa", ValueKind.INTEGER, 0, 0, 4).choices.assign([0, 2, 4])
 	_register("r_water", "water", "water", ValueKind.INTEGER, 2, 0, 3).note = "0 off; 1 surface; 2 reflection; 3 reflection/refraction"
-	_register("s_gain", "audio", "master", ValueKind.DECIMAL, 1.0, 0, 4)
+	_register("s_gain", "app", "source_audio_gain", ValueKind.DECIMAL, 1.0, 0, 4)
+	_register("s_eax", "app", "source_audio_efx", ValueKind.BOOLEAN, true)
 	_register("bf_positionalAudio", "app", "positional_audio", ValueKind.BOOLEAN, true).note = "port setting"
 	# Client_Draw.cpp:63,71–73; MapView.cpp:36–38.
 	for pair: Array in [["cg_hideHud","hide_hud",false], ["cg_stats","statistics",false], ["cg_hitIndicator","hit_indicator",true], ["cg_alerts","alerts",true], ["cg_minimapPlayerColor","minimap_player_colors",true], ["cg_minimapPlayerIcon","minimap_weapon_icons",true]]:

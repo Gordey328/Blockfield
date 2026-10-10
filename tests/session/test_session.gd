@@ -26,6 +26,7 @@ func new_session() -> SESSION:
 func _run() -> void:
 	_test_profiles_and_damage()
 	_test_cadence_and_reload()
+	_test_reload_tool_gate()
 	_test_selection_transitions()
 	_test_grenades_and_stocks()
 	_test_targets_and_life_cycle()
@@ -106,6 +107,38 @@ func _test_cadence_and_reload() -> void:
 	s.select_team(2)
 	check(not s.can_fire() and not s.fire(), "spectator cannot shoot")
 	s.free()
+
+
+func _test_reload_tool_gate() -> void:
+	# R cannot refill a holstered gun while using another item. Exercise both
+	# magazine and per-shell reloads, then select the gun and finish a real reload.
+	for profile: String in ["0.75", "0.76"]:
+		for weapon: int in range(3):
+			var s := new_session()
+			s.set_profile_version(profile)
+			s.select_weapon(weapon)
+			var info := s.get_weapon_info()
+			var initial_ammo := int(info.clip_size) - 2
+			s.magazine = initial_ammo
+			s.reserve = 5
+			var completions: Array[int] = []
+			s.reloaded.connect(func() -> void: completions.append(1))
+			for tool: int in [SESSION.Tool.SPADE, SESSION.Tool.BLOCK, SESSION.Tool.GRENADE]:
+				s.select_tool(tool)
+				s.reload_weapon()
+				check(s.current_tool == tool and not s.is_reloading and s.reload_remaining == 0.0,
+					"holstered reload preserves selected item/state: %s weapon%d tool%d" % [profile, weapon, tool])
+				s.update(float(info.reload_time) * 2.0 + .01)
+				check(s.magazine == initial_ammo and s.reserve == 5 and completions.is_empty(),
+					"holstered reload cannot transfer rounds later: %s weapon%d tool%d" % [profile, weapon, tool])
+			s.select_tool(SESSION.Tool.WEAPON)
+			s.reload_weapon()
+			check(s.is_reloading and s.magazine == initial_ammo and s.reserve == 5,
+				"selected firearm starts its valid reload: %s weapon%d" % [profile, weapon])
+			s.update(float(info.reload_time) * 2.0 + .01)
+			check(not s.is_reloading and s.magazine == int(info.clip_size) and s.reserve == 3 and completions.size() == 1,
+				"selected firearm finishes exactly one ammo-accounted reload: %s weapon%d" % [profile, weapon])
+			s.free()
 
 
 func _select_test_weapon(s: SESSION, transition: String) -> void:

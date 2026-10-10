@@ -26,6 +26,7 @@ var _name := "Player"
 var _role := 0
 var _resume := PackedByteArray()
 var _welcome: P.Packet
+var _preparing: Dictionary = {}
 var _confirmed: Dictionary = {}
 var _remote: Dictionary[int,PREDICTION.RemotePoseBuffer] = {}
 var _events: Array[Dictionary] = []
@@ -84,6 +85,7 @@ func close() -> void:
 	actor_id = 0
 	epoch = 0
 	_welcome = null
+	_preparing.clear()
 	_chat_intent = 0
 	_chat_sequence = 0
 	_request_sequence = 0
@@ -138,6 +140,8 @@ func poll() -> void:
 
 func _game_packet(packet: P.Packet) -> void:
 	match packet.kind:
+		P.Kind.MATCH_PREPARING:
+			_accept_preparing(packet)
 		P.Kind.WELCOME:
 			_accept_welcome(packet)
 		P.Kind.MAP_BEGIN:
@@ -174,41 +178,58 @@ func _game_packet(packet: P.Packet) -> void:
 		P.Kind.GAME_EVENTS: _apply_events(packet)
 		_: _fail("invalid server packet direction")
 
+func _discard_epoch_stream(new_epoch: int) -> void:
+	# Keep the authenticated game socket/endpoints, but no old prediction,
+	# map/capability or presentation state may survive a reset announcement.
+	bulk.stop(true)
+	bulk.drain_events(TRANSPORT.MAX_EVENTS)
+	_bulk_id = 0
+	transfer.reset(new_epoch)
+	assembler.cancel()
+	for buffer: PREDICTION.RemotePoseBuffer in _remote.values(): buffer.clear()
+	_remote.clear(); _events.clear(); _confirmed.clear()
+	prediction = PREDICTION.new()
+	data = null
+	_chat_intent = 0; _chat_sequence = 0; _request_sequence = 0; _event_cursor = 0
+	_predicted_effects.clear(); _predicted_order.clear()
+	_last_snapshot_tick = -1; _snapshot_time_ms = 0
+	_welcome = null
+	last_error = ""
+
+func _accept_preparing(packet: P.Packet) -> void:
+	if not P.encode(packet).ok or packet.epoch <= epoch \
+			or status not in ["joining","loading","synchronizing","live","preparing"] \
+			or (actor_id != 0 and packet.payload.actor_id != actor_id) \
+			or (actor_id == 0 and (status != "joining" or _welcome != null)):
+		_fail("invalid match preparation announcement")
+		return
+	_discard_epoch_stream(packet.epoch)
+	actor_id = packet.payload.actor_id
+	epoch = packet.epoch
+	_preparing = packet.payload.duplicate(true)
+	status = "preparing"
+	_emit({"type":"epoch_reset","epoch":epoch})
+	_emit({"type":"match_preparing","epoch":epoch,"actor_id":actor_id,"profile":_preparing.profile})
+
 func _accept_welcome(packet: P.Packet) -> void:
 	if not P.encode(packet).ok or packet.epoch<=0 or packet.payload.server_hz!=60 \
 			or packet.payload.build_hash!=COMPATIBILITY.build_hash() or packet.payload.rules_hash!=COMPATIBILITY.rules_hash():
 		_fail("incompatible WELCOME")
 		return
-	var replacement:=_welcome!=null
-	if replacement:
-		if status not in ["joining","loading","synchronizing","live"] or packet.epoch<=epoch \
-				or packet.payload.actor_id!=actor_id or packet.payload.spawn_generation!=1:
-			_fail("invalid epoch replacement WELCOME")
+	if not _preparing.is_empty():
+		if status != "preparing" or packet.epoch != epoch or packet.payload.actor_id != actor_id \
+				or packet.payload.spawn_generation != _preparing.spawn_generation or packet.payload.profile != _preparing.profile:
+			_fail("WELCOME does not match announced preparation")
 			return
-		# Keep the game transport/id and user endpoints. Every old map, input and
-		# presentation stream is discarded before exposing the new match epoch.
-		bulk.stop(true)
-		bulk.drain_events(TRANSPORT.MAX_EVENTS)
-		_bulk_id=0
-		transfer.reset(packet.epoch)
-		assembler.cancel()
-		for buffer: PREDICTION.RemotePoseBuffer in _remote.values():buffer.clear()
-		_remote.clear();_events.clear();_confirmed.clear()
-		prediction=PREDICTION.new()
-		data=null
-		_chat_intent=0;_chat_sequence=0;_request_sequence=0;_event_cursor=0
-		_predicted_effects.clear();_predicted_order.clear()
-		_last_snapshot_tick=-1;_snapshot_time_ms=0
-		last_error=""
-		status="joining"
-	elif status!="joining":
+	elif status != "joining" or _welcome != null or actor_id != 0:
 		_fail("incompatible WELCOME")
 		return
 	_welcome=P.make_packet(packet.kind,packet.payload.duplicate(true),packet.epoch,packet.tick,packet.sequence)
 	actor_id=packet.payload.actor_id
 	epoch=packet.epoch
 	_resume=packet.payload.resume_token.duplicate()
-	if replacement:_emit({"type":"epoch_reset","epoch":epoch})
+	_preparing.clear()
+	status = "joining"
 
 static func _effect_identity(event: Dictionary, predicted: bool = false) -> String:
 	var kind: String = event.get("kind","") if predicted else event.type
@@ -266,7 +287,8 @@ func _apply_snapshot(packet: P.Packet) -> void:
 	var p: Dictionary = packet.payload
 	if status not in ["synchronizing","live"] or data == null or packet.epoch != epoch or p.epoch != epoch \
 			or p.owner_state.player_id != actor_id or packet.tick != p.tick or packet.sequence != p.owner_state.spawn_generation \
-			or p.dimensions != data.dimensions or p.map_sequence != data.map_sequence:
+			or p.dimensions != data.dimensions or p.map_sequence != data.map_sequence or _welcome == null \
+			or p.profile != ("0.75" if _welcome.payload.profile == 0 else "0.76"):
 		_fail("state does not match installed terrain/owner")
 		return
 	if packet.tick <= _last_snapshot_tick: return

@@ -32,7 +32,7 @@ func sample(camera: Camera3D, world: VoxelWorld) -> void:
 	for x in range(4):
 		for y in range(4):
 			var ray := (forward + axis_x*(float(x)*2.0/3.0-1.0) + axis_y*(float(y)*2.0/3.0-1.0)).normalized()
-			var hit := world.cast_voxel(camera.global_position,ray,500.0)
+			var hit := world.cast_source_ray(camera.global_position,ray,256)
 			var maximum := camera.global_position.distance_to(hit.position) if hit.hit else 500.0
 			var query := PhysicsRayQueryParameters3D.create(camera.global_position,camera.global_position+ray*maximum,2)
 			query.collide_with_areas = true

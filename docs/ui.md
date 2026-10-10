@@ -3,7 +3,7 @@
 Source baseline: OpenSpades v0.1.3, commit `dcf449c845d509bbde9d79239b32d201c1389961`.
 This document records the current offline implementation and its limits; it does not certify complete OpenSpades parity or multiplayer readiness.
 
-Graphics controls also expose optional float HDR and its native minimum/maximum/adaptation-speed settings. The connected path has37 numeric,30 isolated GPU,30 WebGL and63 actual-main GPU checks; see ADR0004 for source formulas, pyramid budgets and later post-effect ordering. Color correction and bloom do not run twice while HDR is active.
+Graphics controls expose optional float HDR and its native minimum/maximum/adaptation-speed settings. The connected path has47 numeric,32 exposure GPU,79 color GPU and63 actual-Main GPU checks, plus exported WebGL32/79 checks; see ADR0004 for source formulas, pyramid budgets and later post-effect ordering. Color correction and bloom do not run twice while HDR is active.
 
 ## Source contracts and implementation
 
@@ -50,7 +50,7 @@ Uploaded `.vxl` / data resource-pack `.zip` buttons call main import APIs. `hud.
 - `get_chat_messages()->Array[Dictionary]` returns a deep copy for session-log export. The exporter cannot mutate the live chat, and this API performs no upload.
 - HUD subscribes to `session.player_hurt(amount,origin,kind)` and `session.match_event(Dictionary)`. Root handles source state, spatial/audio feedback, imports, screenshots and settings APIs.
 - Match teams use `session.get_team_info(index)->{name,color}` / `set_team_info(index,name,color)`. Team metadata/locale changes refresh chooser and chat once; ammo/TC events do not repeatedly rebuild expanded chat. Target buttons call main `spawn_lab_target(moving,team)->id` and `reset_targets()`.
-- Additional graphics keys exposed through main are `gi` (initiallyoff), `water_waves`, `water_refraction` and `ragdolls` (initiallyon). Audio `environmental_audio` is a persisted main property, initiallyon. Indirect light is explicitly approximate; LDR tone mapping replaces native HDR. Checkbox presence alone does not verify backend/browser effects; relevant evidence belongs in voxel.md/assets.md and the feature ledger.
+- Additional graphics keys exposed through main are `gi` (initiallyoff), `water_waves`, `water_refraction` and `ragdolls` (initiallyon). Audio `environmental_audio` is a persisted main property, initiallyon. Indirect light is approximate; optional normalized float HDR supplies source auto exposure and pre-tone bloom. Relevant backend/browser evidence belongs in voxel.md/assets.md and the feature ledger.
 
 ## Verification
 
@@ -80,7 +80,20 @@ Run:
 - Map tracer state follows `MapView.cpp:651–694` and `Client_Update.cpp:1069–1087`: velocities 700/360/500, 0.1s shutter, initial random offset, first-update skip and hit endpoint expiry. The constructor's local `bulletVel *= 4` does not change stored native velocity; effective behavior is preserved. The drawn line is a Godot 2px primitive in place of the native Ball texture; root-owned controller connects authoritative shots. Source suppression applies to local first-person traces on both maps and 3D view.
 - Browser pointer-lock and browser download behavior need deployed-browser acceptance. The state/GPU tests verify scene-only visibility restoration, not actual browser download dialogs. GPU captures do not prove all screen sizes, especially narrow/mobile layouts.
 - Data resource packs are the documented Godot replacement for native script mod loading. They do not establish AngelScript, executable mod, custom uploaded-font or native title/server-browser parity.
-- Post-processing toggles expose Compatibility replacements; LDR tone mapping substitutes original HDR and indirect light is explicitly approximate. See renderer documentation/ADR for fidelity limits. New GI/water/corpse/environmental-audio switches require backend and deployed-browser acceptance.
+- Post-processing toggles expose Compatibility adaptations, including optional float HDR and bounded indirect light. See renderer documentation/ADR for fidelity limits. GI/water/corpse/environmental-audio switches require backend and deployed-browser acceptance.
 # Browser pointer capture fallback
+
+Current unpublished integration passed actual-Main UI247/0, console76/0 and
+preparation menu72/0. It adds legacy source eyedropper/fog miss behavior,
+progressive map completion, independent source gain/EFX preferences and exact
+Euclidean OBB hottracking from the observed first-person eye. Displayed name
+distance remains measured from the local eye. The source wireframe is independent
+of the name toggle, respects target team/alive/camera/terrain gates, and highlights
+accumulated hit parts. See hottracked-player.md for standalone6216/0 and GPU6221/0.
+Actual source-input integration31/0 covers newest opposing-key priority, ADS
+sound edges/hold-toggle/gates, weapon-only reload, three depleted-tool alerts,
+native map sounds and the slash-prefilled chat shortcut. Main maps UI feedback
+to centered dry playback. These are focused native checks; current exported
+browser interaction remains an acceptance gate.
 
 The normal game uses Godot pointer capture. When the browser actually emits `pointerlockerror`, main releases the cursor and shows a quiet alert; dragging with a held mouse button still turns the camera with the same source sensitivity/ADS rules. Ordinary free cursor movement does not turn the camera. Successful later capture restores normal controls. This is an additional browser fallback, not evidence that native pointer capture was accepted in the embedded runner.

@@ -18,18 +18,18 @@ One commit then advances epoch/profile/clock, removes disconnected grace records
 
 The trusted coordinator must replace its match/map/input/event/history state consistently with this transition, close returned bulk sockets, remove returned grace actors, send replacement WELCOME packets on retained game sockets and start fresh baselines. A client cannot request this operation. Runtime owns stale old-epoch input/request policy during the transition; Registry only admits a new MAP_READY after the new barrier. See the separately maintained runtime reset acceptance document for actual socket evidence.
 
-## Replica replacement WELCOME
+## Replica preparation announcement and matching WELCOME
 
-An initial WELCOME retains the previous joining semantics, including an assigned actor ID and an existing resumed spawn generation. It produces no reset event. A replacement requires an already accepted welcome, status `joining`, `loading`, `synchronizing` or `live`, a strictly greater epoch, the **same actor ID**, generation1 and valid encoded compatibility fields. Wrong hashes, simulation rate, profile, token size, identity, epoch or status fail the client closed. Repeated/stale WELCOME packets never silently reset a client.
+Initial WELCOME retains joining/resume semantics and produces no reset event. A trusted MATCH_PREPARING17 now announces a strictly greater epoch, the same known actor ID, generation1 and valid profile before expensive preparation. It may supersede unfinished preparation and may bind the first positive ID of an initial joining client. Repeated/stale announcements fail closed. Subsequent WELCOME must exactly match the announced epoch/ID/profile/generation; unannounced replacement or wrong compatibility/rate/token fields fail closed. See [match-preparation.md](match-preparation.md).
 
-Before exposing the replacement epoch, the replica stops the old bulk transport with forced queue cleanup and resets:
+Before exposing the announced replacement epoch, the replica stops/drains old bulk and resets:
 
 - Joining map buffers, decode/apply/hash work and transaction assembler.
 - Installed map, private prediction/input history and confirmed snapshot.
 - Remote interpolation, pending presentation events and predicted-effect suppression history.
 - Chat intent/confirmed cursors, request sequence, confirmed-event cursor and snapshot tick/time.
 
-It retains the game transport object and connection ID, callbacks, map endpoint, name and admission role. The copied replacement welcome and new resume capability become active, status becomes `joining`, and the only pending presentation event is `{type: "epoch_reset", epoch: new_epoch}`. Main owns clearing scene views and returning to the connection/loading menu.
+It retains game transport/ID, callbacks, endpoint, name and admission role. Status becomes `preparing`, with `epoch_reset` and `match_preparing` events. Main clears scene views and returns to its preparation menu. Matching WELCOME activates refreshed capabilities and advances to joining; no map socket opens before the subsequent MAP_BEGIN.
 
 The subsequent baseline uses a newly opened bulk stream and the new one-time token. Successful map installation advances only to `synchronizing`; input remains denied until a matching full owner snapshot. New map/state ticks and input/chat/request cursors may start at0/1 even when the previous match had much larger values. Server packets remain epoch-strict on the client: ordered game TCP delivers old queued game frames before replacement WELCOME. Native transport forced stop **emits and retains** terminal events, so Replica intentionally drains the complete bounded `MAX_EVENTS` queue after old bulk stop (and both transports in `close()`). This also permits immediately reusing the same Replica for connect/resume. Genuine failures on the new stream still fail closed; cleanup does not weaken packet identity or direction checks.
 

@@ -221,7 +221,7 @@ func _run() -> void:
 	var reset: Dictionary = server.reset_match(new_data, "0.76", "tc")
 	check(reset.ok and reset.epoch == NEW_EPOCH, "trusted coordinator resets live CTF to new TC/profile/map epoch")
 	if not reset.ok: await cleanup(); return
-	if not await wait_for(func(): return app.network_client.epoch == NEW_EPOCH and app.network_client.status in ["joining","loading","synchronizing"], "Main observes greater WELCOME before the new live barrier"):
+	if not await wait_for(func(): return app.network_client.epoch == NEW_EPOCH and app.network_client.status in ["preparing","joining","loading","synchronizing"], "Main observes greater epoch before the new live barrier"):
 		await cleanup(); return
 	menu.refresh()
 	check(app.hud.is_menu_open() and not app.player.controls_enabled and menu.controls.enter.disabled and menu.controls.progress.visible, "reset loading UI blocks input and shows map progress")
@@ -280,6 +280,12 @@ func cleanup() -> void:
 	server.stop()
 	if is_instance_valid(app): app.queue_free()
 	for frame in 8: await process_frame
+	# --fixed-fps advances simulated frames faster than the audio driver's wall
+	# clock. Give its deferred stop commands real mixer cycles before quitting.
+	var drain_deadline := Time.get_ticks_msec()+200
+	while Time.get_ticks_msec()<drain_deadline:
+		OS.delay_msec(1)
+		await process_frame
 	for path: String in saved_files:
 		var record: Dictionary = saved_files[path]
 		if record.existed:

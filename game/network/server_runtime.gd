@@ -22,6 +22,9 @@ const MAX_EVENT_FRAMES := 16
 const MAX_EVENT_BYTES := 262144
 const MAX_JOINS := 2
 const JOIN_TIMEOUT_MS := 240000
+# At most32 retained owners, two active joins, each active deadline240s:
+# last FIFO admission waits at most15 waves; one extra wave is scheduling slack.
+const MAX_QUEUE_WAIT_MS := ((P.MAX_ACTORS + MAX_JOINS - 1) / MAX_JOINS) * JOIN_TIMEOUT_MS
 const HELLO_TIMEOUT_MS := 5000
 var simulation: MatchSimulation
 var game_transport := TRANSPORT.new()
@@ -42,7 +45,7 @@ var _request_times: Dictionary[int,Array] = {}
 var _totals := {"steps":0,"admissions":0,"resumes":0,"input_rejections":0,"closed":0,"map_resyncs":0,"snapshots":0,"chat":0}
 
 func configure(match_simulation: MatchSimulation, build_hash: PackedByteArray, rules_hash: PackedByteArray) -> bool:
-	if running or match_simulation == null or match_simulation.data == null: return false
+	if running or match_simulation == null or not _supported_map_water(match_simulation.data): return false
 	if not registry.configure(match_simulation.epoch,build_hash,rules_hash,0 if match_simulation.profile == "0.75" else 1): return false
 	simulation = match_simulation
 	hit_history.cancel("runtime configured")
@@ -66,10 +69,18 @@ func configure(match_simulation: MatchSimulation, build_hash: PackedByteArray, r
 func set_snapshot_factory(factory: Callable) -> void:
 	_snapshot_factory = factory
 
+static func _supported_map_water(map_data: VoxelData) -> bool:
+	# Canonical map bytes do not carry physical water metadata. Network maps
+	# must agree with the receiver's native defaults; offline queries may differ.
+	return map_data != null and is_finite(map_data.water_level) and is_finite(map_data.wade_origin_level) \
+		and map_data.water_level == 1.0 and map_data.wade_origin_level == 2.0
+
 func reset_match(map_data: VoxelData, match_profile: String = "", game_mode: String = "") -> Dictionary:
 	# Trusted native coordinator only; clients have no reset/map authority.
 	if not running or simulation == null or map_data == null or map_data.epoch <= simulation.epoch:
 		return {"ok":false,"error":"reset requires a newer map epoch"}
+	if not _supported_map_water(map_data):
+		return {"ok":false,"error":"network maps require native water levels1/2"}
 	var replacement := SIMULATION.new()
 	var configured := replacement.configure(map_data,simulation.profile if match_profile.is_empty() else match_profile,simulation.mode if game_mode.is_empty() else game_mode)
 	if not configured.ok: return configured
@@ -124,10 +135,13 @@ func reset_match(map_data: VoxelData, match_profile: String = "", game_mode: Str
 		_inputs[id] = queue
 		_request_intents[id] = 0
 		_streams[id] = _new_stream(null,welcome,"queued")
+		var announcement := P.make_packet(P.Kind.MATCH_PREPARING,{"actor_id":id,"spawn_generation":1,"profile":welcome.payload.profile},simulation.epoch,simulation.tick,1)
+		if not game_transport.send(registry.session_view(id).game,announcement).ok:
+			_close_game(registry.session_view(id).game,"match preparation announcement backpressure",Time.get_ticks_msec())
 	return {"ok":true,"error":"","epoch":simulation.epoch,"actors":teams.size()}
 
 func _new_stream(job: RefCounted, welcome: P.Packet, phase: String = "prepare") -> Dictionary:
-	return {"phase":phase,"started":Time.get_ticks_msec(),"job":job,"sender":null,"end_job":null,
+	return {"phase":phase,"started":Time.get_ticks_msec(),"queued_at":Time.get_ticks_msec(),"job":job,"sender":null,"end_job":null,
 		"welcome":welcome,"pending":[],"changes":0,"bytes":0,"delta_sender":null,"delta_packet":null,
 		"map_sequence":simulation.data.map_sequence,"barrier_sequence":-1,"end_packet":null,"bulk_packet":null,"latest_snapshot":null,
 		"event_packets":[],"event_bytes":0}
@@ -222,7 +236,7 @@ func _allocate_actor(player_name: String, _role: int) -> Dictionary:
 func _game_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) -> void:
 	var id := registry.owner_of_game(connection,false)
 	if id == 0:
-		if not _pending_game.has(connection) or packet.kind != P.Kind.HELLO or _loading_count() >= MAX_JOINS:
+		if not _pending_game.has(connection) or packet.kind != P.Kind.HELLO or _loading_count() >= MAX_JOINS or _queued_count() > 0:
 			_close_game(connection,"admission unavailable",now)
 			return
 		var admitted := registry.admit_game(connection,packet,now,_allocate_actor)
@@ -322,6 +336,12 @@ func _loading_count() -> int:
 		if stream.phase not in ["live","queued"]: count += 1
 	return count
 
+func _queued_count() -> int:
+	var count := 0
+	for stream: Dictionary in _streams.values():
+		if stream.phase == "queued": count += 1
+	return count
+
 func _release_stream(stream: Dictionary) -> void:
 	for key in ["job","sender","end_job","delta_sender"]:
 		if stream.get(key) != null: stream[key].cancel()
@@ -351,11 +371,15 @@ func _poll_stream(id: int, now: int) -> void:
 	var s: Dictionary = _streams[id]
 	var view := registry.session_view(id)
 	if view.is_empty() or view.game == 0: return
-	if s.phase != "live" and now-s.started >= JOIN_TIMEOUT_MS:
+	if s.phase == "queued" and now-s.queued_at >= MAX_QUEUE_WAIT_MS:
+		_close_game(view.game,"map preparation queue timeout",now)
+		return
+	if s.phase not in ["live","queued"] and now-s.started >= JOIN_TIMEOUT_MS:
 		_close_game(view.game,"map join timeout",now)
 		return
 	if s.phase == "queued":
 		if _loading_count() >= MAX_JOINS: return
+		s.started = now
 		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id)
 		_next_snapshot_id += 1
 		if not prepared.ok:
@@ -643,5 +667,5 @@ func _player_request(id: int, packet: BlockfieldProtocol.Packet, now: int) -> vo
 	else: simulation.set_block_color(id,packet.payload.value)
 
 func get_stats() -> Dictionary:
-	return {"running":running,"tick":simulation.tick if simulation != null else -1,"registry":registry.get_stats(),"loading":_loading_count(),
+	return {"running":running,"tick":simulation.tick if simulation != null else -1,"registry":registry.get_stats(),"loading":_loading_count(),"queued":_queued_count(),
 		"streams":_streams.size(),"totals":_totals.duplicate(),"game":game_transport.get_stats(),"map":map_transport.get_stats()}

@@ -77,9 +77,23 @@ var _falling_clusters: Array[Node3D] = []
 var _effects_observer := Vector3(48.5, 5.0, 70.5)
 var _water_mesh: MeshInstance3D
 var _wave_field: Node
+var _water_image: Image
+var _water_cursor := 0
+var _water_dirty: Dictionary = {}
+var _water_dirty_queue: Array[int] = []
+var _water_dirty_cursor := 0
+var _water_fog_color := Color(0.70, 0.78, 0.80)
+var _water_fog_distance := 64.0
 var _topdown_image: Image
 var _topdown_heights := PackedInt32Array()
 var _topdown_dirty: Dictionary = {}
+var _topdown_dirty_queue: Array[int] = []
+var _topdown_dirty_cursor := 0
+var _topdown_cursor := 0
+var _topdown_revision := 0
+var _topdown_progressive := false
+var _preparation_turn := false
+var _topdown_initial_turn := false
 
 func _ready() -> void:
 	_ensure_material()
@@ -99,6 +113,8 @@ func _process(_delta: float) -> void:
 	if irradiance_enabled:
 		_ensure_irradiance()
 		_irradiance.update()
+	if _water_image != null or _topdown_progressive:
+		advance_visual_preparation()
 
 static func pack_color(color: Color) -> int:
 	return 0x01000000 | (clampi(roundi(color.r * 255.0), 0, 255) << 16) | (clampi(roundi(color.g * 255.0), 0, 255) << 8) | clampi(roundi(color.b * 255.0), 0, 255)
@@ -148,8 +164,17 @@ func _present_transaction(transaction: Dictionary) -> void:
 		if _topdown_image != null:
 			var column := cell.x + dimensions.x * cell.z
 			var top := _topdown_heights[column]
-			if cell.y == top or (change.after != 0 and cell.y > top):
+			# Unfilled columns read the newest authoritative state when reached.
+			if column < _topdown_cursor and (cell.y == top or (change.after != 0 and cell.y > top)):
+				if not _topdown_dirty.has(column):
+					_topdown_dirty_queue.append(column)
 				_topdown_dirty[column] = maxi(cell.y, int(_topdown_dirty.get(column, top)))
+		if _water_image != null and cell.y == 0:
+			var column := cell.x + dimensions.x * cell.z
+			if column < _water_cursor:
+				if not _water_dirty.has(column):
+					_water_dirty_queue.append(column)
+				_water_dirty[column] = true
 		changes.append({"cell": cell, "before": change.before, "after": change.after, "collapsed": change.flags == 1})
 		_mark_dirty(cell, (change.before == 0) != (change.after == 0))
 	for group: Dictionary in transaction.collapse_groups:
@@ -231,34 +256,125 @@ func explode_sphere(position: Vector3, radius: float) -> void:
 func cast_voxel(origin: Vector3, direction: Vector3, max_dist: float = 128.0) -> Dictionary:
 	return data.cast_voxel(origin, direction, max_dist)
 
+func cast_source_ray(origin: Vector3, direction: Vector3, max_steps: int = 500) -> Dictionary:
+	return data.cast_source_ray(origin, direction, max_steps)
+
+func cast_source_ray_legacy(origin: Vector3, direction: Vector3, length: float = 256.0) -> Dictionary:
+	return data.cast_source_ray_legacy(origin, direction, length)
+
 func get_spawn_position() -> Vector3:
 	return _spawn
 
 func get_topdown_image() -> Image:
 	# GLFlatMapRenderer::GenerateBitmap selects the first solid in Z-down
 	# order, with original RGB and opaque alpha, including underwater floor.
-	if _topdown_image == null:
-		var pixels := PackedByteArray()
-		var columns := dimensions.x * dimensions.z
-		pixels.resize(columns * 4)
-		_topdown_heights.resize(columns)
-		for column in range(columns):
-			var top := _column_top(column, dimensions.y - 1)
-			_topdown_heights[column] = top.y
-			var offset := column * 4
-			pixels[offset] = (top.x >> 16) & 255
-			pixels[offset + 1] = (top.x >> 8) & 255
-			pixels[offset + 2] = top.x & 255
-			pixels[offset + 3] = 255 if top.x != 0 else 0
-		_topdown_image = Image.create_from_data(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8, pixels)
-	else:
-		for column in _topdown_dirty:
-			var top := _column_top(column, _topdown_dirty[column])
-			_topdown_heights[column] = top.y
-			var color := block_color(top.x) if top.x != 0 else Color.TRANSPARENT
-			_topdown_image.set_pixel(column % dimensions.x, column / dimensions.x, color)
+	# Explicit synchronous compatibility API: also completes an active fill.
+	_begin_topdown_image()
+	var changed := false
+	for column in range(_topdown_cursor, dimensions.x * dimensions.z):
+		_update_topdown_column(column, dimensions.y - 1)
+		changed = true
+	_topdown_cursor = dimensions.x * dimensions.z
+	for column: int in _topdown_dirty:
+		_update_topdown_column(column, _topdown_dirty[column])
+		changed = true
 	_topdown_dirty.clear()
+	_topdown_dirty_queue.clear()
+	_topdown_dirty_cursor = 0
+	if changed:
+		_topdown_revision += 1
 	return _topdown_image
+
+func _begin_topdown_image() -> void:
+	if _topdown_image == null:
+		var columns := dimensions.x * dimensions.z
+		_topdown_heights.resize(columns)
+		_topdown_heights.fill(-1)
+		_topdown_image = Image.create(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8)
+		_topdown_image.fill(Color.TRANSPARENT)
+		_topdown_cursor = 0
+
+func _update_topdown_column(column: int, from_y: int) -> void:
+	var top := _column_top(column, from_y)
+	_topdown_heights[column] = top.y
+	_topdown_image.set_pixel(column % dimensions.x, column / dimensions.x, block_color(top.x) if top.x != 0 else Color.TRANSPARENT)
+
+func get_topdown_image_progressive() -> Image:
+	# This shared image is initially transparent; _process warms it without a
+	# whole-map scan. Consumers upload again while pending or revision changes.
+	_begin_topdown_image()
+	_topdown_progressive = true
+	return _topdown_image
+
+func is_topdown_pending() -> bool:
+	return _topdown_image != null and (_topdown_cursor < dimensions.x * dimensions.z or not _topdown_dirty.is_empty())
+
+func get_visual_preparation_stats() -> Dictionary:
+	var columns := dimensions.x * dimensions.z
+	var topdown_pending := columns - _topdown_cursor + _topdown_dirty.size() if _topdown_image != null else 0
+	var water_pending := columns - _water_cursor + _water_dirty.size() if _water_image != null else 0
+	return {"epoch":data.epoch, "map_sequence":data.map_sequence, "topdown_requested":_topdown_image != null,
+		"topdown_revision":_topdown_revision, "topdown_pending_columns":topdown_pending, "water_pending_columns":water_pending,
+		"dirty_chunks":_dirty.size(), "ready":topdown_pending == 0 and water_pending == 0 and _dirty.is_empty()}
+
+func advance_visual_preparation(max_columns: int = 4096, max_usec: int = 2000) -> Dictionary:
+	# Count cap is hard; elapsed cap is checked between indivisible columns.
+	# Alternate caches so a continuously edited map cannot starve new columns.
+	var started := Time.get_ticks_usec()
+	var processed := 0
+	var topdown_changed := false
+	var water_changed := false
+	var columns := dimensions.x * dimensions.z
+	while processed < maxi(0, max_columns) and max_usec > 0:
+		var topdown_pending := is_topdown_pending()
+		var water_pending := _water_image != null and (_water_cursor < columns or not _water_dirty.is_empty())
+		if not topdown_pending and not water_pending:
+			break
+		_preparation_turn = not _preparation_turn
+		if topdown_pending and (_preparation_turn or not water_pending):
+			# Initial fill and dirty work alternate; both have bounded progress.
+			_topdown_initial_turn = not _topdown_initial_turn
+			if _topdown_cursor < columns and (_topdown_dirty.is_empty() or _topdown_initial_turn):
+				_update_topdown_column(_topdown_cursor, dimensions.y - 1)
+				_topdown_cursor += 1
+			else:
+				var column: int = _topdown_dirty_queue[_topdown_dirty_cursor]
+				_update_topdown_column(column, _topdown_dirty[column])
+				_topdown_dirty.erase(column)
+				_topdown_dirty_cursor += 1
+			topdown_changed = true
+		else:
+			if _water_cursor < columns:
+				_update_water_column(_water_cursor)
+				_water_cursor += 1
+			else:
+				var column: int = _water_dirty_queue[_water_dirty_cursor]
+				_update_water_column(column)
+				_water_dirty.erase(column)
+				_water_dirty_cursor += 1
+			water_changed = true
+		processed += 1
+		if Time.get_ticks_usec() - started >= max_usec:
+			break
+	if topdown_changed:
+		_topdown_revision += 1
+	# Compact once per batch, never duplicate every pending key per column.
+	if _topdown_dirty_cursor > 0 and (_topdown_dirty_cursor == _topdown_dirty_queue.size() or _topdown_dirty_cursor >= 4096):
+		_topdown_dirty_queue = _topdown_dirty_queue.slice(_topdown_dirty_cursor)
+		_topdown_dirty_cursor = 0
+	if _water_dirty_cursor > 0 and (_water_dirty_cursor == _water_dirty_queue.size() or _water_dirty_cursor >= 4096):
+		_water_dirty_queue = _water_dirty_queue.slice(_water_dirty_cursor)
+		_water_dirty_cursor = 0
+	if water_changed and _water_cursor == columns:
+		if not is_instance_valid(_water_mesh):
+			_finish_water_creation()
+		else:
+			var texture: ImageTexture = _water_mesh.mesh.surface_get_material(0).get_shader_parameter("bottom_color")
+			texture.update(_water_image)
+	var stats := get_visual_preparation_stats()
+	stats["processed_columns"] = processed
+	stats["elapsed_usec"] = Time.get_ticks_usec() - started
+	return stats
 
 func _column_top(column: int, from_y: int) -> Vector2i:
 	return data.column_top(column, from_y)
@@ -285,6 +401,11 @@ func _clear_world_visuals() -> void:
 		remove_child(_wave_field)
 		_wave_field.queue_free()
 		_wave_field = null
+	_water_image = null
+	_water_cursor = 0
+	_water_dirty.clear()
+	_water_dirty_queue.clear()
+	_water_dirty_cursor = 0
 	if is_instance_valid(_reflection):
 		remove_child(_reflection)
 		_reflection.queue_free()
@@ -298,6 +419,13 @@ func _clear_world_visuals() -> void:
 	_topdown_image = null
 	_topdown_heights.clear()
 	_topdown_dirty.clear()
+	_topdown_dirty_queue.clear()
+	_topdown_dirty_cursor = 0
+	_topdown_cursor = 0
+	_topdown_revision = 0
+	_topdown_progressive = false
+	_preparation_turn = false
+	_topdown_initial_turn = false
 	_view_chunk = Vector3i(-1000, 0, -1000)
 
 func generate_lab() -> void:
@@ -316,22 +444,22 @@ func generate_lab() -> void:
 func _fill_box(start: Vector3i, end: Vector3i, color: int) -> void:
 	data.seed_box(start, end, color)
 
-func load_vxl(path: String) -> Error:
+func load_vxl(path: String, deferred_visuals: bool = false) -> Error:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return FileAccess.get_open_error()
-	return load_vxl_bytes(file.get_buffer(file.get_length()), path.get_file().get_basename())
+	return load_vxl_bytes(file.get_buffer(file.get_length()), path.get_file().get_basename(), deferred_visuals)
 
-func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL") -> Error:
+func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL", deferred_visuals: bool = false) -> Error:
 	var error: Error = data.load_vxl_bytes(bytes, data.epoch + 1)
 	if error != OK:
 		push_warning("VXL import failed: %s" % data.last_error)
 		return error
 	_clear_world_visuals()
-	_prepare_loaded_map(title)
+	_prepare_loaded_map(title, deferred_visuals)
 	return OK
 
-func set_map_data(validated: VOXEL_DATA, title: String = "Network map") -> Error:
+func set_map_data(validated: VOXEL_DATA, title: String = "Network map", deferred_visuals: bool = false) -> Error:
 	# This adopts an already validated, uniquely coordinated writable model.
 	# No palette scan/copy: the receiver validated colors before this handoff.
 	if validated == null or validated.read_only or not VOXEL_DATA.valid_dimensions(validated.dimensions) or validated.blocks.size() != validated.dimensions.x * validated.dimensions.y * validated.dimensions.z:
@@ -340,10 +468,10 @@ func set_map_data(validated: VOXEL_DATA, title: String = "Network map") -> Error
 		return ERR_INVALID_DATA
 	data = validated
 	_clear_world_visuals()
-	_prepare_loaded_map(title)
+	_prepare_loaded_map(title, deferred_visuals)
 	return OK
 
-func _prepare_loaded_map(title: String) -> void:
+func _prepare_loaded_map(title: String, deferred_visuals: bool = false) -> void:
 	map_name = title
 	_streaming = true
 	var center_x := dimensions.x / 2
@@ -354,9 +482,10 @@ func _prepare_loaded_map(title: String) -> void:
 			surface_y = y + 1
 			break
 	_spawn = Vector3(center_x + 0.5, surface_y + 1.0, center_z + 0.5)
-	_create_water()
+	_create_water(deferred_visuals)
 	set_view_position(_spawn)
-	rebuild_now()
+	if not deferred_visuals:
+		rebuild_now()
 	map_loaded.emit(map_name)
 
 func encode_vxl() -> PackedByteArray:
@@ -402,21 +531,33 @@ func set_effects_observer(position: Vector3) -> void:
 func get_effects_observer() -> Vector3:
 	return _effects_observer
 
-func _create_water() -> void:
+func _create_water(deferred: bool = false) -> void:
+	_water_image = Image.create(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8)
+	_water_cursor = 0
+	_water_dirty.clear()
+	_water_dirty_queue.clear()
+	_water_dirty_cursor = 0
+	if not deferred:
+		for column in range(dimensions.x * dimensions.z):
+			_update_water_column(column)
+		_water_cursor = dimensions.x * dimensions.z
+		_finish_water_creation()
+
+func _update_water_column(column: int) -> void:
+	_water_image.set_pixel(column % dimensions.x, column / dimensions.x, block_color(data.blocks[column * dimensions.y]))
+
+func _finish_water_creation() -> void:
 	_wave_field = WAVE_FIELD.new()
 	_wave_field.name = "SpectralWaterWaves"
 	add_child(_wave_field)
 	_wave_field.setup()
 	_wave_field.set_enabled(water_enabled and water_waves_enabled)
-	var image := Image.create(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8)
-	for z in range(dimensions.z):
-		for x in range(dimensions.x):
-			image.set_pixel(x, z, block_color(get_block(Vector3i(x, 0, z))))
 	var material := ShaderMaterial.new()
 	material.shader = WATER_SHADER
-	material.set_shader_parameter("bottom_color", ImageTexture.create_from_image(image))
+	material.set_shader_parameter("bottom_color", ImageTexture.create_from_image(_water_image))
 	material.set_shader_parameter("map_size", Vector2(dimensions.x, dimensions.z))
-	material.set_shader_parameter("fog_distance", float(render_radius * CHUNK_SIZE))
+	material.set_shader_parameter("fog_color", Vector3(_water_fog_color.r, _water_fog_color.g, _water_fog_color.b))
+	material.set_shader_parameter("fog_distance", _water_fog_distance)
 	material.set_shader_parameter("fog_enabled", water_fog_enabled)
 	material.set_shader_parameter("wave_texture", _wave_field.get_texture())
 	material.set_shader_parameter("lighting_enabled", lighting_enabled)
@@ -493,6 +634,8 @@ func set_water_enabled(enabled: bool) -> void:
 	_mark_all_chunks(false)
 
 func set_water_fog(color: Color, distance: float) -> void:
+	_water_fog_color = color
+	_water_fog_distance = maxf(distance, 1.0)
 	if is_instance_valid(_water_mesh):
 		var material: ShaderMaterial = _water_mesh.mesh.surface_get_material(0)
 		material.set_shader_parameter("fog_color", Vector3(color.r, color.g, color.b))
@@ -627,6 +770,7 @@ func set_draw_distance(meters: float) -> float:
 	set_view_position(_effects_observer)
 	for chunk in _chunks.values():
 		chunk.mesh_instance.visibility_range_end = get_draw_distance() + CHUNK_SIZE * 0.8660254
+	_water_fog_distance = get_draw_distance()
 	if is_instance_valid(_water_mesh):
 		var material: ShaderMaterial = _water_mesh.mesh.surface_get_material(0)
 		material.set_shader_parameter("fog_distance", get_draw_distance())

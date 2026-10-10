@@ -4,6 +4,18 @@
 
 ## Query contract
 
+The camera-only `cast_camera_ray` follows `World::WeaponRayCast`: Euclidean nearest
+distance, accumulated hit-part flags and an optional prior actor distance so that
+farther parts do not acquire flags before a new actor becomes the nearest. It has
+no firearm128m cutoff. Its finite slab endpoint encloses each prepared pose, so it does not impose
+a fixed500m view limit. Camera slabs treat only exact zero as parallel, as native OBB
+math does; existing firearm slabs retain the documented1e-6 numeric adaptation.
+Godot inverse/slab arithmetic is geometrically equivalent, not a claim of binary32
+identity to the native plane implementation. `test_camera_target_rays.gd` has independent
+vertical, far-diagonal, crouch, zero and near-parallel cases. Actual UI follow tests use
+the observed eye/front/team and exclude that soldier; display distance deliberately
+uses local-eye to target-eye as `Client_Draw.cpp:303` does.
+
 ```gdscript
 var pose: LabHitVolumes.PreparedPose = LabHitVolumes.prepare_pose(feet, yaw, crouching, pitch)
 var result: Dictionary = LabHitVolumes.cast_prepared(origin, direction, pose, max_distance)

@@ -8,6 +8,8 @@ const DIRECTIONS: Array[Vector3i] = [Vector3i.DOWN,Vector3i.LEFT,Vector3i.RIGHT,
 const MAX_UINT32: int = 0xffffffff
 const MAX_JOURNAL_BYTES: int = 8*1024*1024
 const MAX_JOURNAL_CHANGES: int = 32768
+const MAX_SOURCE_RAY_STEPS: int = 8192
+const SOURCE_RAY_COORD_LIMIT: float = 1000000.0
 var dimensions: Vector3i = Vector3i(96,32,96)
 var blocks: PackedInt32Array = PackedInt32Array()
 var water_level: float = 1.0
@@ -107,6 +109,192 @@ func cast_voxel(origin: Vector3, direction: Vector3, max_dist: float = 128.0) ->
 		normal = Vector3i.ZERO
 		normal[axis] = -step[axis]
 	return miss
+
+static func _ray_f32(value: float) -> float:
+	return Vector3(value, 0.0, 0.0).x
+
+static func _ray_to_native(point: Vector3) -> Vector3:
+	# Points reflect around the native geometric ceiling64; cells use63-z.
+	return Vector3(point.x, point.z, 64.0 - point.y)
+
+static func _ray_from_native(point: Vector3) -> Vector3:
+	return Vector3(point.x, 64.0 - point.z, point.y)
+
+static func _ray_cell_from_native(cell: Vector3i) -> Vector3i:
+	return Vector3i(cell.x, 63 - cell.z, cell.y)
+
+static func _ray_normal_from_native(normal: Vector3i) -> Vector3i:
+	return Vector3i(normal.x, -normal.z, normal.y)
+
+func _source_ray_solid(native_cell: Vector3i) -> bool:
+	var cell := _ray_cell_from_native(native_cell)
+	if cell.y < 0:
+		return true
+	if cell.y >= dimensions.y:
+		return false
+	if dimensions == Vector3i(512, 64, 512):
+		cell.x &= 511
+		cell.z &= 511
+	# Dispatch through get_block so a leased historical query reads its frame.
+	# Authored smaller arenas keep bounded horizontal queries rather than wrap.
+	return get_block(cell) != 0
+
+static func _source_ray_result(origin: Vector3, native_cell: Vector3i = Vector3i.ZERO, native_normal: Vector3i = Vector3i.ZERO, steps: int = 0) -> Dictionary:
+	return {"hit":false, "start_solid":false, "cell":_ray_cell_from_native(native_cell),
+		"normal":_ray_normal_from_native(native_normal), "position":origin,
+		"steps":steps, "valid":true, "error":""}
+
+static func _source_ray_error(origin: Vector3, message: String) -> Dictionary:
+	return {"hit":false, "start_solid":false, "cell":Vector3i.ZERO, "normal":Vector3i.ZERO,
+		"position":origin, "steps":0, "valid":false, "error":message}
+
+func cast_source_ray(origin: Vector3, direction: Vector3, max_steps: int = 500) -> Dictionary:
+	# GameMap::CastRay2, v0.1.3 GameMap.cpp361-506. max_steps counts crossed
+	# grid planes, not metres. Execute in native axes to retain X/Y/Z ties.
+	if not origin.is_finite() or not direction.is_finite() or not valid_dimensions(dimensions) or max_steps < 0 or max_steps > MAX_SOURCE_RAY_STEPS:
+		return _source_ray_error(origin, "invalid source ray input/budget")
+	if maxf(absf(origin.x), maxf(absf(origin.y), absf(origin.z))) > SOURCE_RAY_COORD_LIMIT:
+		return _source_ray_error(origin, "source ray origin exceeds coordinate budget")
+	var native_origin := _ray_to_native(origin)
+	var ray := Vector3(direction.x, direction.z, -direction.y)
+	# Math.h359-374 uses left-associated float products/sums and sqrtf.
+	var squared := ray * ray
+	var length := _ray_f32(sqrt(_ray_f32(_ray_f32(squared.x + squared.y) + squared.z)))
+	if not is_finite(length):
+		return _source_ray_error(origin, "source ray direction cannot normalize")
+	var scale := _ray_f32(1.0 / length) if length != 0.0 else 0.0
+	ray *= scale
+	if not ray.is_finite():
+		return _source_ray_error(origin, "source ray direction cannot normalize")
+	var cell := Vector3i(native_origin.floor())
+	var result := _source_ray_result(origin, cell)
+	if _source_ray_solid(cell):
+		result.hit = true
+		result.start_solid = true
+		return result
+	if max_steps == 0:
+		return result
+	if ray == Vector3.ZERO:
+		return _source_ray_error(origin, "zero source ray has no next grid plane")
+	var fractional := Vector3.ZERO
+	var inverse := Vector3.ZERO
+	var absolute := ray.abs()
+	for axis in range(3):
+		fractional[axis] = float(cell[axis] + 1) - native_origin[axis] if ray[axis] > 0.0 else native_origin[axis] - float(cell[axis])
+		inverse[axis] = 1.0 / absolute[axis] if absolute[axis] != 0.0 else 0.0
+	if not inverse.is_finite():
+		return _source_ray_error(origin, "source ray reciprocal exceeds float32 range")
+	var normal := Vector3i.ZERO
+	for step in range(max_steps):
+		var times := fractional * inverse
+		var selected := -1
+		var next_time := 0.0
+		for axis in range(3):
+			if inverse[axis] != 0.0 and (selected < 0 or times[axis] < next_time):
+				selected = axis
+				next_time = times[axis]
+		var next_cell := cell
+		next_cell[selected] += 1 if ray[selected] > 0.0 else -1
+		# Vector3 multiplication/subtraction each round their components to
+		# native binary32, matching separate float operations in the source.
+		fractional -= absolute * next_time
+		fractional[selected] = 1.0
+		normal = cell - next_cell
+		if _source_ray_solid(next_cell):
+			var hit_position := Vector3.ZERO
+			for axis in range(3):
+				hit_position[axis] = float(next_cell[axis] + 1) - fractional[axis] if ray[axis] > 0.0 else float(next_cell[axis]) + fractional[axis]
+			result = _source_ray_result(_ray_from_native(hit_position), next_cell, normal, step + 1)
+			result.hit = true
+			return result
+		cell = next_cell
+	return _source_ray_result(origin, cell, normal, max_steps)
+
+func cast_source_ray_legacy(origin: Vector3, direction: Vector3, length: float = 256.0) -> Dictionary:
+	# GameMap::CastRay, v0.1.3 GameMap.cpp208-358 (active #if1 branch).
+	# direction is NOT normalized. The native result is an integer corner;
+	# normal/start_solid are absent in that API and remain zero/false here.
+	if not origin.is_finite() or not direction.is_finite() or not is_finite(length) or not valid_dimensions(dimensions) or length < 0.0 or length > MAX_SOURCE_RAY_STEPS:
+		return _source_ray_error(origin, "invalid legacy source ray input/budget")
+	if maxf(absf(origin.x), maxf(absf(origin.y), absf(origin.z))) > SOURCE_RAY_COORD_LIMIT:
+		return _source_ray_error(origin, "legacy source ray origin exceeds coordinate budget")
+	var native_origin := _ray_to_native(origin)
+	var native_direction := Vector3(direction.x, direction.z, -direction.y)
+	var endpoint := native_origin + native_direction * _ray_f32(length)
+	if not endpoint.is_finite() or maxf(absf(endpoint.x), maxf(absf(endpoint.y), absf(endpoint.z))) > SOURCE_RAY_COORD_LIMIT:
+		return _source_ray_error(origin, "legacy source ray endpoint exceeds coordinate budget")
+	var cell := Vector3i(native_origin.floor())
+	var target := Vector3i(endpoint.floor())
+	var increment := Vector3i.ZERO
+	var fractional := Vector3.ZERO
+	var scaled := Vector3.ZERO
+	var count := 0
+	for axis in range(3):
+		if target[axis] < cell[axis]:
+			increment[axis] = -1
+			fractional[axis] = native_origin[axis] - float(cell[axis])
+			scaled[axis] = _ray_f32(native_origin[axis] - endpoint[axis]) * 1024.0
+			count += cell[axis] - target[axis]
+		elif target[axis] != cell[axis]:
+			increment[axis] = 1
+			fractional[axis] = float(cell[axis] + 1) - native_origin[axis]
+			scaled[axis] = _ray_f32(endpoint[axis] - native_origin[axis]) * 1024.0
+			count += target[axis] - cell[axis]
+	var product_a := Vector3(fractional.x * scaled.z, fractional.y * scaled.z, fractional.y * scaled.x)
+	var product_b := Vector3(fractional.z * scaled.x, fractional.z * scaled.y, fractional.x * scaled.y)
+	var cross_difference := product_a - product_b
+	if maxf(scaled.x, maxf(scaled.y, scaled.z)) > 536870911.0 or maxf(absf(cross_difference.x), maxf(absf(cross_difference.y), absf(cross_difference.z))) > 1073741823.0:
+		return _source_ray_error(origin, "legacy source ray exceeds native integer arithmetic budget")
+	var decision := Vector3i(cross_difference.floor())
+	var integer_scaled := Vector3i(scaled.floor())
+	count = mini(count, int(_ray_f32(length)))
+	var steps := 0
+	var cached_column := Vector2i(cell.x, cell.y)
+	if cell.z < 0 and increment.z < 0:
+		return _source_ray_result(origin, cell)
+	elif cell.z >= 64:
+		return _legacy_source_hit(cell, steps)
+	var in_sky := cell.z < 0
+	while count > 0:
+		if cell.z >= 0:
+			in_sky = false
+		var axis: int
+		if ((decision.x | decision.y) >= 0) and cell.z != target.z:
+			axis = 2
+			cell.z += increment.z
+			decision.x -= integer_scaled.x
+			decision.y -= integer_scaled.y
+		elif decision.z >= 0 and cell.x != target.x:
+			axis = 0
+			cell.x += increment.x
+			decision.x += integer_scaled.z
+			decision.z -= integer_scaled.y
+		else:
+			axis = 1
+			cell.y += increment.y
+			decision.y += integer_scaled.z
+			decision.z += integer_scaled.x
+		steps += 1
+		count -= 1
+		# Source skips checking the first entered z0 cell and does not
+		# refresh its cached column while traversing empty sky.
+		if in_sky:
+			continue
+		if axis == 2:
+			if cell.z < 0 and increment.z < 0:
+				return _source_ray_result(origin, cell, Vector3i.ZERO, steps)
+			elif cell.z >= 64:
+				return _legacy_source_hit(cell, steps)
+		else:
+			cached_column = Vector2i(cell.x, cell.y)
+		if _source_ray_solid(Vector3i(cached_column.x, cached_column.y, cell.z)):
+			return _legacy_source_hit(cell, steps)
+	return _source_ray_result(origin, cell, Vector3i.ZERO, steps)
+
+static func _legacy_source_hit(native_cell: Vector3i, steps: int) -> Dictionary:
+	var result := _source_ray_result(_ray_from_native(Vector3(native_cell)), native_cell, Vector3i.ZERO, steps)
+	result.hit = true
+	return result
 
 func column_top(column: int, from_y: int) -> Vector2i:
 	if column < 0 or column >= dimensions.x*dimensions.z or blocks.is_empty():

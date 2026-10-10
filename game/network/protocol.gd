@@ -22,7 +22,7 @@ const INPUT_BUTTON_MASK: int = 0x7f # jump,crouch,sprint,sneak,primary,secondary
 const ACTOR_FLAG_MASK: int = 0xff # alive,crouch,sprint,wade,ground,connected,reload,cook
 
 enum Kind { HELLO = 1, WELCOME, REJECT, INPUT_BATCH, CHAT, PING, PONG,
-	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE, GAME_EVENTS, PLAYER_REQUEST }
+	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE, GAME_EVENTS, PLAYER_REQUEST, MATCH_PREPARING }
 
 class Packet extends RefCounted:
 	var kind: int = 0
@@ -170,7 +170,7 @@ static func _failure(message: String) -> Result:
 
 static func encode(packet: Packet) -> Result:
 	if packet == null: return _failure("null packet")
-	if packet.kind < Kind.HELLO or packet.kind > Kind.PLAYER_REQUEST: return _failure("unsupported kind")
+	if packet.kind < Kind.HELLO or packet.kind > Kind.MATCH_PREPARING: return _failure("unsupported kind")
 	for value: int in [packet.epoch, packet.tick, packet.sequence]:
 		if value < 0 or value > U32_MAX: return _failure("header value out of range")
 	var payload_writer: Writer = Writer.new()
@@ -180,6 +180,8 @@ static func encode(packet: Packet) -> Result:
 		return _failure("state header/body identity mismatch")
 	if packet.kind == Kind.GAME_EVENTS and not _event_header_matches(packet.payload,packet.epoch,packet.tick,packet.sequence):
 		return _failure("event header/body identity mismatch")
+	if packet.kind == Kind.MATCH_PREPARING and (packet.epoch == 0 or packet.sequence != packet.payload.spawn_generation):
+		return _failure("preparing header/body identity mismatch")
 	var data: PackedByteArray = payload_writer.stream.data_array
 	var limit: int = MAX_BULK_FRAME if packet.kind == Kind.MAP_CHUNK else MAX_FRAME
 	if data.size() > limit - HEADER_SIZE: return _failure("frame exceeds limit")
@@ -202,7 +204,7 @@ static func decode(data: PackedByteArray) -> Result:
 	if _header_u32(data, 0) != MAGIC: return _failure("wrong magic")
 	if (int(data[4]) << 8 | int(data[5])) != VERSION: return _failure("unsupported version")
 	var kind: int = data[6]
-	if kind < Kind.HELLO or kind > Kind.PLAYER_REQUEST: return _failure("unsupported kind")
+	if kind < Kind.HELLO or kind > Kind.MATCH_PREPARING: return _failure("unsupported kind")
 	if data[7] != 0: return _failure("reserved flags must be zero")
 	if kind == Kind.MAP_CHUNK and data.size() > MAX_BULK_FRAME: return _failure("bulk frame exceeds limit")
 	if _header_u32(data, 8) != data.size() - HEADER_SIZE: return _failure("payload length mismatch")
@@ -221,6 +223,8 @@ static func decode(data: PackedByteArray) -> Result:
 		return _failure("state header/body identity mismatch")
 	if kind == Kind.GAME_EVENTS and not _event_header_matches(payload,_header_u32(data,12),_header_u32(data,16),_header_u32(data,20)):
 		return _failure("event header/body identity mismatch")
+	if kind == Kind.MATCH_PREPARING and (_header_u32(data,12) == 0 or _header_u32(data,20) != payload.spawn_generation):
+		return _failure("preparing header/body identity mismatch")
 	var result: Result = Result.new()
 	result.ok = true
 	result.packet = make_packet(kind, payload, _header_u32(data, 12), _header_u32(data, 16), _header_u32(data, 20))
@@ -245,6 +249,9 @@ static func _array(value: Variant, maximum: int, writer: Writer, minimum: int = 
 
 static func _write_payload(kind: int, p: Dictionary, w: Writer) -> void:
 	match kind:
+		Kind.MATCH_PREPARING:
+			if not _keys(p,["actor_id","spawn_generation","profile"],w): return
+			w.integer(p.actor_id,4,1); w.integer(p.spawn_generation,4,1,1); w.integer(p.profile,1,0,1)
 		Kind.HELLO:
 			if not _keys(p, ["role", "name", "build_hash", "rules_hash", "resume_token", "bulk_token"], w): return
 			w.integer(p.role, 1, 0, 2); w.text(p.name, 64, p.role == 2)
@@ -379,6 +386,7 @@ static func _write_snapshot(p: Dictionary, w: Writer) -> void:
 
 static func _read_payload(kind: int, r: Reader) -> Dictionary:
 	match kind:
+		Kind.MATCH_PREPARING: return {"actor_id":r.integer(4),"spawn_generation":r.integer(4),"profile":r.integer(1)}
 		Kind.PLAYER_REQUEST: return {"action":r.integer(1),"value":r.integer(4),"request_sequence":r.integer(4)}
 		Kind.HELLO: return {"role":r.integer(1), "name":r.text(64), "build_hash":r.raw(32), "rules_hash":r.raw(32), "resume_token":r.token(), "bulk_token":r.token()}
 		Kind.WELCOME: return {"actor_id":r.integer(4), "spawn_generation":r.integer(4), "server_hz":r.integer(2), "snapshot_hz":r.integer(2), "profile":r.integer(1), "resume_token":r.raw(32), "bulk_token":r.raw(32), "build_hash":r.raw(32), "rules_hash":r.raw(32)}

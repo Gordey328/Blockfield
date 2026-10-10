@@ -104,6 +104,8 @@ func _test_transactions_and_collapse() -> void:
 	check(rewound.query.clip_world(Vector3(2.1,3.1,2.1)) and not history.query_at(2,2).query.clip_world(Vector3(2.1,3.1,2.1)),"inherited ClipWorld dispatch uses historical get_block")
 	var ray: Dictionary = rewound.query.cast_voxel(Vector3(0.5,3.5,2.5),Vector3.RIGHT,10)
 	check(ray.hit and ray.cell==cell and ray.valid,"inherited DDA dispatch hits restored old cover")
+	var source_ray: Dictionary = rewound.query.cast_source_ray(Vector3(0.5,3.5,2.5),Vector3.RIGHT,10)
+	check(source_ray.hit and source_ray.cell==cell and source_ray.valid and source_ray.normal==Vector3i.LEFT,"source step-count ray also reads historical cover through its lease")
 	check(rewound.query.get_block(Vector3i.ZERO)==data.get_block(Vector3i.ZERO) and rewound.query.get_block(Vector3i(-1,2,0))==0,"untouched cells/bounds preserve Data queries")
 	var saved_blocks: PackedInt32Array = data.blocks.duplicate()
 	check(not rewound.query.set_block(cell,0x01ffffff).ok and rewound.query.clear(Vector3i.ONE,9)==ERR_UNAUTHORIZED and data.blocks==saved_blocks,"query mutation methods cannot write authority")
@@ -115,6 +117,7 @@ func _test_transactions_and_collapse() -> void:
 	check(history.query_at(1,2).query.get_block(Vector3i(2,2,2))==0x01000000,"history owns copied receipt colors")
 	data.last_tick=3
 	check(not again.query.is_valid() and not again.query.cast_voxel(Vector3.ZERO,Vector3.RIGHT).valid and again.query.clip_world(Vector3(999,999,999)) and again.query.get_block(Vector3i(99,99,99))==0x01000000,"stale query reports invalid and fails closed")
+	check(not again.query.cast_source_ray(Vector3.ZERO,Vector3.RIGHT).valid and not again.query.cast_source_ray_legacy(Vector3.ZERO,Vector3.RIGHT).valid,"both source ray APIs fail closed after historical lease revocation")
 	check(not history.query_at(1,2).ok,"query refuses authority tick not yet recorded")
 
 func _test_record_failures() -> void:

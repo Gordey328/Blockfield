@@ -36,7 +36,12 @@ var camera_mode: CameraMode = CameraMode.INTRO
 var followed_target_id: int = -1
 var follow_first_person: bool = false
 ## Gameplay permission belongs to menus/chat, independently of OS pointer lock.
-var controls_enabled: bool = false
+var controls_enabled: bool = false:
+	set(value):
+		controls_enabled=value
+		if not value:
+			_move_press_order.clear()
+			_secondary_held=false
 var block_color := Color8(111,111,111)
 var _kick := 0.0
 var _tool_clock := 0.0
@@ -61,6 +66,9 @@ var _spectator_view: OpenSpadesSpectatorView
 var skin_id := "original"
 var _was_reloading: bool = false
 var _aim_toggled: bool = false
+var _secondary_held: bool = false
+var _move_press_order: Dictionary[String,int] = {}
+var _move_sequence: int = 0
 var _aim_down_state: float = 0.0
 var _dry_fire_held: bool = false
 var _observed_tool: int = -1
@@ -116,6 +124,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if lab != null and lab.handle_focus_input(event):
 		get_viewport().set_input_as_handled()
 		return
+	for action: String in ["left","right","forward","back"]:
+		if event.is_action_pressed(action):
+			_move_sequence+=1
+			_move_press_order[action]=_move_sequence
 	if session.team >= 2 or session.health <= 0.0:
 		if event.is_action_pressed("primary"): cycle_camera_target(1)
 		if event.is_action_pressed("secondary"): cycle_camera_target(-1)
@@ -124,30 +136,38 @@ func _unhandled_input(event: InputEvent) -> void:
 				follow_first_person = not follow_first_person
 		if event.is_action_pressed("reload") and session.team >= 2: stop_following()
 		return
-	if event.is_action_pressed("reload"):
+	if event.is_action_pressed("reload") and session.current_tool==2:
 		_aim_toggled = false
 		session.reload_weapon()
-	if event.is_action_pressed("tool_spade"): session.select_tool(0)
-	if event.is_action_pressed("tool_block"): session.select_tool(1)
-	if event.is_action_pressed("tool_weapon"): session.select_tool(2)
-	if event.is_action_pressed("tool_grenade"): session.select_tool(3)
+	if event.is_action_pressed("tool_spade"): _select_tool_hotkey(0)
+	if event.is_action_pressed("tool_block"): _select_tool_hotkey(1)
+	if event.is_action_pressed("tool_weapon"): _select_tool_hotkey(2)
+	if event.is_action_pressed("tool_grenade"): _select_tool_hotkey(3)
 	if InputMap.has_action("last_tool") and event.is_action_pressed("last_tool"):
 		select_last_tool()
 	if event is InputEventMouseButton and event.pressed and wheel_tool_direction != 0:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP: cycle_tool(signi(wheel_tool_direction))
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: cycle_tool(-signi(wheel_tool_direction))
 	if event.is_action_pressed("eyedropper") and world != null:
-		var hit := world.cast_voxel(get_aim_origin(), get_aim_direction(), 12.0)
+		var hit := world.cast_source_ray_legacy(get_aim_origin(), get_aim_direction(), 256.0)
 		if hit.hit:
-			block_color = VoxelWorld.block_color(world.get_block(hit.cell))
-			if session is NETWORK_SESSION: session.request_block_color(VoxelWorld.pack_color(block_color))
-			notice.emit("Picked block color")
+			var cell: Vector3i = hit.cell
+			if world.dimensions == Vector3i(512,64,512):
+				cell.x &= 511;cell.y &= 63;cell.z &= 511
+			block_color = VoxelWorld.block_color(world.get_block(cell))
+		elif lab != null and lab.world_environment != null:
+			block_color = lab.world_environment.environment.fog_light_color
+		if session is NETWORK_SESSION: session.request_block_color(VoxelWorld.pack_color(block_color))
+		notice.emit("Picked block color")
 	if event.is_action_pressed("view_toggle"):
 		third_person = not third_person
-	if event.is_action_pressed("secondary") and session.current_tool == 2 and not hold_aim_down_sight:
-		if not session.is_reloading:
-			_aim_toggled = not _aim_toggled
-			if _aim_toggled and can_use_tool(): _play_sound("Weapons/AimDownSightLocal",.08,OpenSpadesAudio.LOCAL_ORIGIN)
+	if event.is_action("secondary"):
+		var previous:=_secondary_held if hold_aim_down_sight else _aim_toggled
+		if hold_aim_down_sight:_secondary_held=event.is_action_pressed("secondary")
+		elif event.is_action_pressed("secondary") and session.current_tool==2 and not session.is_reloading:_aim_toggled=not _aim_toggled
+		var next:=_secondary_held if hold_aim_down_sight else _aim_toggled
+		if session.current_tool==2 and next and not previous and not session.is_reloading and can_use_tool():
+			_play_sound("Weapons/AimDownSightLocal",.08,OpenSpadesAudio.LOCAL_ORIGIN)
 	# Inputs below invoke offline authority. In multiplayer their button edges
 	# reach the shared rules through the fixed input command instead.
 	if session is NETWORK_SESSION: return
@@ -201,7 +221,7 @@ func _physics_process(delta: float) -> void:
 		session.update_player_position(global_position)
 		_update_view(delta)
 		return
-	var axis := Input.get_vector("left", "right", "forward", "back")
+	var axis := get_source_movement_axis()
 	var wants_crouch := Input.is_action_pressed("crouch")
 	if wants_crouch != crouching:
 		_motion=SourcePlayerMotion.set_crouch(world,_motion,wants_crouch)
@@ -286,6 +306,21 @@ func _physics_process(delta: float) -> void:
 	if not Input.is_action_pressed("primary") or session.current_tool != 2: _dry_fire_held = false
 	_update_view(delta)
 
+func get_source_movement_axis() -> Vector2:
+	# Client_Input remembers both physical keys. A newer opposing press wins;
+	# releasing it restores the still-held key. Menus use controls_enabled and
+	# the normal Input release path, so stale serials cannot create movement.
+	var axis:=Vector2.ZERO
+	for index in 2:
+		var negative: String="left" if index==0 else "forward"
+		var positive: String="right" if index==0 else "back"
+		var first:=Input.is_action_pressed(negative)
+		var second:=Input.is_action_pressed(positive)
+		if first and second:axis[index]=-1.0 if int(_move_press_order.get(negative,0))>int(_move_press_order.get(positive,0)) else 1.0
+		elif first:axis[index]=-1.0
+		elif second:axis[index]=1.0
+	return axis.limit_length(1.0)
+
 func _network_replica() -> NETWORK_CLIENT:
 	return lab.get("network_client") as NETWORK_CLIENT if lab != null else null
 
@@ -310,7 +345,7 @@ func _network_physics(delta: float) -> void:
 	var buttons := 0
 	var move := Vector2.ZERO
 	if owner.is_alive() and controls_enabled:
-		move = Input.get_vector("left","right","forward","back").limit_length(1)
+		move = get_source_movement_axis()
 		if Input.is_action_pressed("jump"): buttons |= SHARED_RULES.Buttons.JUMP
 		if Input.is_action_pressed("crouch"): buttons |= SHARED_RULES.Buttons.CROUCH
 		if Input.is_action_pressed("sprint"): buttons |= SHARED_RULES.Buttons.SPRINT
@@ -459,6 +494,14 @@ func _clip_motion(delta: float) -> void:
 	if _motion.landed:
 		_play_world_sound("Player/FallHurt" if _motion.fall_hurt else ("Player/WaterLand" if wading else "Player/Land"))
 		if _motion.fall_hurt:session.damage_player(pow(incoming_speed-.58,2)*4096.0,Vector3.INF,"fall")
+
+func _select_tool_hotkey(tool: int) -> void:
+	if session.is_tool_selectable(tool):
+		session.select_tool(tool)
+		return
+	if lab!=null and lab.get("hud")!=null:
+		var message: String={1:"Out of Blocks",2:"Out of Ammo",3:"Out of Grenades"}.get(tool,"")
+		if not message.is_empty():lab.hud.show_alert(OpenSpadesLocalization.text(message,"Client"),"error")
 
 func cycle_tool(direction: int) -> void:
 	if session == null or session.team >= 2 or session.health <= 0.0 or direction == 0: return
@@ -624,6 +667,9 @@ func _clear_action_state() -> void:
 	_clear_input_state()
 
 func _clear_input_state() -> void:
+	_move_press_order.clear()
+	_move_sequence=0
+	_secondary_held=false
 	_drag_look_active=false
 	_last_spade_fire_time=-1.0e20
 	camera_radial_blur=0.0
@@ -681,7 +727,7 @@ func _shoot() -> void:
 		# Player::FireWeapon accumulates all pellets into the unnormalized vector.
 		accumulated_direction += Vector3(randf()-randf(), randf()-randf(), randf()-randf()) * spread
 		var direction := accumulated_direction.normalized()
-		var map_hit := world.cast_voxel(origin, direction, 500.0)
+		var map_hit := world.cast_source_ray(origin, direction, 500)
 		var result := raycast_targets(origin,direction,500.0)
 		var chosen := source_weapon_hit(origin,map_hit,result)
 		var end := origin+direction*128.0
@@ -697,11 +743,12 @@ func _shoot() -> void:
 				end = result.position
 		elif chosen=="map":
 			end=map_hit.position
-			if lab!=null and lab.audio!=null:lab.audio.bullet_impact(map_hit.position,Vector3(map_hit.normal),int(map_hit.cell.y)==0)
-			if effects != null:
-				effects.block_hit(map_hit.position,Vector3(map_hit.normal),VoxelWorld.block_color(world.get_block(map_hit.cell)),map_hit.position.y <= world.water_level + 0.2)
-			if _damage_block(map_hit.cell, float(info.block), not destroyed_block):
-				destroyed_block = true
+			if world.is_in_bounds(map_hit.cell):
+				if lab!=null and lab.audio!=null:lab.audio.bullet_impact(map_hit.position,Vector3(map_hit.normal),int(map_hit.cell.y)==0)
+				if effects != null:
+					effects.block_hit(map_hit.position,Vector3(map_hit.normal),VoxelWorld.block_color(world.get_block(map_hit.cell)),map_hit.position.y <= world.water_level + 0.2)
+				if _damage_block(map_hit.cell, float(info.block), not destroyed_block):
+					destroyed_block = true
 		if effects != null:
 			effects.tracer(origin,end,session.current_weapon,camera_mode == CameraMode.FIRST_PERSON)
 		elif lab != null: lab.spawn_tracer(origin-head.global_basis.y*0.12, end)
@@ -765,7 +812,7 @@ func _spade(dig: bool) -> void:
 	if _weapon_view != null: _weapon_view.fire()
 	var origin := get_aim_origin()
 	var direction := get_aim_direction()
-	var hit := world.cast_voxel(origin, direction, 6.0)
+	var hit := world.cast_source_ray(origin, direction, 256)
 	if not dig:
 		var target_id:=find_melee_target(origin,direction)
 		if target_id>=0:
@@ -774,7 +821,7 @@ func _spade(dig: bool) -> void:
 			if amount>0 and lab!=null and lab.audio!=null:lab.audio.flesh_hit(session.get_target(target_id).position+Vector3.UP*2.25)
 			if lab!=null and lab.audio!=null:lab.audio.play_spatial("Weapons/Spade/HitPlayer",session.get_target(target_id).position+Vector3.UP*2.25)
 			return
-	if hit.hit and _in_reach(hit.cell+hit.normal):
+	if hit.hit and world.is_in_bounds(hit.cell) and _in_reach(hit.cell+hit.normal):
 		_play_sound("Weapons/Spade/HitBlock",1.0,Vector3(.1,-.1,1.2))
 		var effects := _effects()
 		if effects != null: effects.block_hit(hit.position,Vector3(hit.normal),VoxelWorld.block_color(world.get_block(hit.cell)))
@@ -820,7 +867,7 @@ func get_build_preview() -> Dictionary:
 	var result := {"cells":cells,"valid":false,"reason":"","pending":false}
 	if world == null or session == null or session.current_tool != 1 or session.team >= 2 or session.health <= 0.0:
 		return result
-	var hit := world.cast_voxel(get_aim_origin(),get_aim_direction(),12.0)
+	var hit := world.cast_source_ray(get_aim_origin(),get_aim_direction(),12)
 	if not hit.hit:
 		result.reason = "No block in view"
 		return result
@@ -851,7 +898,7 @@ func get_build_preview() -> Dictionary:
 func _build_single() -> void:
 	if session is NETWORK_SESSION: return
 	if _tool_clock > 0.0: return
-	var hit := world.cast_voxel(get_aim_origin(),get_aim_direction(),12.0)
+	var hit := world.cast_source_ray(get_aim_origin(),get_aim_direction(),12)
 	if not hit.hit: return
 	var cell: Vector3i = hit.cell+hit.normal
 	if not _in_reach(cell): return
@@ -877,7 +924,7 @@ func _build_line() -> void:
 	if not attached:
 		build_error.emit("The line has no support")
 		return
-	var hit := world.cast_voxel(get_aim_origin(),get_aim_direction(),12.0)
+	var hit := world.cast_source_ray(get_aim_origin(),get_aim_direction(),12)
 	if not hit.hit: return
 	var end: Vector3i = hit.cell+hit.normal
 	if not _in_reach(end):
@@ -1083,8 +1130,8 @@ func _update_camera_transform() -> void:
 				break
 	if camera_mode == CameraMode.THIRD_PERSON: orbit_basis = head.global_basis
 	var direction := orbit_basis.z
-	var hit := world.cast_voxel(center,direction,distance)
-	if hit.hit: distance = maxf(0.05,center.distance_to(hit.position) - 0.3)
+	var hit := world.cast_source_ray(center,direction,256)
+	if hit.hit: distance = minf(distance,maxf(0.05,center.distance_to(hit.position) - 0.3))
 	camera.global_position = center + direction * distance
 	camera.look_at(center,Vector3.UP)
 
@@ -1102,7 +1149,7 @@ func _move_free_camera(delta: float) -> void:
 				for z in range(-1,2):
 					var shift := Vector3(x,y,z) * 0.1
 					if world.get_block(Vector3i((_free_position + shift).floor())) != 0: continue
-					var hit := world.cast_voxel(_free_position + shift,displacement / distance,distance)
+					var hit := world.cast_source_ray(_free_position + shift,displacement,256)
 					if hit.hit:
 						var found := (_free_position + shift).distance_to(hit.position)
 						if found < minimum:
@@ -1118,7 +1165,7 @@ func _move_free_camera(delta: float) -> void:
 			_free_position[axis] = clampf(_free_position[axis],0.1,maximum)
 			_free_velocity[axis] *= -0.2
 	_free_position.y = maxf(0.1,_free_position.y)
-	var axis := Input.get_vector("left","right","forward","back")
+	var axis := get_source_movement_axis()
 	var vertical := float(Input.is_action_pressed("jump")) - float(Input.is_action_pressed("crouch"))
 	var basis := Basis.from_euler(Vector3(_camera_pitch,_camera_yaw,0.0))
 	var acceleration := 10.0 * delta * (3.0 if Input.is_action_pressed("sprint") else 1.0)

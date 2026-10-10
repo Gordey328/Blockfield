@@ -32,7 +32,8 @@ The reference is OpenSpades v0.1.3, commit `dcf449c845d509bbde9d79239b32d201c138
 | `r_saturation`, `r_exposureValue` | Graphics scalars | Defaults 1, 0; port limits 0..2 and -4..4; `GLSettings.cpp:39,59` |
 | `r_multisamples` | Graphics `msaa` | Default 0; accepted 0/2/4 only, matching available port presets; native setting at `GLSettings.cpp:54` |
 | `r_water` | Graphics water + reflections + refraction | Native default 2; 0 disables all, 1 surface, 2 surface/reflections, 3 adds refraction. `GLSettings.cpp:66`, `GLWaterRenderer.cpp:450–466`. Separate wave setting is preserved. |
-| `s_gain` | Godot Master bus linear gain | Native default 1; 0..4 as clamped in `ALDevice.cpp:210` / `YsrDevice.cpp:556`. Query/set use linear gain, preferences store dB. |
+| `s_gain` | Per-source linear gain before attenuation/AL effective-gain clamp | Native default1, range0..4. Persisted separately as `audio/source_gain`; the Settings volume slider remains a post-mix Master setting. |
+| `s_eax` | Shared reverb and obstruction filtering | Separate default-on environment adapter, persisted as `audio/efx`. `cg_environmentalAudio` still controls gun ambience layers. |
 | `bf_positionalAudio` | `main.positional_audio` | Port-specific bool, default true; no claim of a native cvar with this name |
 | `cg_hideHud`, `cg_stats`, `cg_hitIndicator`, `cg_alerts` | HUD public console adapter | Defaults false,false,true,true; `Client_Draw.cpp:63,71–72`, `Client_Input.cpp:85` |
 | `cg_minimapPlayerColor`, `cg_minimapPlayerIcon` | HUD map preferences | Default true; `MapView.cpp:37–38` |

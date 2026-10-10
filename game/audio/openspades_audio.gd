@@ -5,6 +5,7 @@ extends Node
 ## mono/stereo voices so disabling panning does not change loudness.
 
 const MAX_VOICES := 128
+const ENVIRONMENT := preload("res://audio/audio_environment.gd")
 const WEAPONS := ["Rifle","SMG","Shotgun"]
 const LOCAL_ORIGIN := Vector3(.4,-.3,.5) # OpenAL listener-relative axes.
 const AMBIENCE_DIRECTIONS := [
@@ -26,17 +27,47 @@ var world: VoxelWorld
 var camera: Camera3D
 var positional := true
 var environmental := true
+var efx_enabled: bool = true
+var source_gain: float = 1.0
 var _voices: Array[Node] = []
 var _stereo: Dictionary = {}
 var _random := RandomNumberGenerator.new()
+var _environment := ENVIRONMENT.new()
+var _owned_buses: Array[StringName] = []
+var _buses: Dictionary = {}
+var _output_send: StringName = &"Master"
+var _early_delay: AudioEffectDelay
+var _late_delay: AudioEffectDelay
+var _reverb: AudioEffectReverb
+var _limiter: AudioEffectHardLimiter
+var _last_parameters: Dictionary = {}
+var _environment_frame: int = -1
+var _route_cursor: int = 0
 
 func setup(voxel_world: VoxelWorld,listener: Camera3D) -> void:
+	stop()
 	world=voxel_world
 	camera=listener
 	_random.randomize()
+	_environment.set_query(world.data if world != null else null)
+	_environment_frame = -1
 
 static func inverse_gain(gain: float,distance: float,reference_distance: float) -> float:
 	return maxf(0.0,gain)/maxf(1.0,maxf(0.0,distance)/maxf(.001,reference_distance))
+
+static func effective_gain(gain: float, distance: float, reference: float, local: bool, stereo: bool = false, setting: float = 1.0) -> float:
+	# OpenAL MIN_GAIN=0/MAX_GAIN=1 apply AFTER distance attenuation. The
+	# native stereo-world UpdateObstruction assignment omits s_gain.
+	var volume: float = maxf(0.0, gain) * (1.0 if stereo and not local else clampf(setting, 0.0, 4.0))
+	return clampf(volume if local else inverse_gain(volume, distance, reference), 0.0, 1.0)
+
+static func effective_wet_gain(gain: float, distance: float, reference: float, local: bool, stereo: bool, setting: float, decay_time: float) -> float:
+	# EFX ROOM has roomRolloff=0. This explicit OpenAL Soft1.17.2 automatic
+	# wet-gain adapter uses apparent attenuation distance, then MAX_GAIN.
+	if local or stereo:
+		return effective_gain(gain, distance, reference, local, stereo, setting)
+	var apparent: float = maxf(distance / maxf(.001, reference), 1.0) - 1.0
+	return clampf(maxf(0.0, gain) * clampf(setting, 0.0, 4.0) * pow(.001, apparent / (maxf(.1, decay_time) * 343.3)), 0.0, 1.0)
 
 static func ambience_from_samples(distances: Array,opposite_hits: Array) -> Dictionary:
 	var count:=0
@@ -58,12 +89,17 @@ func compute_ambience(origin: Vector3) -> Dictionary:
 	var feedback: Array[bool]=[]
 	for source in AMBIENCE_DIRECTIONS:
 		var direction:=Vector3(source.x,-source.z,source.y)
-		var hit:=world.cast_voxel(origin,direction,40.0)
+		var hit:=_acoustic_ray(origin,direction,40.0)
 		# Native CastRay reports an integer corner. W maps its z corner to
 		# the top of a Godot voxel, rather than the voxel's lower y corner.
 		distances.append(origin.distance_to(Vector3(hit.cell)+Vector3.UP) if hit.hit else 80.0)
-		feedback.append(bool(world.cast_voxel(origin,-direction,40.0).hit) if hit.hit else false)
+		feedback.append(bool(_acoustic_ray(origin,-direction,40.0).hit) if hit.hit else false)
 	return ambience_from_samples(distances,feedback)
+
+func _acoustic_ray(origin: Vector3,direction: Vector3,distance: float) -> Dictionary:
+	if world.data.has_method("cast_source_ray_legacy"):
+		return world.data.cast_source_ray_legacy(origin,direction,distance)
+	return world.cast_voxel(origin,direction,distance)
 
 static func weapon_layers(weapon: int,first_person: bool,room: float,size: float,variant: int=1,ambience_variant: int=1) -> Array[Dictionary]:
 	var layers: Array[Dictionary]=[]
@@ -154,10 +190,37 @@ func _play(path: String,gain: float,point: Vector3,local: bool,reference_distanc
 	if gain<=0.0 or camera==null:return null
 	var stream:=OpenSpadesExtensions.sound("res://assets/openspades/sounds/"+path+".ogg")
 	if stream==null:return null
+	return _start_voice(stream,path,gain,point,local,reference_distance)
+
+func _start_voice(stream: AudioStream, path: String, gain: float, point: Vector3, local: bool, reference_distance: float) -> Node:
 	var identifier:=stream.get_instance_id()
 	if not _stereo.has(identifier):_stereo[identifier]=is_stereo(stream)
 	var spatial: bool=not _stereo[identifier] and positional and (not local or point!=Vector3.ZERO)
-	var voice: Node
+	_ensure_buses()
+	_begin_environment_turn()
+	var voice: Node = _new_player(stream, spatial, local, point, reference_distance)
+	voice.set_meta("local",local)
+	voice.set_meta("path",path)
+	voice.set_meta("gain",gain)
+	voice.set_meta("origin",point)
+	voice.set_meta("reference",reference_distance)
+	voice.set_meta("stereo",bool(_stereo[identifier]))
+	voice.set_meta("efx_eligible",not local or point!=Vector3.ZERO)
+	voice.set_meta("copies",[])
+	_update_routes(voice)
+	_update_gain(voice)
+	voice.finished.connect(func():_release(voice))
+	_voices.append(voice)
+	while _voices.size()>MAX_VOICES:_release(_voices[0])
+	# Plain stream players register immediately. 3D players queue their start
+	# for the same physics turn; see measured mix-block scheduling limits.
+	AudioServer.lock()
+	voice.play()
+	for copy: Node in voice.get_meta("copies",[]):copy.play()
+	AudioServer.unlock()
+	return voice
+
+func _new_player(stream: AudioStream, spatial: bool, local: bool, point: Vector3, reference_distance: float, wet: bool = false) -> Node:
 	if spatial:
 		var player:=AudioStreamPlayer3D.new()
 		player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
@@ -165,51 +228,226 @@ func _play(path: String,gain: float,point: Vector3,local: bool,reference_distanc
 		player.attenuation_model=AudioStreamPlayer3D.ATTENUATION_DISABLED
 		player.max_distance=0.0
 		player.unit_size=reference_distance
-		player.max_db=linear_to_db(maxf(1.0,gain))
+		player.max_db=3.0103 if wet else 0.0
 		player.attenuation_filter_cutoff_hz=20500.0
+		if wet:player.panning_strength=0.0
 		if local:
 			camera.add_child(player)
 			player.position=Vector3(point.x,point.y,-point.z)
 		else:
 			add_child(player)
 			player.global_position=point
-		voice=player
+		return player
 	else:
 		var player:=AudioStreamPlayer.new()
 		player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
 		player.stream=stream
 		add_child(player)
-		voice=player
-	voice.set_meta("local",local)
-	voice.set_meta("path",path)
-	voice.set_meta("gain",gain)
-	voice.set_meta("origin",point)
-	voice.set_meta("reference",reference_distance)
-	_update_gain(voice)
-	voice.finished.connect(func():_release(voice))
-	_voices.append(voice)
-	while _voices.size()>MAX_VOICES:_release(_voices[0])
-	voice.play()
-	return voice
+		return player
 
 func _update_gain(voice: Node) -> void:
-	var gain: float=voice.get_meta("gain",1.0)
-	if not voice.get_meta("local",true):gain=inverse_gain(gain,camera.global_position.distance_to(voice.get_meta("origin",Vector3.ZERO)),float(voice.get_meta("reference",1.0)))
+	var raw: float=voice.get_meta("gain",1.0)
+	var local: bool=voice.get_meta("local",true)
+	var stereo: bool=voice.get_meta("stereo",false)
+	var distance: float=0.0 if local else camera.global_position.distance_to(voice.get_meta("origin",Vector3.ZERO))
+	var reference: float=voice.get_meta("reference",1.0)
+	var gain: float=effective_gain(raw,distance,reference,local,stereo,source_gain)
 	voice.volume_db=linear_to_db(maxf(.000001,gain))
+	var wet_gain: float=effective_wet_gain(raw,distance,reference,local,stereo,source_gain,float(_environment.parameters.decay_time))
+	for copy: Node in voice.get_meta("copies",[]):
+		copy.volume_db=linear_to_db(maxf(.000001,wet_gain))+(3.0103 if copy is AudioStreamPlayer3D else 0.0)
+		copy.pitch_scale=voice.pitch_scale
+		if copy is AudioStreamPlayer3D:copy.global_transform=voice.global_transform
 
 func _process(_delta: float) -> void:
 	if camera==null:return
-	for voice in _voices:_update_gain(voice)
+	if _owned_buses.is_empty():return
+	_begin_environment_turn()
+	_apply_room_parameters()
+	# Rotate obstruction refresh priority so a full voice pool cannot starve
+	# newer origins indefinitely when the ray/time budget is exhausted.
+	for offset: int in range(_voices.size()):
+		var voice: Node=_voices[(_route_cursor+offset)%_voices.size()]
+		_update_routes(voice)
+		_update_gain(voice)
+	_route_cursor=(_route_cursor+1)%maxi(1,_voices.size())
+	_environment.finish_turn()
+	# Master is a separate user output setting, applied after this owned bus.
+	# Reserve extra headroom if it amplifies, without mutating a shared bus.
+	_limiter.ceiling_db=-.3-maxf(0.0,AudioServer.get_bus_volume_db(0))
 
 func _release(voice: Node) -> void:
 	_voices.erase(voice)
+	for copy: Node in voice.get_meta("copies",[]):
+		copy.stop()
+		copy.stream=null
+		copy.queue_free()
+	voice.set_meta("copies",[])
 	voice.stop()
 	voice.stream=null
 	voice.queue_free()
 
 func stop() -> void:
+	AudioServer.lock()
 	for voice in _voices.duplicate():_release(voice)
 	_stereo.clear()
+	for name: StringName in _owned_buses:
+		var index: int=AudioServer.get_bus_index(name)
+		if index>=0:AudioServer.remove_bus(index)
+	_owned_buses.clear()
+	_buses.clear()
+	_early_delay=null
+	_late_delay=null
+	_reverb=null
+	_limiter=null
+	_last_parameters.clear()
+	_environment.set_query(null)
+	_environment_frame=-1
+	_route_cursor=0
+	AudioServer.unlock()
+
+func get_output_bus() -> StringName:
+	_ensure_buses()
+	return _buses.output
+
+func reset_environment() -> void:
+	## Explicit lifecycle hook for an in-place map replacement with the same
+	## epoch/sequence. Ordinary block edits only invalidate obstruction answers.
+	_environment.set_query(world.data if is_instance_valid(world) else null)
+	_environment_frame=-1
+	_last_parameters.clear()
+
+func set_output_bus(name: StringName) -> void:
+	_output_send=name if AudioServer.get_bus_index(name)>=0 else &"Master"
+	if not _owned_buses.is_empty():AudioServer.set_bus_send(AudioServer.get_bus_index(_buses.output),_output_send)
+
+func debug_environment() -> Dictionary:
+	var state: Dictionary=_environment.debug_state()
+	state.owned_buses=_owned_buses.duplicate()
+	state.logical_voices=_voices.size()
+	var copies: int=0
+	for voice: Node in _voices:copies+=voice.get_meta("copies",[]).size()
+	state.wet_copies=copies
+	state.efx_enabled=efx_enabled
+	state.source_gain=source_gain
+	state.output_send=_output_send
+	state.backend="Godot stream; Freeverb + separate early/late delays + high shelves + hard limiter"
+	return state
+
+func _bus(key: String, send: StringName) -> void:
+	var name: StringName=StringName("OpenSpades_%d_%s"%[get_instance_id(),key])
+	AudioServer.add_bus()
+	var index: int=AudioServer.get_bus_count()-1
+	AudioServer.set_bus_name(index,name)
+	AudioServer.set_bus_send(index,send)
+	_owned_buses.append(name)
+	_buses[key]=name
+
+func _shelf(gain_hf: float) -> AudioEffectHighShelfFilter:
+	var effect:=AudioEffectHighShelfFilter.new()
+	# Godot's biquad uses A=gain and asymptotic HF=A². The reference is5kHz.
+	effect.gain=sqrt(gain_hf)
+	effect.cutoff_hz=5000.0
+	effect.resonance=.5
+	effect.db=AudioEffectFilter.FILTER_6DB
+	return effect
+
+func _delay() -> AudioEffectDelay:
+	var effect:=AudioEffectDelay.new()
+	effect.dry=0.0
+	effect.tap1_active=true
+	effect.tap1_level_db=0.0
+	effect.tap2_active=false
+	effect.feedback_active=false
+	return effect
+
+func _ensure_buses() -> void:
+	if not _owned_buses.is_empty():return
+	_bus("output",_output_send)
+	_limiter=AudioEffectHardLimiter.new()
+	_limiter.ceiling_db=-.3-maxf(0.0,AudioServer.get_bus_volume_db(0))
+	_limiter.pre_gain_db=0.0
+	_limiter.release=.1
+	AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses.output),_limiter)
+	_bus("early",_buses.output)
+	_early_delay=_delay()
+	AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses.early),_shelf(.5929))
+	AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses.early),_early_delay)
+	_bus("late",_buses.output)
+	_late_delay=_delay()
+	_reverb=AudioEffectReverb.new()
+	_reverb.dry=0.0
+	_reverb.predelay_msec=0.0
+	_reverb.predelay_feedback=0.0
+	_reverb.spread=1.0
+	_reverb.hipass=0.0
+	_reverb.damping=.2
+	AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses.late),_late_delay)
+	AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses.late),_shelf(.5929))
+	AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses.late),_reverb)
+	for path: String in ["dry","early","late"]:
+		for blocked: bool in [false,true]:
+			var key: String=path+("_blocked" if blocked else "_clear")
+			_bus(key,_buses.output if path=="dry" else _buses[path])
+			if blocked:AudioServer.add_bus_effect(AudioServer.get_bus_index(_buses[key]),_shelf(.1))
+	_apply_room_parameters()
+
+func _apply_room_parameters() -> void:
+	var parameters: Dictionary=_environment.parameters
+	if parameters==_last_parameters:return
+	_last_parameters=parameters.duplicate(true)
+	_early_delay.tap1_delay_ms=float(parameters.early_delay)*1000.0
+	_late_delay.tap1_delay_ms=float(parameters.late_onset)*1000.0
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index(_buses.early),linear_to_db(maxf(.000001,float(parameters.gain)*float(parameters.early_gain))))
+	AudioServer.set_bus_mute(AudioServer.get_bus_index(_buses.early),not efx_enabled or float(parameters.gain)==0.0)
+	_reverb.wet=clampf(float(parameters.gain)*float(parameters.late_gain)/.6,0.0,1.0)
+	AudioServer.set_bus_mute(AudioServer.get_bus_index(_buses.late),not efx_enabled or _reverb.wet==0.0)
+	# Match low-frequency T60 through the longest36.667ms Freeverb comb.
+	# Its feedback floor.7 bounds the short-room adaptation (~.71sec).
+	var feedback: float=exp(log(.001)*.0366666667/maxf(.1,float(parameters.decay_time)))
+	_reverb.room_size=clampf((feedback-.7)/.28,0.0,1.0)
+
+func _begin_environment_turn() -> void:
+	var frame: int=Engine.get_process_frames()
+	if frame==_environment_frame:return
+	_environment_frame=frame
+	var query: Variant=world.data if is_instance_valid(world) else null
+	if query!=_environment.query:_environment.set_query(query)
+	_environment.begin_turn(float(Time.get_ticks_usec())/1000000.0)
+	if efx_enabled:_environment.sample_room(camera.global_position)
+	# A changed flag must update bus mute even if the room parameters did not.
+	if not _owned_buses.is_empty():
+		AudioServer.set_bus_mute(AudioServer.get_bus_index(_buses.early),not efx_enabled or float(_environment.parameters.gain)==0.0)
+		AudioServer.set_bus_mute(AudioServer.get_bus_index(_buses.late),not efx_enabled or _reverb.wet==0.0)
+
+func _update_routes(voice: Node) -> void:
+	var eligible: bool=efx_enabled and bool(voice.get_meta("efx_eligible",false))
+	var copies: Array=voice.get_meta("copies",[])
+	var added: bool=false
+	if not eligible and not copies.is_empty():
+		for copy: Node in copies:
+			copy.stop()
+			copy.stream=null
+			copy.queue_free()
+		copies.clear()
+	elif eligible and copies.is_empty():
+		added=true
+		for _branch: int in range(2):
+			var copy: Node=_new_player(voice.stream,voice is AudioStreamPlayer3D,bool(voice.get_meta("local")),voice.get_meta("origin"),float(voice.get_meta("reference")),true)
+			copies.append(copy)
+	voice.set_meta("copies",copies)
+	var blocked: bool=false
+	if eligible and not bool(voice.get_meta("local",false)):
+		blocked=bool(_environment.obstruction(camera.global_position,voice.get_meta("origin")).blocked)
+	var suffix: String="_blocked" if blocked else "_clear"
+	voice.bus=_buses["dry"+suffix]
+	voice.set_meta("blocked",blocked)
+	for index: int in range(copies.size()):copies[index].bus=_buses[("early" if index==0 else "late")+suffix]
+	if added and voice.playing:
+		_update_gain(voice)
+		AudioServer.lock()
+		for copy: Node in copies:copy.play(voice.get_playback_position())
+		AudioServer.unlock()
 
 func _exit_tree() -> void:
 	stop()

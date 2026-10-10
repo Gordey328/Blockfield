@@ -36,6 +36,8 @@ class Application extends Node:
 	var positional_audio: bool = true
 	var chat_beep: bool = true
 	var hit_feedback_gain: float = .2
+	var source_audio_gain: float = 1.0
+	var source_audio_efx: bool = true
 	var saves: int = 0
 	var resets: int = 0
 	var graphics: Dictionary = {"hdr":false,"hdr_min_ev":-1.5,"hdr_max_ev":.5,"hdr_speed":1.0,"manual_focus":false,"dof_strength":1.0,"particles":2,"shake":2,"blood":true,"ragdolls":true,"bloom":false,"camera_blur":false,"color_correction":true,"dof":false,"fxaa":false,"lens":false,"lens_flare":false,"shadows":true,"lighting":true,"gi":false,"ssao":false,"saturation":1.0,"exposure":0.0,"msaa":0,"water":true,"water_reflections":true,"water_refraction":true}
@@ -111,7 +113,8 @@ func _test_queries_and_mapping() -> void:
 	console.execute("/r_water 0")
 	check(not app.graphics.water and not app.graphics.water_reflections and not app.graphics.water_refraction, "water level zero disables all mapped water layers")
 	console.execute("/s_gain .5")
-	check(is_equal_approx(AudioServer.get_bus_volume_linear(0),.5), "native master gain uses linear rather than decibel units")
+	check(is_equal_approx(app.source_audio_gain,.5), "native source gain is applied before each source's effective gain clamp")
+	check(console.execute("/s_eax 0").changed and not app.source_audio_efx,"native EAX switch controls the separate reverb/obstruction setting")
 	check(console.execute("/cg_hideHud true").changed and bool(app.hud.values.hide_hud), "HUD cvar uses public HUD adapter")
 	check(console.execute("/cg_minimapSize 256").changed and app.hud.values.minimap_size == 256, "minimap bounds match persisted UI limits")
 	check(console.execute("/bf_positionalAudio 0").changed and not app.positional_audio, "explicit port audio variable maps application panning")

@@ -3,6 +3,7 @@ extends CanvasLayer
 signal alert_sound_requested
 signal ui_sound_requested(kind: String)
 signal chat_sound_requested
+signal map_sound_requested(path: String)
 
 var main: Node3D
 var session: LocalSession
@@ -30,6 +31,7 @@ var _build_cursor: LabBuildCursor
 var _build_status: Label
 var _weapon_status: Label
 var _name_under_crosshair: Label
+var _hottracked_player: OpenSpadesHottrackedPlayer
 var _state_hint: Label
 var _intel_icon: TextureRect
 var _feed: RichTextLabel
@@ -73,6 +75,9 @@ func setup(app: Node3D, local_session: LocalSession, local_player: BlockfieldPla
 	session=local_session
 	player=local_player
 	world=map_world
+	_hottracked_player=OpenSpadesHottrackedPlayer.new()
+	_hottracked_player.name="HottrackedPlayer"
+	add_child(_hottracked_player)
 	_root=Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -608,20 +613,44 @@ func _update_intel_indicator(live: bool) -> void:
 
 func _update_hottracked_name() -> void:
 	_name_under_crosshair.text=""
-	if _show_names==0 or not player.is_inside_tree():return
+	_hottracked_player.hide_target()
+	if not player.is_inside_tree():return
+	if player.camera_mode not in [BlockfieldPlayer.CameraMode.FIRST_PERSON,BlockfieldPlayer.CameraMode.FOLLOW_FIRST_PERSON]:return
 	var origin:=player.get_aim_origin()
 	var direction:=player.get_aim_direction()
-	var terrain:=world.cast_voxel(origin,direction,500)
-	var length:=origin.distance_to(terrain.position) if terrain.hit else 500.0
-	var query:=PhysicsRayQueryParameters3D.create(origin,origin+direction*length,2)
-	query.collide_with_areas=true
-	var result:=player.get_world_3d().direct_space_state.intersect_ray(query)
-	if result.is_empty() or not result.collider.has_meta("target_id"):return
-	var target:=session.get_target(int(result.collider.get_meta("target_id")))
-	if target.is_empty() or not bool(target.alive):return
+	var viewed_team: int=session.team
+	var exclude_id: int=session.local_player_id()
+	if player.camera_mode==BlockfieldPlayer.CameraMode.FOLLOW_FIRST_PERSON:
+		var observed:=session.get_target(player.followed_target_id)
+		if observed.is_empty() or not bool(observed.alive):return
+		var crouched:=bool(observed.get("crouching",str(observed.state)=="crouching"))
+		origin=Vector3(observed.position)+Vector3.UP*(1.35 if crouched else 2.25)
+		direction=-Basis.from_euler(Vector3(float(observed.get("pitch",0)),float(observed.get("yaw",0)),0)).z
+		viewed_team=int(observed.team)
+		exclude_id=int(observed.id)
+	var terrain:=world.cast_source_ray(origin,direction,256)
+	var target: Dictionary={}
+	var hit_parts: Array[String]=[]
+	var closest:=INF
+	for candidate: Dictionary in session.targets:
+		if int(candidate.id)==exclude_id or not bool(candidate.alive) or int(candidate.team)>=2:continue
+		var hit:=LabHitVolumes.cast_camera_ray(origin,direction,candidate.position,float(candidate.get("yaw",0)),bool(candidate.get("crouching",str(candidate.state)=="crouching")),float(candidate.get("pitch",0)),closest)
+		if hit.hit and float(hit.distance)<closest:
+			closest=hit.distance
+			target=candidate
+			hit_parts.assign(hit.parts)
+	if target.is_empty():return
+	# Strict source comparison retains a player at an exact terrain/player tie.
+	if terrain.hit and origin.distance_to(terrain.position)<closest:return
+	if viewed_team < 2 and int(target.team) != viewed_team:return
+	_hottracked_player.show_pose(target.position,float(target.get("yaw",0)),bool(target.get("crouching",str(target.state)=="crouching")),float(target.get("pitch",0)),hit_parts,LabMap.team_color_for(session,int(target.team)))
+	if _show_names==0:return
 	_name_under_crosshair.text=str(target.get("name","Target %02d"%int(target.id)))
-	if _show_names==1:_name_under_crosshair.text+=" [%d]"%roundi(origin.distance_to(target.position))
-	var eye: Vector3=target.position+Vector3.UP*(1.35 if str(target.state)=="crouching" else 2.25)
+	var eye: Vector3=target.position+Vector3.UP*(1.35 if bool(target.get("crouching",str(target.state)=="crouching")) else 2.25)
+	# Client_Draw deliberately measures from the local eye even while following.
+	if _show_names==1:
+		var distance:=roundi(player.get_aim_origin().distance_to(eye))
+		_name_under_crosshair.text+=" [%d%s]"%[distance,"block" if distance==1 else "blocks"]
 	if not player.camera.is_position_behind(eye):
 		_name_under_crosshair.position=player.camera.unproject_position(eye)-Vector2(200,28)
 
@@ -645,9 +674,12 @@ func _input(event: InputEvent) -> void:
 		else:set_menu_visible(true)
 	elif event.is_action_pressed("scoreboard"):_scoreboard.show()
 	elif event.is_action_pressed("map") and not event.is_echo():toggle_map()
-	elif event.is_action_pressed("map_scale") and not event.is_echo():_map.switch_scale()
+	elif event.is_action_pressed("map_scale") and not event.is_echo():change_map_scale()
 	elif event.is_action_pressed("chat") and not event.is_echo():open_chat(false)
 	elif event.is_action_pressed("chat_team") and not event.is_echo():open_chat(true)
+	elif event is InputEventKey and event.pressed and not event.echo and (event.unicode==47 or event.keycode==KEY_SLASH):
+		open_chat(false)
+		_chat.set_input_text("/")
 	elif event.is_action_pressed("chat_log") and not event.is_echo():_chat.set_expanded(not _chat.expanded);_sync_controls()
 	elif event.is_action_pressed("hide_hud") and not event.is_echo():set_hud_hidden(not _hud_hidden)
 	elif event.is_action_pressed("stats") and not event.is_echo():_show_statistics=not _show_statistics;_save_ui_settings()
@@ -678,7 +710,13 @@ func is_chat_open() -> bool:return _chat!=null and _chat.is_open
 func get_chat_messages() -> Array[Dictionary]:
 	return _chat.messages.duplicate(true) if _chat!=null else []
 func toggle_scoreboard() -> void:_scoreboard.visible=not _scoreboard.visible
-func toggle_map() -> void:_large_map.visible=not _large_map.visible
+func toggle_map() -> void:
+	_large_map.visible=not _large_map.visible
+	map_sound_requested.emit("Misc/OpenMap" if _large_map.visible else "Misc/CloseMap")
+
+func change_map_scale() -> void:
+	_map.switch_scale()
+	map_sound_requested.emit("Misc/SwitchMapZoom")
 
 func set_hud_hidden(hidden: bool) -> void:
 	_hud_hidden=hidden
@@ -1055,6 +1093,15 @@ func _build_graphics_settings(column: VBoxContainer) -> void:
 	_ui_check(column,"Позиционный звук","Positional audio",bool(main.get("positional_audio")),func(value):main.set("positional_audio",value);main.save_settings())
 	var environmental:=_ui_check(column,"Звуки окружения","Environmental audio",true if main.get("environmental_audio")==null else bool(main.get("environmental_audio")),func(value):main.set("environmental_audio",value);main.save_settings())
 	environmental.set_meta("lab_audio_key","environmental_audio")
+	var efx:=_ui_check(column,"Реверберация и преграды","Reverb and occlusion",true if main.get("source_audio_efx")==null else bool(main.get("source_audio_efx")),func(value):main.set("source_audio_efx",value);main.save_settings())
+	efx.set_meta("lab_audio_key","source_audio_efx")
+	column.add_child(_ui_label("Усиление источников","Source gain"))
+	var source_gain:=HSlider.new()
+	source_gain.min_value=0;source_gain.max_value=4;source_gain.step=.05
+	source_gain.value=1.0 if main.get("source_audio_gain")==null else float(main.get("source_audio_gain"))
+	source_gain.set_meta("lab_audio_key","source_audio_gain")
+	source_gain.value_changed.connect(func(value):main.set("source_audio_gain",value);main.save_settings())
+	column.add_child(source_gain)
 
 func _refresh_graphics_controls() -> void:
 	var options: Dictionary=main.get_graphics_options()

@@ -108,11 +108,32 @@ static func cast_prepared(origin: Vector3, direction: Vector3, pose: PreparedPos
 			result={"hit":true,"part":pose._parts[index],"distance":hit_distance,"position":point}
 	return result
 
-static func ray_box(origin: Vector3,direction: Vector3,box: AABB,max_distance: float) -> float:
+static func cast_camera_ray(origin: Vector3, direction: Vector3, feet: Vector3, yaw: float, crouch: bool, pitch: float = 0.0, prior_distance: float = INF) -> Dictionary:
+	# World::WeaponRayCast uses Euclidean distance and no firearm128m limit.
+	# A per-pose enclosing sphere supplies a finite slab endpoint without an
+	# arbitrary sight cutoff, including cameras/actors outside map bounds.
+	var result := {"hit":false,"part":"","parts":[],"distance":INF,"position":origin}
+	if direction.length_squared()<0.000001:return result
+	var ray:=direction.normalized()
+	var pose:=prepare_pose(feet,yaw,crouch,pitch)
+	var bounds:=pose.get_world_bounds()
+	var limit:=origin.distance_to(bounds.get_center())+bounds.size.length()*.5+1.0
+	var closest:=prior_distance
+	var parts: Array[String]=[]
+	for index in pose._boxes.size():
+		var inverse:=pose._inverses[index]
+		var distance:=ray_box(inverse*origin,inverse.basis*ray,pose._boxes[index],limit,0.0)
+		if distance>=0.0 and distance<closest:
+			closest=distance
+			if pose._parts[index] not in parts:parts.append(pose._parts[index])
+			result={"hit":true,"part":pose._parts[index],"parts":parts.duplicate(),"distance":distance,"position":origin+ray*distance}
+	return result
+
+static func ray_box(origin: Vector3,direction: Vector3,box: AABB,max_distance: float,parallel_epsilon: float=SOURCE_PARALLEL_EPSILON) -> float:
 	var near := 0.0
 	var far := max_distance
 	for axis in range(3):
-		if absf(direction[axis])<0.000001:
+		if (direction[axis]==0.0 if parallel_epsilon==0.0 else absf(direction[axis])<parallel_epsilon):
 			if origin[axis]<box.position[axis] or origin[axis]>box.end[axis]:return -1.0
 		else:
 			var first := (box.position[axis]-origin[axis])/direction[axis]

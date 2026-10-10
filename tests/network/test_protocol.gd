@@ -55,8 +55,33 @@ func _run() -> void:
 	_test_maps()
 	_test_snapshots()
 	_test_hostile_mutations()
+	_test_preparing()
 	print("PROTOCOL: %d assertions, %d failures" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
+
+func _test_preparing() -> void:
+	var payload := {"actor_id":43,"spawn_generation":1,"profile":1}
+	var packet := PROTOCOL.make_packet(PROTOCOL.Kind.MATCH_PREPARING,payload,0x01020304,70,1)
+	var encoded := PROTOCOL.encode(packet)
+	var golden := PackedByteArray([0x42,0x46,0x4e,0x57,0,1,17,0,0,0,0,9,1,2,3,4,0,0,0,70,0,0,0,1,0,0,0,43,0,0,0,1,1])
+	check(encoded.ok and encoded.bytes == golden,"MATCH_PREPARING independent33-byte BE golden contains no capabilities")
+	var decoded := PROTOCOL.decode(golden)
+	check(decoded.ok and decoded.packet.payload == payload,"preparing roundtrip preserves exact metadata")
+	for size in range(golden.size()): _reject_frame(golden.slice(0,size),"truncated preparing at%d" % size)
+	for change in [{"actor_id":0},{"spawn_generation":0},{"spawn_generation":2},{"profile":2},{"profile":1.0},{"bulk_token":_bytes(32)}]:
+		var changed: Dictionary = payload.duplicate(true)
+		changed.merge(change,true)
+		var rejected := PROTOCOL.encode(PROTOCOL.make_packet(PROTOCOL.Kind.MATCH_PREPARING,changed,1,0,1))
+		check(not rejected.ok and rejected.bytes.is_empty(),"invalid preparing fields/types with a valid envelope")
+	for offset in [12,20,28]:
+		var changed := golden.duplicate(); _put_u32(changed,offset,0)
+		_reject_frame(changed,"zero preparing epoch/generation")
+	var wrong_sequence := golden.duplicate(); _put_u32(wrong_sequence,20,2)
+	_reject_frame(wrong_sequence,"preparing envelope generation mismatch")
+	var bad_profile := golden.duplicate(); bad_profile[32] = 2
+	_reject_frame(bad_profile,"unknown preparing profile")
+	packet.epoch = 0; check(not PROTOCOL.encode(packet).ok,"preparing epoch is positive")
+	packet.epoch = 1; packet.sequence = 2; check(not PROTOCOL.encode(packet).ok,"preparing sequence matches generation1")
 
 func _encode(kind: int, payload: Dictionary) -> PROTOCOL.Result:
 	return PROTOCOL.encode(PROTOCOL.make_packet(kind,payload,0x01020304,0xa0b0c0d0,0xffffffff))

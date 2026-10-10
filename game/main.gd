@@ -32,6 +32,15 @@ var environmental_audio := true
 var chat_beep:=true
 var hit_feedback_gain:=.2
 var audio: OpenSpadesAudio
+var source_audio_gain: float = 1.0:
+	set(value):
+		if not is_finite(value): return
+		source_audio_gain = clampf(value, 0.0, 4.0)
+		if is_instance_valid(audio): audio.set("source_gain", source_audio_gain)
+var source_audio_efx: bool = true:
+	set(value):
+		source_audio_efx=value
+		if is_instance_valid(audio): audio.set("efx_enabled",value)
 var flashlight_on := false
 var _flashlight: SpotLight3D
 var _flashlight_fill: OmniLight3D
@@ -89,6 +98,8 @@ func _ready() -> void:
 	audio=OpenSpadesAudio.new()
 	add_child(audio)
 	audio.setup(world,player.camera)
+	audio.set("source_gain",source_audio_gain)
+	audio.set("efx_enabled",source_audio_efx)
 	# Keep spatial listening on the reference camera when HDR renders through
 	# a shared-world clone in a different viewport.
 	var listener:=AudioListener3D.new()
@@ -120,14 +131,15 @@ func _ready() -> void:
 	OpenSpadesLocalization.set_locale(locale)
 	console_service.setup(self)
 	hud.setup(self,session,player,world)
-	hud.alert_sound_requested.connect(func():player._play_sound("Feedback/Alert",1.0,OpenSpadesAudio.LOCAL_ORIGIN))
+	hud.alert_sound_requested.connect(func():player._play_sound("Feedback/Alert"))
 	hud.chat_sound_requested.connect(func():
-		if chat_beep:player._play_sound("Feedback/Chat",1.0,OpenSpadesAudio.LOCAL_ORIGIN))
+		if chat_beep:player._play_sound("Feedback/Chat"))
+	hud.map_sound_requested.connect(func(path: String):player._play_sound(path))
 	if OS.has_feature("web"):
 		_ensure_web_exports()
 		_pointer_callback=JavaScriptBridge.create_callback(_pointer_capture_result)
 		JavaScriptBridge.get_interface("BlockfieldExports").setPointerCallback(_pointer_callback)
-	hud.ui_sound_requested.connect(func(kind: String):player._play_sound("Feedback/Limbo/"+kind.capitalize(),1.0,OpenSpadesAudio.LOCAL_ORIGIN))
+	hud.ui_sound_requested.connect(func(kind: String):player._play_sound("Feedback/Limbo/"+kind.capitalize()))
 	session.player_respawned.connect(func():
 		if not network_mode: player.respawn_at(world.get_spawn_position())
 		else: clear_corpses())
@@ -290,11 +302,13 @@ func _update_objective_views() -> void:
 		node.visible=session.mode=="ctf" if kind!="tc" else session.mode=="tc"
 		var index: int=node.get_meta("index",0)
 		if kind in ["ctf_base","intel"]:OpenSpadesModels.set_tint(node,session.get_team_info(index).color)
+		if kind=="ctf_base" and index<session.ctf_bases.size():node.position=session.ctf_bases[index]
 		if kind=="intel" and index<session.ctf_flags.size():
 			var flag: Dictionary=session.ctf_flags[index]
 			node.position=flag.position
 			node.visible=node.visible and int(flag.carrier)<0
 		elif kind=="tc" and index<session.territories.size():
+			node.position=session.territories[index].position
 			var owner: int=session.territories[index].owner
 			OpenSpadesModels.set_tint(node,session.get_team_info(owner).color if owner<2 else Color.WHITE)
 
@@ -325,7 +339,7 @@ func reset_match() -> void:
 	if _map_baseline.is_empty():
 		reset_lab()
 		return
-	_finish_map_load(world.load_vxl_bytes(_map_baseline,_map_baseline_name))
+	_finish_map_load(world.load_vxl_bytes(_map_baseline,_map_baseline_name,true))
 	hud.show_notice("Map and match reset")
 
 func spawn_tracer(start: Vector3, end: Vector3) -> void:
@@ -404,7 +418,7 @@ func load_original_map() -> void:
 	if network_mode: return
 	hud.show_notice("Loading original OpenSpades map…")
 	await get_tree().process_frame
-	var error:=world.load_vxl("res://assets/openspades/maps/Title.vxl")
+	var error:=world.load_vxl("res://assets/openspades/maps/Title.vxl",true)
 	if error==OK:
 		_map_baseline=FileAccess.get_file_as_bytes("res://assets/openspades/maps/Title.vxl")
 		_map_baseline_name="Title.vxl"
@@ -485,7 +499,7 @@ func _apply_upload(bytes: PackedByteArray,filename: String) -> void:
 	_upload_pending=false
 	if network_mode and _upload_kind == "map": return
 	if _upload_kind=="map":
-		var error:=world.load_vxl_bytes(bytes,filename)
+		var error:=world.load_vxl_bytes(bytes,filename,true)
 		if error==OK:
 			_map_baseline=bytes.duplicate()
 			_map_baseline_name=filename
@@ -632,6 +646,8 @@ func save_settings() -> void:
 	config.set_value("view","fov",player.base_fov)
 	config.set_value("view","skin",skin_id)
 	config.set_value("audio","volume",AudioServer.get_bus_volume_db(0))
+	config.set_value("audio","source_gain",source_audio_gain)
+	config.set_value("audio","efx",source_audio_efx)
 	config.set_value("audio","positional",positional_audio)
 	config.set_value("audio","environmental",environmental_audio)
 	config.set_value("audio","chat_beep",chat_beep)
@@ -656,6 +672,8 @@ func _load_settings() -> void:
 	player.base_fov=float(config.get_value("view","fov",68.0))
 	skin_id=str(config.get_value("view","skin","original"))
 	AudioServer.set_bus_volume_db(0,float(config.get_value("audio","volume",0.0)))
+	source_audio_gain=clampf(float(config.get_value("audio","source_gain",1.0)),0,4)
+	source_audio_efx=bool(config.get_value("audio","efx",true))
 	positional_audio=bool(config.get_value("audio","positional",true))
 	environmental_audio=bool(config.get_value("audio","environmental",true))
 	chat_beep=bool(config.get_value("audio","chat_beep",true))
@@ -940,7 +958,7 @@ func _clear_network_views() -> void:
 
 func _network_install_map(data: VoxelData) -> bool:
 	_clear_network_views()
-	return world.set_map_data(data,"Network map") == OK
+	return world.set_map_data(data,"Network map",true) == OK
 
 func _network_apply_map(transaction: Dictionary) -> bool:
 	for change: Dictionary in transaction.changes:

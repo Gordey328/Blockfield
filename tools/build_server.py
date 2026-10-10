@@ -18,8 +18,15 @@ def main():
         path = folder/name
         if not path.is_file():
             raise SystemExit('Dedicated export missing '+name)
+    # Execute the exported resource pack with the host's matching engine.
+    # This proves packaged scripts/map availability, not Linux execution.
+    build.run('server-exported-pack-smoke', ['--main-pack',str(folder/'blockfield.pck'),
+              '--quit-after','60','--','--server','--game-port=0','--map-port=0',
+              '--map=res://assets/openspades/maps/Title.vxl'], timeout=180)
     shutil.copy2(build.ROOT/'LICENSE', folder/'LICENSE.txt')
     shutil.copytree(build.ROOT/'licenses', folder/'notices', dirs_exist_ok=True)
+    shutil.copytree(build.ROOT/'game'/'assets'/'openspades'/'licenses',
+                    folder/'notices'/'openspades', dirs_exist_ok=True)
     metadata = {'engine': VERSION, 'status': 'development', **build.source_state(),
                 'files': {name: hashlib.sha256((folder/name).read_bytes()).hexdigest()
                           for name in ('blockfield.x86_64', 'blockfield.pck')}}

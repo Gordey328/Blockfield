@@ -160,7 +160,7 @@ func _text_placeholder(field: LineEdit, ru: String, en: String) -> void:
 	field.placeholder_text = _ui(ru, en)
 
 func _join_active() -> bool:
-	return str(_client_stats().get("status", "idle")) in ["live", "connecting", "joining", "loading", "synchronizing"]
+	return str(_client_stats().get("status", "idle")) in ["live", "connecting", "joining", "preparing", "loading", "synchronizing"]
 
 func _refresh_favorites() -> void:
 	_favorite_rows = _book.list(_favorite_filter.text)
@@ -280,7 +280,7 @@ func refresh() -> void:
 	var stats:=_client_stats()
 	var state:=str(stats.get("status","idle"))
 	var live:=state=="live"
-	var busy:=state in ["connecting","joining","loading","synchronizing"]
+	var busy:=state in ["connecting","joining","preparing","loading","synchronizing"]
 	var active:=live or busy
 	var valid_fields:=not _game_url.text.strip_edges().is_empty() and not _map_url.text.strip_edges().is_empty() and not _name_field.text.strip_edges().is_empty()
 	controls.connect.disabled=active or not valid_fields
@@ -308,7 +308,7 @@ func refresh() -> void:
 				_favorite_details.text = "%s\n%s\n%s" % [favorite.game_url, favorite.map_url, _ui("Наблюдатель", "Spectator") if favorite.spectator else _ui("Игрок", "Player")]
 	for index in range(3):_team.set_item_text(index,LabMap.team_name_for(_session,index))
 	_team.select(clampi(_session.team,0,2))
-	var texts: Dictionary={"idle":["Не подключено","Not connected"],"closed":["Отключено","Disconnected"],"failed":["Соединение прервано","Connection interrupted"],"connecting":["Подключение…","Connecting…"],"joining":["Вход в игру…","Joining…"],"loading":["Загрузка карты…","Loading map…"],"synchronizing":["Синхронизация…","Synchronizing…"],"live":["Подключено","Connected"]}
+	var texts: Dictionary={"idle":["Не подключено","Not connected"],"closed":["Отключено","Disconnected"],"failed":["Соединение прервано","Connection interrupted"],"connecting":["Подключение…","Connecting…"],"joining":["Вход в игру…","Joining…"],"preparing":["Подготовка матча…","Preparing match…"],"loading":["Загрузка карты…","Loading map…"],"synchronizing":["Синхронизация…","Synchronizing…"],"live":["Подключено","Connected"]}
 	var caption: Array=texts.get(state,texts.idle)
 	var map_stats: Dictionary=stats.get("map",{}) if stats.get("map",{}) is Dictionary else {}
 	if state=="loading" and str(map_stats.get("work_phase","waiting")) in ["decode","hash","apply","apply_validate","apply_changes"]:caption=["Подготовка карты…","Preparing map…"]

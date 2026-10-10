@@ -61,6 +61,8 @@ func _welcome(epoch: int=17,id: int=43,generation: int=1,profile: int=0) -> P.Pa
 	var resume:=PackedByteArray();resume.resize(32);resume.fill(epoch)
 	var bulk:=PackedByteArray();bulk.resize(32);bulk.fill(epoch+1)
 	return P.make_packet(P.Kind.WELCOME,{"actor_id":id,"spawn_generation":generation,"server_hz":60,"snapshot_hz":20,"profile":profile,"resume_token":resume,"bulk_token":bulk,"build_hash":COMPAT.build_hash(),"rules_hash":COMPAT.rules_hash()},epoch)
+func _preparing(epoch: int=18,id: int=43,profile: int=1) -> P.Packet:
+	return P.make_packet(P.Kind.MATCH_PREPARING,{"actor_id":id,"spawn_generation":1,"profile":profile},epoch,0,1)
 func _wire(packet: P.Packet) -> P.Packet:
 	var encoded:=P.encode(packet);check(encoded.ok,"fixture produces an explicit valid protocol frame")
 	if not encoded.ok:return null
@@ -179,6 +181,9 @@ func _test_replica_reset() -> void:
 		var replica:=_replica();replica.status=status
 		var game: FakeTransport=replica.game;var bulk: FakeTransport=replica.bulk
 		var old_prediction:=replica.prediction;var old_resume:=replica.resume_token()
+		replica._game_packet(_wire(_preparing()))
+		check(replica.status=="preparing" and replica._welcome==null and replica.resume_token()==old_resume,"announcement pauses inputs without exposing replacement capabilities")
+		check(not replica.submit_input(0,Vector2.ZERO,0,0).ok and not replica.send_chat("wait") and not replica.request_team(0),"all owner intentions pause until new map/state barriers")
 		var packet:=_wire(_welcome(18,43,1,1))
 		replica._game_packet(packet)
 		check(replica.status=="joining" and replica.epoch==18 and replica.actor_id==43,"replacement accepted from %s without changing canonical owner"%status)
@@ -190,7 +195,7 @@ func _test_replica_reset() -> void:
 		check(replica._chat_intent==0 and replica._chat_sequence==0 and replica._request_sequence==0 and replica._event_cursor==0 and replica._last_snapshot_tick==-1 and replica._snapshot_time_ms==0,"epoch-local chat/request/event/input snapshot cursors reset")
 		check(replica.transfer.get_stats().status=="idle" and replica.transfer.get_stats().expected_epoch==18 and replica.transfer.get_stats().baseline_bytes==0 and replica.transfer.get_stats().staged_map_bytes==0,"partial old baseline storage is released and transfer expects new epoch")
 		check(not replica.assembler.get_stats().armed and replica.prediction.get_status().pending==0,"old map assembler and prediction command queue are cancelled")
-		check(replica.drain_events()==[{"type":"epoch_reset","epoch":18}],"reset event replaces every old pending presentation event")
+		check(replica.drain_events()==[{"type":"epoch_reset","epoch":18},{"type":"match_preparing","epoch":18,"actor_id":43,"profile":1}],"announcement replaces every old presentation event before WELCOME")
 		check(replica.resume_token()!=old_resume and replica.resume_token()==packet.payload.resume_token,"new reconnect credential replaces old capability")
 		packet.payload.bulk_token[0]^=1
 		check(replica._welcome.payload.bulk_token!=packet.payload.bulk_token,"accepted welcome owns an independent credential copy")
@@ -246,6 +251,7 @@ func _test_reused_replica() -> void:
 	var sender: TRANSFER.BaselineSender=TRANSFER.make_sender(fresh,8).sender
 	# WELCOME and MAP_BEGIN can be in one game drain. Old forced bulk close must
 	# be consumed intentionally before that same poll reaches new loading state.
+	game.pending.append({"type":"packet","packet":_wire(_preparing())})
 	game.pending.append({"type":"packet","packet":_wire(_welcome(18,43,1,1))})
 	game.pending.append({"type":"packet","packet":_wire(sender.begin_packet())})
 	replica.poll()

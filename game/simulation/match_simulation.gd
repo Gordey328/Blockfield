@@ -467,7 +467,7 @@ func _plan_rewound_shot(owner: SharedPlayerState, source: Dictionary, admitted_t
 			"volumes":HITS.prepare_pose(pose.feet,pose.yaw,pose.crouch,pose.pitch)})
 	var pellets: Array[Dictionary] = []
 	for direction: Vector3 in shot.directions:
-		var map_hit: Dictionary = query.cast_voxel(shot.origin,direction,500)
+		var map_hit: Dictionary = query.cast_source_ray(shot.origin,direction,500)
 		if not bool(map_hit.get("valid",false)): return _failed_rewind_query(query,"invalid_or_stale_history",shot)
 		var hit := _raycast_rewound_actors(shot.origin,direction,targets)
 		var chosen := source_weapon_hit(shot.origin,map_hit,hit)
@@ -522,7 +522,7 @@ func _commit_rewound_shot(owner: SharedPlayerState, plan: Dictionary) -> Array[D
 					if not damage_events.is_empty():
 						_rewind_count("applied_player_hits")
 						events.append(RULES.event(owner,tick,"hit_confirmed",{"victim_id":victim.player_id,"part":pellet.part,"damage":damage_events[0].amount,"position":pellet.position,"friendly":owner.team==victim.team,"source_event_id":shot.event_id,"pellet":index}))
-			elif pellet.chosen == "map":
+			elif pellet.chosen == "map" and data.is_in_bounds(pellet.cell):
 				if data.get_block(pellet.cell) != pellet.color:
 					_rewind_count("blocked_color_hits")
 				else:
@@ -536,7 +536,7 @@ func _resolve_shot(owner: SharedPlayerState, shot: Dictionary) -> Array[Dictiona
 	var destroyed := false
 	var pellet := 0
 	for direction: Vector3 in shot.directions:
-		var map_hit: Dictionary = data.cast_voxel(shot.origin,direction,500)
+		var map_hit: Dictionary = data.cast_source_ray(shot.origin,direction,500)
 		var hit := raycast_actors(owner.player_id,shot.origin,direction)
 		var chosen := source_weapon_hit(shot.origin,map_hit,hit)
 		var endpoint: Vector3 = shot.origin+direction*128
@@ -549,8 +549,9 @@ func _resolve_shot(owner: SharedPlayerState, shot: Dictionary) -> Array[Dictiona
 			if not damage_events.is_empty(): events.append(RULES.event(owner,tick,"hit_confirmed",{"victim_id":victim.player_id,"part":hit.part,"damage":damage_events[0].amount,"position":hit.position,"friendly":owner.team==victim.team,"source_event_id":shot.event_id,"pellet":pellet}))
 		elif chosen == "map":
 			endpoint=map_hit.position
-			if _damage_block(owner,map_hit.cell,PROFILES.get_info(profile,int(shot.weapon)).block,not destroyed): destroyed = true
-			events.append(RULES.event(owner,tick,"block_hit",{"cell":map_hit.cell,"position":map_hit.position,"normal":map_hit.normal,"source_event_id":shot.event_id,"pellet":pellet}))
+			if data.is_in_bounds(map_hit.cell):
+				if _damage_block(owner,map_hit.cell,PROFILES.get_info(profile,int(shot.weapon)).block,not destroyed): destroyed = true
+				events.append(RULES.event(owner,tick,"block_hit",{"cell":map_hit.cell,"position":map_hit.position,"normal":map_hit.normal,"source_event_id":shot.event_id,"pellet":pellet}))
 		events.append(RULES.event(owner,tick,"tracer",{"origin":shot.origin,"position":endpoint,"weapon":shot.weapon,"source_event_id":shot.event_id,"pellet":pellet}))
 		pellet += 1
 	return events
@@ -581,8 +582,8 @@ func _resolve_spade(owner: SharedPlayerState, dig: bool, source_event_id: String
 			events.append_array(damage_events)
 			if not damage_events.is_empty(): events.append(RULES.event(owner,tick,"hit_confirmed",{"victim_id":victim.player_id,"part":"melee","damage":damage_events[0].amount,"position":victim.motion.physics_eye(),"friendly":owner.team==victim.team,"source_event_id":source_event_id}))
 			return events # Source player priority, even behind nearby terrain.
-	var hit: Dictionary = data.cast_voxel(origin,front,256)
-	if not hit.hit or not in_reach(owner,hit.cell+hit.normal) or hit.cell.y <= 1:
+	var hit: Dictionary = data.cast_source_ray(origin,front,256)
+	if not hit.hit or not data.is_in_bounds(hit.cell) or not in_reach(owner,hit.cell+hit.normal) or hit.cell.y <= 1:
 		events.append(RULES.event(owner,tick,"spade_miss",{"source_event_id":source_event_id}))
 		return events
 	if dig:
@@ -651,7 +652,7 @@ func cube_line(start: Vector3i,end: Vector3i,limit: int = 256) -> Array[Vector3i
 	return cells
 
 func _build_endpoint(actor: SharedPlayerState) -> Vector3i:
-	var hit: Dictionary = data.cast_voxel(actor.motion.physics_eye(),actor.front(),12)
+	var hit: Dictionary = data.cast_source_ray(actor.motion.physics_eye(),actor.front(),12)
 	if not hit.hit: return NO_CELL
 	var cell: Vector3i = hit.cell+hit.normal
 	if not data.is_in_bounds(cell) or cell.y <= 1 or not in_reach(actor,cell): return NO_CELL

@@ -63,6 +63,16 @@ class HistoricalVoxelQuery extends "res://world/voxel_data.gd":
 			return {"hit":false,"valid":false,"error":last_error,"cell":Vector3i.ZERO,"normal":Vector3i.ZERO,"position":origin}
 		var result: Dictionary = super.cast_voxel(origin,direction,max_dist)
 		result["valid"]=true; result["error"]=""; return result
+	func cast_source_ray(origin: Vector3, direction: Vector3, max_steps: int = 500) -> Dictionary:
+		if not is_valid():
+			last_error="stale historical query"
+			return _source_ray_error(origin,last_error)
+		return super.cast_source_ray(origin,direction,max_steps)
+	func cast_source_ray_legacy(origin: Vector3, direction: Vector3, length: float = 256.0) -> Dictionary:
+		if not is_valid():
+			last_error="stale historical query"
+			return _source_ray_error(origin,last_error)
+		return super.cast_source_ray_legacy(origin,direction,length)
 	func cancel() -> void:
 		if _lease!=null: _lease.active=false
 		_live=null; _identity={}; _context=null; _lease=null

@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import json
+import re
 import subprocess
 from github_api import api
 
@@ -16,6 +17,11 @@ def main():
     parser.add_argument('--repo',default='Gordey328/Blockfield')
     args=parser.parse_args()
     folder=ROOT/'build'/'web'
+    metadata=json.loads((folder/'build-info.json').read_text(encoding='utf-8'))
+    revision=metadata.get('source_commit','')
+    if metadata.get('source_dirty') is not False or not re.fullmatch(r'[0-9a-f]{40}',revision):
+        raise RuntimeError('Pages publication requires a frozen clean source revision')
+    git('cat-file','-e',revision+'^{commit}')
     for name in ('index.html','index.js','index.wasm','index.pck','.nojekyll','LICENSE.txt'):
         if not (folder/name).is_file():raise RuntimeError('Missing checked export: '+name)
     remote='https://github.com/'+args.repo+'.git'
@@ -34,6 +40,6 @@ def main():
     git('push','origin','HEAD:gh-pages',cwd=folder)
     api('/repos/'+args.repo+'/pages','PUT',{'build_type':'legacy','source':{'branch':'gh-pages','path':'/'}})
     queued=api('/repos/'+args.repo+'/pages/builds','POST')
-    print(json.dumps({'status':queued.get('status'),'url':'https://'+args.repo.split('/')[0].lower()+'.github.io/'+args.repo.split('/')[1]+'/'}))
+    print(json.dumps({'status':queued.get('status'),'source_commit':revision,'bundle_commit':git('rev-parse','HEAD',cwd=folder),'url':'https://'+args.repo.split('/')[0].lower()+'.github.io/'+args.repo.split('/')[1]+'/'}))
 
 if __name__=='__main__':main()

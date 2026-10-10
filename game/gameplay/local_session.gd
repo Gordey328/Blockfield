@@ -253,7 +253,9 @@ func set_trigger_held(held: bool) -> void:
 
 func reload_weapon() -> void:
 	var info := get_weapon_info()
-	if health <= 0 or team >= 2 or is_reloading or magazine >= int(info["clip_size"]):
+	# Client_Input.cpp:452–460 accepts reload only with the firearm selected.
+	# Direct lab/API callers must obey the same rule as keyboard input.
+	if current_tool != Tool.WEAPON or health <= 0 or team >= 2 or is_reloading or magazine >= int(info["clip_size"]):
 		return
 	if reserve <= 0 and not unlimited_ammo:
 		return

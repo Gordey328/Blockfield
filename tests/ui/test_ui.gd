@@ -39,7 +39,7 @@ func _run() -> void:
 	world=app.get_node("VoxelWorld")
 	await frames(4)
 	check(hud.is_menu_open() and not player.controls_enabled,"startup menu owns input")
-	for scenario in ["test_bindings","test_input_chat","test_resources_and_events","test_map_objectives","test_team_metadata_and_target_spawn","test_native_palette","test_native_reticle_alerts","test_target_animation_controls","test_console_chat","test_settings"]:
+	for scenario in ["test_bindings","test_input_chat","test_resources_and_events","test_hottracked_follow","test_map_objectives","test_team_metadata_and_target_spawn","test_native_palette","test_native_reticle_alerts","test_target_animation_controls","test_console_chat","test_settings"]:
 		var completed: Variant=await call(scenario)
 		check(completed==true,"scenario reaches completion: "+scenario)
 	LabInputBindings.release_actions()
@@ -210,6 +210,8 @@ func test_resources_and_events() -> bool:
 	check(not bool(hud._scoreboard.get_rows()[0].alive),"scoreboard represents local death")
 	session.respawn()
 	var target: Dictionary=session.targets.back()
+	var viewed_team: int=session.team
+	session.team=int(target.team)
 	session.set_target_state(int(target.id),"standing",0,2)
 	player.respawn_at(target.position+Vector3(0,0,5))
 	player.look_at(Vector3(target.position.x,player.global_position.y,target.position.z),Vector3.UP)
@@ -217,12 +219,67 @@ func test_resources_and_events() -> bool:
 	await frames(3)
 	hud._update_hottracked_name()
 	check(hud._name_under_crosshair.text==str(target.name),"actual target ray produces hottracked player name")
+	session.team=1-int(target.team)
+	hud._update_hottracked_name()
+	check(hud._name_under_crosshair.text.is_empty(),"source hottracking does not reveal enemy names to an active team")
+	session.team=viewed_team
 	session.set_mode("ctf")
 	session.update_player_position(session.ctf_bases[1])
 	session._update_ctf()
 	hud._process(0)
 	check(hud._intel_icon.visible,"carried intel displays source icon")
 	session.set_mode("sandbox")
+	return true
+
+func test_hottracked_follow() -> bool:
+	app.reset_lab()
+	var names: int=hud._show_names
+	hud._show_names=2
+	for target: Dictionary in session.targets:target.alive=false
+	var observed: Dictionary=session.targets[0]
+	var ally: Dictionary=session.targets[1]
+	observed.merge({"alive":true,"team":0,"position":Vector3(32,8,32),"yaw":0.0,"pitch":0.0,"state":"standing"},true)
+	ally.merge({"alive":true,"team":0,"position":Vector3(32,8,24),"yaw":0.0,"pitch":0.0,"state":"standing"},true)
+	player.respawn_at(Vector3(60,8,60))
+	player.rotation.y=PI*.5
+	player.head.rotation.x=0
+	session.select_team(2)
+	player.follow_first_person=true
+	check(player.follow_target(int(observed.id)),"follow-name fixture selects the actual observed soldier")
+	player._sync_camera_mode()
+	player._update_camera_transform()
+	hud._update_hottracked_name()
+	check(hud._name_under_crosshair.text==str(ally.name),"follow name uses observed eye/front and excludes its own body despite unrelated local aim")
+	check(hud._hottracked_player.visible and hud._hottracked_player.get_line_vertices().size()==120,"actual followed ally owns the five source OBB wireframes")
+	hud._show_names=0
+	hud._update_hottracked_name()
+	check(hud._name_under_crosshair.text.is_empty() and hud._hottracked_player.visible,"source outline remains visible independently of the disabled name setting")
+	hud._show_names=2
+	ally.team=1
+	hud._update_hottracked_name()
+	check(hud._name_under_crosshair.text.is_empty(),"spectator follow inherits the observed team enemy-name gate")
+	check(not hud._hottracked_player.visible,"enemy gate also hides the source wireframes")
+	ally.team=0
+	world.set_block(Vector3i(32,10,28),VoxelWorld.pack_color(Color.WHITE))
+	hud._update_hottracked_name()
+	check(hud._name_under_crosshair.text.is_empty(),"source terrain occludes the followed camera's ally OBB")
+	check(not hud._hottracked_player.visible,"source terrain target rejection clears the previous outline")
+	world.set_block(Vector3i(32,10,28),0)
+	observed.state="crouching"
+	observed.crouching=true
+	observed.pitch=atan2(.9,8.0)
+	hud._show_names=1
+	hud._update_hottracked_name()
+	var distance:=roundi(player.get_aim_origin().distance_to(Vector3(ally.position)+Vector3.UP*2.25))
+	check(hud._name_under_crosshair.text==str(ally.name)+" [%dblocks]"%distance,"crouched follow uses its actual eye while displayed distance remains local-eye to target-eye")
+	player.camera_mode=BlockfieldPlayer.CameraMode.FOLLOW_THIRD_PERSON
+	hud._update_hottracked_name()
+	check(hud._name_under_crosshair.text.is_empty(),"follow third-person cannot display a first-person hottracked name")
+	check(not hud._hottracked_player.visible,"third-person camera hides the previous outline")
+	hud._show_names=names
+	player.followed_target_id=-1
+	session.select_team(0)
+	app.reset_lab()
 	return true
 
 func test_map_objectives() -> bool:
@@ -258,9 +315,17 @@ func test_map_objectives() -> bool:
 	hud._process(0)
 	check(root.get_visible_rect().encloses(hud._large_map.get_global_rect()),"large map is centered inside viewport")
 	hud.toggle_map()
-	world.set_block(Vector3i(1,8,1),VoxelWorld.pack_color(Color("c1283a")))
+	var surface: Vector2i=world.data.column_top(1+world.dimensions.x,world.dimensions.y-1)
+	world.set_block(Vector3i(1,surface.y,1),VoxelWorld.pack_color(Color("c1283a")))
 	hud._map._process(.3)
-	check(world.get_topdown_image().get_pixel(1,1).is_equal_approx(Color("c1283a")) and not hud._map._dirty,"terrain edit updates shared full-resolution map texture")
+	for poll in 120:
+		if not world.is_topdown_pending(): break
+		await frames(1)
+	hud._map._process(.3)
+	# Dummy rendering cannot read back ImageTexture pixels. Verify the exact
+	# progressively prepared source and the actual HUD's final upload state;
+	# exported browser acceptance checks the rendered minimap separately.
+	check(world.get_topdown_image_progressive().get_pixel(1,1).is_equal_approx(Color("c1283a")) and not hud._map._dirty,"terrain edit finishes shared map preparation and the HUD's final upload")
 	player.respawn_at(Vector3(48.5,4.01,70.5))
 	session.configure_tc([player.global_position+Vector3(5,0,0)])
 	session.set_mode("tc")
@@ -325,6 +390,20 @@ func test_settings() -> bool:
 		environmental[0].toggled.emit(not original)
 		check(bool(app.environmental_audio)!=original,"environmental checkbox updates actual mixer property")
 		environmental[0].toggled.emit(original)
+	var efx:=controls_with_metadata(hud,"lab_audio_key","source_audio_efx")
+	var source_gain_control:=find_control_metadata(hud,"lab_audio_key","source_audio_gain") as HSlider
+	check(efx.size()==1 and source_gain_control!=null,"audio settings expose separate source gain and EAX environment controls")
+	if not efx.is_empty() and source_gain_control!=null:
+		var old_efx: bool=app.source_audio_efx
+		var old_gain: float=app.source_audio_gain
+		efx[0].toggled.emit(not old_efx)
+		source_gain_control.value_changed.emit(.65)
+		check(app.audio.efx_enabled!=old_efx and is_equal_approx(app.audio.source_gain,.65),"actual settings update the full audio service, separately from Master volume")
+		var audio_config:=ConfigFile.new()
+		audio_config.load("user://settings.cfg")
+		check(audio_config.get_value("audio","efx")== (not old_efx) and is_equal_approx(float(audio_config.get_value("audio","source_gain")),.65),"source audio controls persist distinct native parameters")
+		efx[0].toggled.emit(old_efx)
+		source_gain_control.value_changed.emit(old_gain)
 	hud._refresh_graphics_controls()
 	check(controls_with_metadata(hud,"lab_export","event_log").size()==1,"Settings exposes session log download through main hook")
 	check(controls_with_metadata(hud,"lab_window","fullscreen").size()==2 and app.has_method("toggle_fullscreen"),"Settings and main-menu buttons expose the actual web/desktop fullscreen owner")
@@ -477,6 +556,14 @@ func test_native_palette() -> bool:
 	check(hud._native_palette.get_selected_index()==-1,"eyedropped arbitrary RGB remains valid with no false palette highlight")
 	hud._process(0)
 	check(hud._native_palette.visible and hud._palette.color.is_equal_approx(player.block_color),"in-game palette and custom picker agree with authoritative held RGB")
+	world.set_block(Vector3i(48,5,68),0)
+	world.set_block(Vector3i(48,5,55),VoxelWorld.pack_color(colors[21]))
+	player.head.look_at(Vector3(48.5,5.5,55.5),Vector3.UP)
+	key(KEY_E);key(KEY_E,false)
+	check(hud._native_palette.get_selected_index()==21,"source256-step eyedropper captures a block beyond the twelve-step build cursor")
+	player.head.rotation.x=PI*.5
+	key(KEY_E);key(KEY_E,false)
+	check(player.block_color.is_equal_approx(app.world_environment.environment.fog_light_color),"source eyedropper uses the actual fog color when its ray misses terrain")
 	session.select_tool(LocalSession.Tool.WEAPON)
 	hud._process(0)
 	check(not hud._native_palette.visible,"source palette appears only for live block tool")

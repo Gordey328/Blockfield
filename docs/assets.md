@@ -456,8 +456,9 @@ cleanup. `render_effects.gd` can capture the real OpenGL Compatibility renderer 
 `OpenSpadesPostEffects.setup(camera,world_environment)` creates one world color pass
 and an optional opaque-depth pass. `set_options(Dictionary)` validates updates atomically;
 `preset("low"/"medium"/"high")` and `get_options()` support UI/settings storage. Unknown
-native `hdr`/`gi` switches are rejected. The selected replacements are explicitly
-`tone_map` and `ambient_energy`, whose effects are real and separately adjustable.
+Main owns `hdr`/`gi` switches through separate float-HDR and bounded irradiance
+components. The post component owns ordinary `tone_map` and `ambient_energy`;
+Main disables duplicate bloom/correction/tone stages when HDR is active.
 
 Call `update_state(delta,health,hurt_age,sprinting,aiming_float,focus_distance)` with ADS
 state 0..1; `damage(amount,direction_angle)` can start autonomous hurt decay. Normal main
@@ -471,11 +472,11 @@ damage/motion state. Environment energy changes only on option updates, not ever
 | Setting | Implemented behavior and source adaptation |
 | --- | --- |
 | `fxaa`, `msaa` 0/2/4 | Screen-space FXAA and actual viewport geometry MSAA. |
-| `bloom` | Bounded screen mip/downsample blur, threshold and original LensDustTexture; LDR rather than native HDR bright-pass pyramid. |
+| `bloom` | Ordinary-path bounded LDR blur; optional float HDR uses the original pre-tone dust-bloom formulas. See ADR0004 for separate budgets and pass order. |
 | `lens` | Source radial chromatic separation (.008) and mild corner shading. |
 | `lens_flare` | Original flare images with halo and mirrored ghost, four world-visible lights; owner ray replaces native depth-scanner mask. |
 | `color_correction`, `saturation`, `exposure` | Source equal-channel grayscale, fog tint, smoothstep enhancement and `2^(exposure*.5)` adjustment. |
-| `tone_map` | Source ACES curve applied to LDR squared color; no true HDR render buffer or native automatic exposure. |
+| `tone_map` | Ordinary-path source ACES on LDR squared color; the separate optional float HDR path normalizes Compatibility encoding and supplies native automatic exposure before tone mapping. |
 | `camera_blur` | Five bounded radial/rotation samples, source .15-second hurt blur decay; no depth-aware velocity blur or retained previous-frame image. |
 | `dof`, `dof_strength` | Actual opaque depth, source automatic focal range `.054 + 13*ADS^3`, near-only CoC `1-depth/focalRange`; bounded 6/12 disk samples replace native hexagonal multi-pass bokeh. |
 | `manual_focus` | Near and far blur at half strength, using the provided focus distance; the owner supplies manual focus input. |

@@ -28,6 +28,7 @@ class ObservedClient extends CLIENT:
 	var paused := false
 	var halt_on_begin := false
 	var welcome_log: Array[Dictionary] = []
+	var preparing_log: Array[Dictionary] = []
 	var begin_log: Array[Dictionary] = []
 	var barrier_log: Array[Dictionary] = []
 	var install_log: Array[Dictionary] = []
@@ -39,7 +40,9 @@ class ObservedClient extends CLIENT:
 		var before_status := status
 		var before_epoch := epoch
 		super._game_packet(packet)
-		if packet.kind == P.Kind.WELCOME and status != "failed":
+		if packet.kind == P.Kind.MATCH_PREPARING and status != "failed":
+			preparing_log.append({"epoch":epoch,"before_status":before_status,"before_epoch":before_epoch,"id":actor_id})
+		elif packet.kind == P.Kind.WELCOME and status != "failed":
 			var digest := HashingContext.new();digest.start(HashingContext.HASH_SHA256);digest.update(packet.payload.bulk_token)
 			welcome_log.append({"epoch":epoch,"id":actor_id,"before_epoch":before_epoch,"before_status":before_status,
 				"data_cleared":data == null,"prediction_cleared":not prediction.get_status().ready,
@@ -206,7 +209,7 @@ func verify_epoch(targets: Array,epoch: int,map: DATA,ids: Array[int],old_tokens
 		check(not client.install_log.is_empty() and client.install_log.back().epoch == epoch and client.install_log.back().dimensions == map.dimensions,"trusted presentation callback installs new epoch map")
 		var welcome: Dictionary = client.welcome_log.back()
 		check(welcome.data_cleared and welcome.prediction_cleared and welcome.remote_count == 0 and welcome.input_sequence == 0 and welcome.predicted_effects == 0 and welcome.cursor == 0 and welcome.chat == 0 and welcome.request == 0,"replacement WELCOME clears all old client data/history/effects/cursors")
-		check(welcome.before_epoch < welcome.epoch and welcome.id == ids[index] and welcome.profile == (0 if owner.profile == "0.75" else 1),"greater compatible replacement WELCOME preserves socket owner")
+		check(welcome.before_epoch == welcome.epoch and welcome.before_status == "preparing" and welcome.id == ids[index] and welcome.profile == (0 if owner.profile == "0.75" else 1),"WELCOME exactly matches announced epoch and preserved socket owner")
 		var begin: Dictionary = client.begin_log.back()
 		var barrier: Dictionary = client.barrier_log.back()
 		check(begin.epoch == epoch and barrier.epoch == epoch and begin.snapshot_id == barrier.snapshot_id and barrier.sequence <= client.data.map_sequence,"new baseline/barrier identity precedes matching snapshots")
@@ -318,7 +321,7 @@ func run() -> void:
 	if not all_live([resumed,second,spectator],83): finish();return
 	await wait_until(func():return server._retired_bulks.is_empty(),"mid-join reset retires superseded bulk channels after latest WELCOME",[rejected_grace])
 	verify_epoch([resumed,second,spectator],83,newer,ids,prior_tokens,teams)
-	check(resumed.welcome_log.back().before_status == "loading","greater WELCOME replaces an unfinished old baseline")
+	check(resumed.preparing_log.back().before_status == "loading" and resumed.welcome_log.back().before_status == "preparing","announcement replaces unfinished baseline before compatible WELCOME")
 	check(server.simulation.profile == "0.76" and server.simulation.mode == "ctf","empty profile reset option preserves negotiated profile")
 	check(spectator.get_owner_state().team == 2 and not spectator.get_owner_state().is_alive(),"explicit spectator role remains spectator through repeated reset")
 	finish()

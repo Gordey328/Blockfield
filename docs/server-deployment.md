@@ -8,14 +8,14 @@ Local native authority (Windows engine; no visual scene):
 & ./.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path game -- --server --bind=127.0.0.1 --game-port=8765 --map-port=8766 --mode=ctf --profile=0.75
 ```
 
-Options use `--name=value`; unknown/duplicate options fail. `map=lab` is the default shared arena; `--map=/absolute/path/map.vxl` loads a validated local map with a64MiB file budget. Modes: sandbox/ctf/tc. Profiles:0.75/0.76. Ports0 choose ephemeral ports for tests. Bind to loopback for a same-host proxy; bind0.0.0.0 inside the isolated compose network. `--round-restart=10` restores pristine terrain ten seconds after CTF/TC victory (allowed1..3600). Connected players cross a fresh epoch/map barrier. The client Connection menu accepts separate public game/map endpoints; no public host is preconfigured.
+Options use `--name=value`; unknown/duplicate options fail. `map=lab` is the default shared arena; `--map=/absolute/path/map.vxl` loads a validated local map with a64MiB file budget. The dedicated export includes the original map `res://assets/openspades/maps/Title.vxl`; set `BLOCKFIELD_MAP` to that path in compose to select it. Custom maps need an explicit read-only mount and an absolute container path. Modes: sandbox/ctf/tc. Profiles:0.75/0.76. Ports0 choose ephemeral ports for tests. Bind to loopback for a same-host proxy; bind0.0.0.0 inside the isolated compose network. `--round-restart=10` restores pristine terrain ten seconds after CTF/TC victory (allowed1..3600). Connected players cross a fresh epoch/map barrier. The client Connection menu accepts separate public game/map endpoints; no public host is preconfigured.
 
 ```text
 python tools/build_server.py
 docker compose --env-file deploy/.env -f deploy/compose.yaml up --build -d
 ```
 
-The build script installs only the matching Linux release template, performs native launcher smoke and exports `build/server/blockfield.x86_64` with its PCK, notices and SHA256 build metadata. The Linux Dedicated Server preset exports only the entry/server scenes and their dependencies, stripping presentation resources. Build output is ignored; source and reproducible scripts are versioned.
+The build script installs only the matching Linux release template, performs native launcher smoke and exports `build/server/blockfield.x86_64` with its PCK, notices and SHA256 build metadata. It then loads that exported PCK with the matching Windows host engine and the included Title.vxl: this checks packaged script/map availability, not execution of the Linux binary. The Linux Dedicated Server preset exports only the entry/server scenes and their dependencies, stripping presentation resources. Build output is ignored; source and reproducible scripts are versioned.
 
 Copy deploy/.env.example to deploy/.env and set a public DNS domain pointed to the selected host. Ports80/443 must reach Caddy for HTTPS/WSS. Caddy routes `/play` and `/map` to internal8765/8766 and permits the Pages origin `https://gordey328.github.io`; other routes return404. WSS URL paths are public configuration, not secrets. Native local clients connect directly to loopback ports; the proxy deliberately restricts its public routes to the Pages browser origin. This Origin check is an access policy, not account authentication.
 
