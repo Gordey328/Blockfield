@@ -4,3 +4,5 @@
 *.wav binary
 *.ogg binary
 *.vxl binary
+game/assets/openspades/** -text
+LICENSE -text
