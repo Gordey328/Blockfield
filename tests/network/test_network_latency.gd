@@ -54,9 +54,16 @@ func write_json(name: String, value: Dictionary) -> void:
 		check(publish_error == OK,"owned control file publish")
 func read_control() -> Dictionary:
 	var path := task_dir.path_join("control.json")
-	if not FileAccess.file_exists(path): return {}
-	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	return value if value is Dictionary else {}
+	# Atomic replacement can invalidate the path between exists/open on Windows.
+	# Keep one read handle; retry transient missing/empty content in wait_until.
+	var file := FileAccess.open(path,FileAccess.READ)
+	if file == null: return {}
+	var text := file.get_as_text()
+	file.close()
+	if text.is_empty(): return {}
+	var decoder := JSON.new()
+	if decoder.parse(text) != OK: return {}
+	return decoder.data if decoder.data is Dictionary else {}
 func make_map() -> DATA:
 	var data := DATA.new(); data.clear(Vector3i(24,16,24),5)
 	data.seed_box(Vector3i.ZERO,Vector3i(24,4,24),0x0155796b)

@@ -4,6 +4,14 @@
 
 This is local native transport acceptance with artificial delay and stopped forwarding. It is not WAN, TLS, browser, 32-client capacity or sustained 60 Hz acceptance.
 
+The frozen00d241c7da06 run reported499/0 but its engine log included a control-file
+JSON parse error, so the release gate rejected it before export. The Python writer
+already uses atomic replacement; a Windows path can disappear/change between an
+existence check and opening it. Both GDScript control readers now use one read
+handle, a non-logging JSON parser and their existing bounded retry/wait. Malformed
+control data cannot acknowledge a request or extend its deadline. A focused
+post-repair run passes501/0 with clean diagnostics; the failed archive is retained.
+
 ## Reproduce
 
 Pass absolute existing paths. The test defaults to the script beside the runner's repository, so the command also works in a Git-archive release checkout without looking up the original workspace.

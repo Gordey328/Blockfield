@@ -115,9 +115,14 @@ func _write_json(path: String, value: Dictionary) -> bool:
 
 func _read_control() -> Dictionary:
 	var path := relay_dir.path_join("control.json")
-	if not FileAccess.file_exists(path): return {}
-	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	return value if value is Dictionary else {}
+	var file := FileAccess.open(path,FileAccess.READ)
+	if file == null: return {}
+	var text := file.get_as_text()
+	file.close()
+	if text.is_empty(): return {}
+	var decoder := JSON.new()
+	if decoder.parse(text) != OK: return {}
+	return decoder.data if decoder.data is Dictionary else {}
 
 func _hash_source(path: String) -> String:
 	var hashing := HashingContext.new()

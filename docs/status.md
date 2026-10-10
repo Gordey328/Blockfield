@@ -118,9 +118,18 @@ nodes. Root audio now rejects detached service/camera playback before reading
 transforms or starting a voice. Actual source-input35/0, audio routing128/0,
 original post-DSP PCM134/0, Main network27/0 and Main epoch83/0 are clean after
 the focused corrections. The clock correction requires a fresh frozen release.
-All production ownership is root; source_audit owns only the new scheduler test
-and its document, with a headless-only engine lease. Root's ignored diagnostic
-native server owns only loopback8765/8766 and aggregate clock/queue logs.
+All ownership and engine leases have returned to root. The previous ignored
+native diagnostic server was stopped through its exact owned Windows Job Object.
+
+Frozen00d241c7da06 passed all registered gameplay/network/audio/scheduler
+assertions but correctly stopped before export because the latency helper logged
+a JSON parse error while reading an atomically replaced Windows control file.
+The runner reported499/0, but its engine diagnostics were not clean. Preserve
+`.cache/release-00d241c7da06`; it is not published. Both test readers now keep a
+single FileAccess handle and quietly retry transient missing/empty/invalid
+control content through their existing bounded waits. No production or admission
+limit changed. Focused shaped latency501/0 exits cleanly in8.094s with no engine
+errors (`latency-control-read-fixed.json`/`.log`); a new frozen archive is next.
 
 ## Commands and recovery
 Python: `C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`.
