@@ -487,7 +487,7 @@ func _label(action: String) -> String:
 		"tool_spade": return _ui("1\nЛопата", "1\nSpade")
 		"tool_block": return _ui("2\nБлок", "2\nBlock")
 		"tool_weapon": return _ui("3\nОружие", "3\nGun")
-		"tool_grenade": return _ui("4\nГраната", "4\nGrenade")
+		"tool_grenade": return _ui("4\nГран.", "4\nGren.")
 		"map": return _ui("Карта", "Map")
 		"view_toggle": return _ui("Вид", "View")
 		"menu": return _ui("Меню", "Menu")
