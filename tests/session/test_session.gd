@@ -30,6 +30,7 @@ func _run() -> void:
 	_test_targets_and_life_cycle()
 	_test_ctf()
 	_test_tc()
+	_test_match_events()
 	print("SESSION TESTS: %d assertions, %d failures" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
 
@@ -237,4 +238,38 @@ func _test_tc() -> void:
 	s.reset_lab()
 	check(int(s.territories[0].owner) == 2 and s.winning_team == -1,
 		"TC reset returns every territory to neutral")
+	s.free()
+
+
+func _test_match_events() -> void:
+	var s := new_session()
+	s.player_name = "Tester"
+	var hurt: Array[Dictionary] = []
+	var events: Array[Dictionary] = []
+	s.player_hurt.connect(func(amount:float,origin:Vector3,kind:String):hurt.append({"amount":amount,"origin":origin,"kind":kind}))
+	s.match_event.connect(func(event:Dictionary):events.append(event))
+	s.damage_player(25,Vector3(3,5,7),"grenade")
+	check(hurt.size()==1 and hurt[0].amount==25 and hurt[0].origin==Vector3(3,5,7) and hurt[0].kind=="grenade","hurt event preserves amount/source/kind")
+	s.invulnerable=true
+	s.damage_player(1000)
+	check(hurt.size()==1 and events.is_empty(),"suppressed damage emits no feedback or death")
+	s.invulnerable=false
+	s.damage_player(1000,Vector3.INF,"fall")
+	check(hurt[1].amount==75 and s.player_deaths==1,"feedback clamps lethal damage to remaining health")
+	check(events[-1].type=="death" and events[-1].name=="Tester" and events[-1].kind=="fall","death carries profile and cause")
+	s.respawn()
+	check(events[-1].type=="respawn" and s.health==100,"player respawn emits once")
+	var target_id:=s.add_target(Vector3.ZERO,1)
+	s.apply_target_damage(target_id,100,"head")
+	check(events[-1].type=="kill" and events[-1].part=="head" and events[-1].killer=="Tester" and events[-1].target_id==target_id,"kill event identifies hitter, victim and hit zone")
+	check(s.get_target(target_id).deaths==1,"target scoreboard stores deaths")
+	s.update(3.01)
+	check(events[-1].type=="respawn" and events[-1].target_id==target_id,"target respawn includes stable ID")
+	s.select_team(2)
+	check(events[-1].type=="team" and events[-1].team==2,"spectator change produces match event")
+	for index in 150:s.respawn()
+	check(s.event_log.size()==128,"authoritative event journal has a bounded history")
+	s.reset_lab()
+	check(s.player_deaths==0 and s.event_log.size()==2 and s.event_log[-1].type=="reset","reset clears counters/history then records a fresh reset")
+	check(s.get_target(target_id).deaths==0,"reset clears soldier scoreboard deaths")
 	s.free()

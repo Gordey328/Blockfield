@@ -111,6 +111,10 @@ Iteration 1 release gate: all iteration-1 and offline portions of `1+2` rows ver
 
 ## Subsystem evidence log
 
+2026-10-10 expanded checkpoint: source grenade move/bounce/water/explosion tests17/0; session event journal77/0; lit terrain/AO/collider invalidation26/0; full-resolution topdown13/0; post79/0; data resource extensions67/0; HUD/map/chat/bindings88/0. Main integrates source map tracers, persistence, map/pack uploads, skin factories, flashlight and screenshot/download APIs. Local GPU evidence is recorded in ui.md/assets.md/voxel.md. Renderer/extension fidelity limits: decisions/0004-compatibility-renderer.md. Browser input, downloads, resource-pack import and all optional graphics still require deployed checks; entire feature rows remain unaccepted.
+
+2026-10-10 public browser checkpoint: source9f876bb2a27bad24f64899cff7bf61c52fe739c0, bundle09793333b69d5efa1a2a76cae704e292c30aee78. Russian/English locale switch, local entry, rifle ADS, a100-damage headshot and genuine Title.vxl load exercised on Pages. Pointer lock returned Chromium UnknownError; waiting for VXL download timed out. These are partial B03/T06 checks, not complete acceptance.
+
 2026-10-10: `game/gameplay/local_session.gd` implements local session state, both source weapon tuning profiles, ammo/cadence/reload, stocks, grenade cook/fuse events, target damage/respawn, team/spectator state and local CTF/TC rules. `tests/session/test_session.gd` exercises these contracts headlessly on Godot 4.7.2. This supports the simulation portions of P04/P05/P08–P11/P13/P15/P16/M01–M03/T02/T04/T05; it does not verify their input, models, sound, visual feedback or browser integration. Rows remain unaccepted until those checks are recorded.
 
 Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path game --script ../tests/session/test_session.gd`. Result is recorded after each relevant change in the session handoff; source constants are covered separately from authored offline melee/grenade/respawn/objective policy.

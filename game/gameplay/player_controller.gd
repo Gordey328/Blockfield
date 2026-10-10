@@ -42,7 +42,8 @@ var _block_health: Dictionary = {}
 var _dig_held: bool = false
 var _connected_session: LocalSession
 var _connected_world: VoxelWorld
-var _weapon_view: WeaponView
+var _weapon_view: Node3D
+var skin_id := "original"
 var _was_reloading: bool = false
 var _aim_toggled: bool = false
 var _aim_down_state: float = 0.0
@@ -206,7 +207,7 @@ func _physics_process(delta: float) -> void:
 				_native_velocity.x *= 0.5
 				_native_velocity.z *= 0.5
 				_play_sound("Player/FallHurt" if fall_speed > 0.58 else ("Player/WaterLand" if wading else "Player/Land"))
-			if fall_speed > 0.58: session.damage_player(pow(fall_speed - 0.58, 2.0) * 4096.0)
+			if fall_speed > 0.58: session.damage_player(pow(fall_speed - 0.58, 2.0) * 4096.0, Vector3.INF, "fall")
 			_native_velocity.y = 0.0
 		if is_on_wall() and not crouching and not sprinting and head.rotation.x > -0.52:
 			_try_step(movement)
@@ -216,7 +217,7 @@ func _physics_process(delta: float) -> void:
 			_step_distance = 0.0
 			_play_sound("Player/Wade%d" % randi_range(1,8) if wading else "Player/Footstep%d" % randi_range(1,8))
 			if sprinting and not wading: _play_sound("Player/Run%d" % randi_range(1,12))
-		if global_position.y < -5.0: session.damage_player(1000.0)
+		if global_position.y < -5.0: session.damage_player(1000.0, Vector3.INF, "fall")
 	session.update_player_position(global_position)
 	world.set_view_position(global_position)
 	if _pending_cell.x >= 0 and is_on_floor(): _pending_cell = Vector3i(-1,-1,-1)
@@ -325,7 +326,7 @@ func apply_mouse_motion(relative: Vector2) -> void:
 
 func _connect_simulation() -> void:
 	if _weapon_view == null:
-		_weapon_view = WeaponView.new()
+		_weapon_view = OpenSpadesExtensions.create_first_person_skin(skin_id,{"player":self,"session":session,"world":world})
 		weapon_root.position = Vector3.ZERO
 		weapon_root.add_child(_weapon_view)
 	if _connected_session != session:
@@ -411,7 +412,7 @@ func _shoot() -> void:
 	_play_sound("Weapons/%s/FireLocal" % str(info.name))
 	var effects := _effects()
 	if effects != null:
-		var muzzle := _weapon_view.get_muzzle_transform().origin if _weapon_view != null and camera_mode == CameraMode.FIRST_PERSON else origin + accumulated_direction * 0.5
+		var muzzle: Vector3 = _weapon_view.get_muzzle_transform().origin if _weapon_view != null and camera_mode == CameraMode.FIRST_PERSON else origin + accumulated_direction * 0.5
 		effects.muzzle_fire(muzzle,accumulated_direction,session.current_weapon)
 		if session.current_weapon != 2:
 			effects.eject_shell(muzzle,accumulated_direction,head.global_basis.x,head.global_basis.y,session.current_weapon)
@@ -444,6 +445,8 @@ func _shoot() -> void:
 		if effects != null:
 			effects.tracer(origin,end,session.current_weapon,camera_mode == CameraMode.FIRST_PERSON)
 		elif lab != null: lab.spawn_tracer(origin-head.global_basis.y*0.12, end)
+		if lab != null and lab.hud != null:
+			lab.hud.add_map_tracer(origin,end,session.current_weapon,camera_mode == CameraMode.FIRST_PERSON)
 	var recoil: Vector3 = info.recoil
 	var multiplier := 0.5 if crouching else 1.0
 	head.rotation.x = clampf(head.rotation.x+recoil.y*multiplier, -1.55,1.55)
@@ -753,12 +756,31 @@ func _play_sound(path: String) -> void:
 		var full_path := "res://assets/openspades/sounds/%s.%s" % [path,extension]
 		if ResourceLoader.exists(full_path):
 			var audio:=AudioStreamPlayer.new()
-			audio.stream=load(full_path)
+			audio.stream=OpenSpadesExtensions.sound(full_path)
 			audio.volume_db=-8.0
 			add_child(audio)
 			audio.finished.connect(audio.queue_free)
 			audio.play()
 			return
+
+func refresh_resources() -> void:
+	if _weapon_view!=null:_weapon_view.refresh_resources()
+
+func set_skin(id: String) -> void:
+	if id not in OpenSpadesExtensions.get_skins():return
+	var replacement:=OpenSpadesExtensions.create_first_person_skin(id,{"player":self,"session":session,"world":world})
+	if replacement==null:return
+	if _weapon_view!=null:
+		_weapon_view.hide()
+		_weapon_view.queue_free()
+	skin_id=id
+	_weapon_view=replacement
+	weapon_root.add_child(_weapon_view)
+	_weapon_view.set_selection(session.current_tool,session.current_weapon)
+	_weapon_view.set_team(session.team)
+	_weapon_view.set_block_color(block_color)
+	_weapon_view.set_ammo(session.magazine,int(session.get_weapon_info().clip_size))
+	if session.is_reloading:_weapon_view.reload()
 
 func respawn_at(point: Vector3) -> void:
 	_clear_input_state()

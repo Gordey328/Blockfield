@@ -5,16 +5,19 @@ extends RefCounted
 ## Conjugate source rotations rather than guessing each part's orientation.
 
 const ASSET_ROOT := "res://assets/openspades/models/"
+const EXTENSIONS = preload("res://presentation/openspades_extensions.gd")
 const SOURCE_AXES := Basis(Vector3.RIGHT, Vector3(0, 0, -1), Vector3(0, -1, 0))
 const TEAM_COLORS := [Color(0.18, 0.42, 0.86), Color(0.22, 0.66, 0.26)]
 static var _scene_cache: Dictionary = {}
 static var _material_cache: Dictionary = {}
+static var _resource_generation := -1
 
 static func clear_cache() -> void:
 	# Call after presentation nodes leave the tree, for explicit test/session teardown.
 	RenderingServer.force_sync()
 	_material_cache.clear()
 	_scene_cache.clear()
+	_resource_generation = EXTENSIONS.get_generation()
 
 static func source_vector(value: Vector3) -> Vector3:
 	return SOURCE_AXES * value
@@ -29,9 +32,13 @@ static func source_translation(value: Vector3) -> Transform3D:
 	return Transform3D(Basis.IDENTITY, source_vector(value))
 
 static func create(relative_path: String, first_person: bool = false) -> Node3D:
+	if _resource_generation != EXTENSIONS.get_generation():
+		clear_cache()
 	var scene := _scene_cache.get(relative_path) as PackedScene
 	if scene == null:
-		scene = load(ASSET_ROOT + relative_path + ".glb") as PackedScene
+		scene = EXTENSIONS.model_override(relative_path)
+		if scene == null:
+			scene = load(ASSET_ROOT + relative_path + ".glb") as PackedScene
 		if scene != null:
 			_scene_cache[relative_path] = scene
 	if scene == null:

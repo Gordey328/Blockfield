@@ -34,6 +34,19 @@ var _carrying_intel := false
 func _ready() -> void:
 	_ensure_built()
 
+func refresh_resources() -> void:
+	if not _built:
+		return
+	_rig.hide()
+	_rig.queue_free()
+	_built = false
+	_equipment = null
+	_intel = null
+	_legs.clear()
+	_crouch_legs.clear()
+	_ensure_built()
+	set_intel_carrier(_carrying_intel)
+
 func _ensure_built() -> void:
 	if _built:
 		return

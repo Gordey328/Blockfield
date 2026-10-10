@@ -14,6 +14,8 @@ signal grenade_thrown(grenade: Dictionary)
 signal grenade_exploded(grenade: Dictionary)
 signal objectives_changed
 signal round_won(winning_team: int)
+signal player_hurt(amount: float, origin: Vector3, kind: String)
+signal match_event(event: Dictionary)
 
 enum Weapon { RIFLE, SMG, SHOTGUN }
 enum Tool { SPADE, BLOCK, WEAPON, GRENADE }
@@ -79,6 +81,9 @@ var grenade_cook_time: float = 0.0
 var respawn_remaining: float = 0.0
 var player_position: Vector3 = Vector3.ZERO
 var score: int = 0
+var player_name: String = "Player"
+var player_deaths: int = 0
+var event_log: Array[Dictionary] = []
 var shots_fired: int = 0
 var hits_landed: int = 0
 var last_damage: float = 0.0
@@ -170,6 +175,7 @@ func select_team(index: int) -> void:
 		is_reloading = false
 		respawn_remaining = 0.0
 	changed.emit()
+	_event("team", {"name":player_name,"team":team})
 
 
 func can_fire() -> bool:
@@ -287,17 +293,21 @@ func compute_damage(hit_part: String, distance: float) -> float:
 	return float(get_weapon_info().get(key, 0))
 
 
-func damage_player(amount: float) -> void:
+func damage_player(amount: float, origin: Vector3 = Vector3.INF, kind: String = "weapon") -> void:
 	if invulnerable or health <= 0 or team >= 2 or amount <= 0.0:
 		return
+	var dealt := minf(amount, float(health))
 	health = maxi(0, health - int(ceilf(amount)))
+	player_hurt.emit(dealt, origin, kind)
 	if health == 0:
+		player_deaths += 1
 		_drop_carried_intel()
 		is_reloading = false
 		respawn_remaining = LOCAL_RESPAWN_SECONDS
 		if is_cooking_grenade:
 			release_grenade()
 		player_died.emit()
+		_event("death", {"name":player_name,"team":team,"kind":kind,"origin":origin})
 	changed.emit()
 
 
@@ -318,6 +328,7 @@ func respawn() -> void:
 	grenades = 3
 	blocks = 50
 	player_respawned.emit()
+	_event("respawn", {"name":player_name,"team":team})
 	changed.emit()
 
 
@@ -413,6 +424,7 @@ func _update_grenades(delta: float) -> void:
 func add_target(position: Vector3, target_team: int = 1, moving: bool = false) -> int:
 	var target: Dictionary = {
 		"id": _next_target_id, "health": 100, "team": clampi(target_team, 0, 1),
+		"name": "Soldier %d" % _next_target_id, "kills":0, "deaths":0,
 		"position": position, "spawn_position": position, "moving": moving,
 		"alive": true, "respawn_remaining": 0.0, "state": "standing",
 		"weapon": Weapon.RIFLE, "tool": Tool.WEAPON, "phase": 0.0
@@ -472,11 +484,14 @@ func apply_target_damage(target_id: int, amount: float, hit_part: String = "tors
 	last_damage = dealt
 	last_hit_part = hit_part
 	if int(target["health"]) == 0:
+		target["deaths"] = int(target.get("deaths",0)) + 1
 		target["alive"] = false
 		target["state"] = "dead"
 		target["respawn_remaining"] = LOCAL_RESPAWN_SECONDS
 		add_score()
 		target_died.emit(target_id)
+		_event("kill", {"killer":player_name,"killer_team":team,"victim":str(target.name),
+			"victim_team":int(target.team),"target_id":target_id,"weapon":current_weapon,"part":hit_part})
 	changed.emit()
 	return dealt
 
@@ -492,7 +507,7 @@ func apply_grenade_damage(position: Vector3) -> void:
 	var player_distance := position.distance_to(player_position)
 	if player_distance < LOCAL_GRENADE_DAMAGE_RADIUS:
 		var player_factor := 1.0 - player_distance / LOCAL_GRENADE_DAMAGE_RADIUS
-		damage_player(100.0 * player_factor * player_factor)
+		damage_player(100.0 * player_factor * player_factor, position, "grenade")
 
 
 func _update_targets(delta: float) -> void:
@@ -507,6 +522,7 @@ func _update_targets(delta: float) -> void:
 				target["state"] = "walking" if bool(target["moving"]) else "standing"
 				target["position"] = target["spawn_position"]
 				target_respawned.emit(int(target["id"]))
+				_event("respawn", {"name":str(target.name),"team":int(target.team),"target_id":int(target.id)})
 				changed.emit()
 		elif bool(target["moving"]):
 			var speed := 2.0 if str(target["state"]) == "sprinting" else 1.0
@@ -544,6 +560,7 @@ func set_mode(new_mode: String) -> void:
 	mode = new_mode
 	_reset_objectives()
 	changed.emit()
+	_event("mode", {"mode":mode})
 
 
 func _reset_objectives() -> void:
@@ -581,6 +598,7 @@ func _update_ctf() -> void:
 	if int(enemy_flag["carrier"]) < 0 and player_position.distance_to(enemy_flag_position) < LOCAL_CTF_PICKUP_DISTANCE:
 		enemy_flag["carrier"] = 0
 		enemy_flag["at_base"] = false
+		_event("intel_pickup", {"name":player_name,"team":team,"flag_team":enemy_team})
 		objectives_changed.emit()
 	if int(enemy_flag["carrier"]) == 0:
 		enemy_flag["position"] = player_position
@@ -589,15 +607,18 @@ func _update_ctf() -> void:
 			enemy_flag["position"] = ctf_bases[enemy_team]
 			enemy_flag["at_base"] = true
 			team_scores[team] += 1
+			_event("intel_capture", {"name":player_name,"team":team,"score":team_scores[team]})
 			add_score(10)
 			objectives_changed.emit()
 			if team_scores[team] >= capture_limit:
 				winning_team = team
 				round_won.emit(team)
+				_event("round_won", {"team":team,"mode":mode})
 	if not bool(own_flag["at_base"]) and int(own_flag["carrier"]) < 0 \
 			and player_position.distance_to(own_flag_position) < LOCAL_CTF_PICKUP_DISTANCE:
 		own_flag["position"] = ctf_bases[team]
 		own_flag["at_base"] = true
+		_event("intel_return", {"name":player_name,"team":team})
 		objectives_changed.emit()
 	if _resupply_cooldown <= 0.0 and player_position.distance_to(ctf_bases[team]) < LOCAL_CTF_RESUPPLY_DISTANCE:
 		restock()
@@ -610,6 +631,7 @@ func _drop_carried_intel() -> void:
 			flag["carrier"] = -1
 			flag["position"] = player_position
 			flag["at_base"] = false
+			_event("intel_drop", {"name":player_name,"team":team,"flag_team":int(flag.team)})
 			objectives_changed.emit()
 
 
@@ -648,6 +670,7 @@ func _update_tc(delta: float) -> void:
 			territory["owner"] = capture_team
 			territory["capturing_team"] = -1
 			territory["progress"] = 0.0
+			_event("territory_capture", {"team":capture_team,"position":position,"territory":territories.find(territory)})
 		did_change = true
 	if not did_change:
 		return
@@ -662,6 +685,7 @@ func _update_tc(delta: float) -> void:
 			if team_scores[candidate_team] == territories.size():
 				winning_team = candidate_team
 				round_won.emit(candidate_team)
+				_event("round_won", {"team":candidate_team,"mode":mode})
 				break
 	changed.emit()
 
@@ -670,6 +694,8 @@ func reset_lab() -> void:
 	_drop_carried_intel()
 	team = 0
 	score = 0
+	player_deaths = 0
+	event_log.clear()
 	shots_fired = 0
 	hits_landed = 0
 	last_damage = 0.0
@@ -679,6 +705,8 @@ func reset_lab() -> void:
 	live_grenades.clear()
 	_resupply_cooldown = 0.0
 	for target in targets:
+		target["kills"] = 0
+		target["deaths"] = 0
 		target["health"] = 100
 		target["alive"] = true
 		target["state"] = "walking" if bool(target["moving"]) else "standing"
@@ -688,3 +716,13 @@ func reset_lab() -> void:
 	current_tool = Tool.WEAPON
 	_reset_objectives()
 	respawn()
+	_event("reset", {})
+
+
+func _event(kind: String, details: Dictionary) -> void:
+	var event := details.duplicate(true)
+	event["type"] = kind
+	event["time"] = session_time
+	event_log.append(event)
+	if event_log.size() > 128: event_log.pop_front()
+	match_event.emit(event)

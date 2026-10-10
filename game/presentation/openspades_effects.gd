@@ -9,6 +9,7 @@ signal casing_contact(position: Vector3, water: bool, weapon: int)
 const IMAGE_ROOT := "res://assets/openspades/images/"
 const SOUND_ROOT := "res://assets/openspades/sounds/Weapons/"
 const WEAPONS := ["Rifle", "SMG", "Shotgun"]
+const EXTENSIONS = preload("res://presentation/openspades_extensions.gd")
 const TRACER_SPEEDS := [350.0, 180.0, 250.0] # Native velocities * 0.5 visual slowdown.
 const IGNORE := 0
 const DELETE := 1
@@ -51,6 +52,12 @@ func _process(delta: float) -> void:
 
 func _exit_tree() -> void:
 	stop_audio()
+
+func reload_resources() -> void:
+	clear()
+	_textures.clear()
+	_tracer_material = null
+	_tracer_mesh = null
 
 func stats() -> Dictionary:
 	return {"particles": _particles.size(), "casings": _casings.size(),
@@ -441,7 +448,7 @@ func _contact(position: Vector3, water: bool, weapon: int) -> void:
 	if not audio_enabled or _distance(position) >= 40.0 or _sounds.size() >= 16:
 		return
 	var relative: String = WEAPONS[weapon] + ("/ShellWater.ogg" if water else "/ShellDrop%d.ogg" % rng.randi_range(1, 2))
-	var stream := load(SOUND_ROOT + relative) as AudioStream
+	var stream := EXTENSIONS.sound(SOUND_ROOT + relative)
 	if stream == null:
 		return
 	var node := AudioStreamPlayer3D.new()
@@ -491,7 +498,7 @@ func _product() -> float:
 
 func _texture(relative: String) -> Texture2D:
 	if not _textures.has(relative):
-		_textures[relative] = load(IMAGE_ROOT + relative) as Texture2D
+		_textures[relative] = EXTENSIONS.texture(IMAGE_ROOT + relative)
 	return _textures[relative]
 
 func _dispose(node: Node) -> void:

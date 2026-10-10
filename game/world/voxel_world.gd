@@ -14,11 +14,15 @@ const VXL_READER = preload("res://world/vxl_reader.gd")
 const CHUNK_SCRIPT = preload("res://world/voxel_chunk.gd")
 const FALLING_CLUSTER = preload("res://world/falling_cluster.gd")
 const WATER_SHADER = preload("res://world/water.gdshader")
+const TERRAIN_SHADER = preload("res://world/terrain.gdshader")
 
 var dimensions := Vector3i(96, 32, 96)
 var map_name := "Blockfield Test Grounds"
 var render_radius := 4
 var rebuild_budget := 3
+var rebuild_time_budget_ms := 4.0
+var lighting_enabled := true
+var ambient_occlusion_enabled := true
 var water_level := 1.0
 var wade_origin_level := 2.0
 var water_enabled := true
@@ -29,30 +33,32 @@ var smoke_limit_per_cluster := 1024
 var _blocks := PackedInt32Array()
 var _chunks: Dictionary = {}
 var _dirty: Dictionary = {}
+var _collision_dirty: Dictionary = {}
 var _streaming := false
 var _view_chunk := Vector3i(-1000, 0, -1000)
 var _spawn := Vector3(48.5, 5.0, 70.5)
-var _material: StandardMaterial3D
+var _material: ShaderMaterial
 var _falling_clusters: Array[Node3D] = []
 var _effects_observer := Vector3(48.5, 5.0, 70.5)
 var _water_mesh: MeshInstance3D
+var _topdown_image: Image
+var _topdown_heights := PackedInt32Array()
+var _topdown_dirty: Dictionary = {}
 
 func _ready() -> void:
-	_material = StandardMaterial3D.new()
-	_material.vertex_color_use_as_albedo = true
-	_material.roughness = 1.0
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ensure_material()
 	if _blocks.is_empty():
 		generate_lab()
 
 func _process(_delta: float) -> void:
 	var rebuilt := 0
+	var started := Time.get_ticks_usec()
 	for key in _dirty.keys():
 		_dirty.erase(key)
 		if not _streaming or _is_chunk_near(key):
 			_rebuild_chunk(key)
 			rebuilt += 1
-			if rebuilt >= rebuild_budget:
+			if rebuilt >= rebuild_budget or Time.get_ticks_usec() - started >= rebuild_time_budget_ms * 1000.0:
 				break
 
 static func pack_color(color: Color) -> int:
@@ -125,17 +131,30 @@ func remove_blocks(cells: Array[Vector3i], protect_lower_layer: bool = false) ->
 func _change_block(cell: Vector3i, color: int, changes: Array, collapsed: bool = false) -> void:
 	var before := get_block(cell)
 	_blocks[_index(cell)] = color
+	if _topdown_image != null:
+		var column := cell.x + dimensions.x * cell.z
+		var top := _topdown_heights[column]
+		if cell.y == top or (color != 0 and cell.y > top):
+			_topdown_dirty[column] = maxi(cell.y, int(_topdown_dirty.get(column, top)))
 	changes.append({"cell": cell, "before": before, "after": color, "collapsed": collapsed})
-	_mark_dirty(cell)
+	_mark_dirty(cell, (before == 0) != (color == 0))
 
-func _mark_dirty(cell: Vector3i) -> void:
-	_dirty[_chunk_of(cell)] = true
-	for direction in DIRECTIONS:
-		var neighbor := cell + direction
-		if is_in_bounds(neighbor):
-			var chunk := _chunk_of(neighbor)
-			if chunk != _chunk_of(cell):
-				_dirty[chunk] = true
+func _mark_dirty(cell: Vector3i, geometry_changed: bool = true) -> void:
+	# AO uses the eight neighbors on the exterior face plane. An edit at a
+	# chunk edge/corner must also rebuild diagonal neighboring chunks.
+	var native := dimensions == Vector3i(512, 64, 512)
+	for z in range(cell.z - 1, cell.z + 2):
+		for x in range(cell.x - 1, cell.x + 2):
+			for y in range(cell.y - 1, cell.y + 2):
+				var neighbor := Vector3i(posmod(x, dimensions.x) if native else x, y, posmod(z, dimensions.z) if native else z)
+				if is_in_bounds(neighbor):
+					_dirty[_chunk_of(neighbor)] = true
+	if geometry_changed:
+		_collision_dirty[_chunk_of(cell)] = true
+		for direction in DIRECTIONS:
+			var neighbor := cell + direction
+			if is_in_bounds(neighbor):
+				_collision_dirty[_chunk_of(neighbor)] = true
 
 func _chunk_of(cell: Vector3i) -> Vector3i:
 	return Vector3i(floori(float(cell.x) / CHUNK_SIZE), floori(float(cell.y) / CHUNK_SIZE), floori(float(cell.z) / CHUNK_SIZE))
@@ -275,6 +294,40 @@ func cast_voxel(origin: Vector3, direction: Vector3, max_dist: float = 128.0) ->
 func get_spawn_position() -> Vector3:
 	return _spawn
 
+func get_topdown_image() -> Image:
+	# GLFlatMapRenderer::GenerateBitmap selects the first solid in Z-down
+	# order, with original RGB and opaque alpha, including underwater floor.
+	if _topdown_image == null:
+		var pixels := PackedByteArray()
+		var columns := dimensions.x * dimensions.z
+		pixels.resize(columns * 4)
+		_topdown_heights.resize(columns)
+		for column in range(columns):
+			var top := _column_top(column, dimensions.y - 1)
+			_topdown_heights[column] = top.y
+			var offset := column * 4
+			pixels[offset] = (top.x >> 16) & 255
+			pixels[offset + 1] = (top.x >> 8) & 255
+			pixels[offset + 2] = top.x & 255
+			pixels[offset + 3] = 255 if top.x != 0 else 0
+		_topdown_image = Image.create_from_data(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8, pixels)
+	else:
+		for column in _topdown_dirty:
+			var top := _column_top(column, _topdown_dirty[column])
+			_topdown_heights[column] = top.y
+			var color := block_color(top.x) if top.x != 0 else Color.TRANSPARENT
+			_topdown_image.set_pixel(column % dimensions.x, column / dimensions.x, color)
+	_topdown_dirty.clear()
+	return _topdown_image
+
+func _column_top(column: int, from_y: int) -> Vector2i:
+	var offset := column * dimensions.y
+	for y in range(mini(from_y, dimensions.y - 1), -1, -1):
+		var packed := _blocks[offset + y]
+		if packed != 0:
+			return Vector2i(packed, y)
+	return Vector2i(0, -1)
+
 func clear_world(size: Vector3i) -> void:
 	for cluster in _falling_clusters:
 		remove_child(cluster)
@@ -289,6 +342,10 @@ func clear_world(size: Vector3i) -> void:
 		chunk.queue_free()
 	_chunks.clear()
 	_dirty.clear()
+	_collision_dirty.clear()
+	_topdown_image = null
+	_topdown_heights.clear()
+	_topdown_dirty.clear()
 	dimensions = size
 	_blocks.resize(size.x * size.y * size.z)
 	_blocks.fill(0)
@@ -435,7 +492,7 @@ func set_water_enabled(enabled: bool) -> void:
 	water_enabled = enabled
 	if is_instance_valid(_water_mesh):
 		_water_mesh.visible = enabled
-	_mark_all_chunks()
+	_mark_all_chunks(false)
 
 func set_water_fog(color: Color, distance: float) -> void:
 	if is_instance_valid(_water_mesh):
@@ -446,17 +503,16 @@ func set_water_fog(color: Color, distance: float) -> void:
 func _is_chunk_near(key: Vector3i) -> bool:
 	return abs(key.x - _view_chunk.x) <= render_radius and abs(key.z - _view_chunk.z) <= render_radius
 
-func _mark_all_chunks() -> void:
+func _mark_all_chunks(geometry_changed: bool = true) -> void:
 	for z in range(ceili(float(dimensions.z) / CHUNK_SIZE)):
 		for x in range(ceili(float(dimensions.x) / CHUNK_SIZE)):
 			for y in range(ceili(float(dimensions.y) / CHUNK_SIZE)):
 				_dirty[Vector3i(x, y, z)] = true
+				if geometry_changed:
+					_collision_dirty[Vector3i(x, y, z)] = true
 
 func rebuild_now() -> void:
-	if _material == null:
-		_material = StandardMaterial3D.new()
-		_material.vertex_color_use_as_albedo = true
-		_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ensure_material()
 	for key in _dirty.keys():
 		if not _streaming or _is_chunk_near(key):
 			_rebuild_chunk(key)
@@ -464,6 +520,7 @@ func rebuild_now() -> void:
 
 func _rebuild_chunk(key: Vector3i) -> void:
 	var chunk: StaticBody3D
+	var rebuild_collision := _collision_dirty.has(key) or not _chunks.has(key)
 	if _chunks.has(key):
 		chunk = _chunks[key]
 	else:
@@ -473,7 +530,40 @@ func _rebuild_chunk(key: Vector3i) -> void:
 		chunk.name = "Chunk_%d_%d_%d" % [key.x, key.y, key.z]
 		add_child(chunk)
 		_chunks[key] = chunk
-	chunk.rebuild(self, _material)
+	chunk.rebuild(self, _material, rebuild_collision)
+	_collision_dirty.erase(key)
+	chunk.mesh_instance.visibility_range_end = get_draw_distance() + CHUNK_SIZE * 0.8660254
+
+func _ensure_material() -> void:
+	if _material == null:
+		_material = ShaderMaterial.new()
+		_material.shader = TERRAIN_SHADER
+		_material.set_shader_parameter("lighting_enabled", lighting_enabled)
+		_material.set_shader_parameter("ambient_occlusion_strength", 1.0 if ambient_occlusion_enabled else 0.0)
+
+func set_lighting_enabled(enabled: bool) -> void:
+	lighting_enabled = enabled
+	_ensure_material()
+	_material.set_shader_parameter("lighting_enabled", enabled)
+
+func set_ambient_occlusion_enabled(enabled: bool) -> void:
+	ambient_occlusion_enabled = enabled
+	_ensure_material()
+	_material.set_shader_parameter("ambient_occlusion_strength", 1.0 if enabled else 0.0)
+
+func get_draw_distance() -> float:
+	return float(render_radius * CHUNK_SIZE)
+
+func set_draw_distance(meters: float) -> float:
+	render_radius = clampi(ceili(meters / CHUNK_SIZE), 1, 10)
+	_view_chunk = Vector3i(-1000, 0, -1000)
+	set_view_position(_effects_observer)
+	for chunk in _chunks.values():
+		chunk.mesh_instance.visibility_range_end = get_draw_distance() + CHUNK_SIZE * 0.8660254
+	if is_instance_valid(_water_mesh):
+		var material: ShaderMaterial = _water_mesh.mesh.surface_get_material(0)
+		material.set_shader_parameter("fog_distance", get_draw_distance())
+	return get_draw_distance()
 
 func get_stats() -> Dictionary:
 	var faces := 0

@@ -45,7 +45,8 @@ def main():
     for label in ('world','session','integration'):
         path=ROOT/'tests'/label/f'test_{"lab" if label=="integration" else label}.gd'
         if path.exists():run('test-'+label,['--script',str(path)])
-    for name,path in [('vxl-save','tests/world/test_vxl_save.gd'),('falling-clusters','tests/world/test_falling_clusters.gd'),('presentation','tests/presentation/test_presentation.gd'),('localization','tests/presentation/test_localization.gd'),('effects','tests/presentation/test_effects.gd')]:
+    suites=[('grenade','tests/gameplay/test_grenade.gd'),('vxl-save','tests/world/test_vxl_save.gd'),('falling-clusters','tests/world/test_falling_clusters.gd'),('lighting','tests/world/test_lighting.gd'),('topdown','tests/world/test_topdown.gd'),('presentation','tests/presentation/test_presentation.gd'),('localization','tests/presentation/test_localization.gd'),('effects','tests/presentation/test_effects.gd'),('post-effects','tests/presentation/test_post_effects.gd'),('extensions','tests/presentation/test_extensions.gd'),('ui','tests/ui/test_ui.gd')]
+    for name,path in suites:
         path=ROOT/path
         if path.exists():run('test-'+name,['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])

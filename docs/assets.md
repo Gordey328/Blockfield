@@ -192,8 +192,10 @@ moving 1/30-second streak segments. Local first-person tracers are suppressed as
 
 Adaptations requiring visual comparison: sprites use Godot's alpha blending rather than the
 original renderer's premultiplied pipeline; tracer streaks use one textured quad rather than
-11 layered long sprites; coherent shake uses Godot noise and omits original radial blur/FOV
-shake. Temporary point lights cannot light unshaded terrain materials. Particle, shell,
+11 layered long sprites; coherent shake uses Godot noise and omits source FOV shake.
+The postprocess below adds hurt/rotation blur; explicit local-fire and explosion radial
+shake inputs still need to be connected for identical source behavior. Terrain/light
+response is owned by the world renderer. Particle, shell,
 tracer and light budgets (defaults 512/48/64/8) keep repeated lab events bounded in browsers.
 Casing collision uses the world voxel sampler and 60 Hz substeps; a 15-second flight limit
 also bounds shells falling beyond a map. Spatial impact/weapon audio remains controller-owned.
@@ -203,3 +205,57 @@ checks source emission groups, shell/contact/lifetime behavior, all tracer veloc
 first-person suppression, budgets, finite transforms, animated frame updates, gravity and
 cleanup. `render_effects.gd` can capture the real OpenGL Compatibility renderer using the same
 `--output=<absolute dir>` convention as the model preview. Screenshots stay in ignored `.cache/`.
+
+## Compatibility renderer effects
+
+`OpenSpadesPostEffects.setup(camera,world_environment)` creates one world color pass
+and an optional opaque-depth pass. `set_options(Dictionary)` validates updates atomically;
+`preset("low"/"medium"/"high")` and `get_options()` support UI/settings storage. Unknown
+native `hdr`/`gi` switches are rejected. The selected replacements are explicitly
+`tone_map` and `ambient_energy`, whose effects are real and separately adjustable.
+
+Call `update_state(delta,health,hurt_age,sprinting,aiming_float,focus_distance)` with ADS
+state 0..1; `damage(amount,direction_angle)` can start autonomous hurt decay. Normal main
+UI owns red flash, edge sprites and directional ring. Post overlays default disabled;
+`set_hurt_overlay_enabled(true)` is only for isolated previews. PostEffects handles source
+scene desaturation/radial blur without drawing the HUD's hurt overlay a second time.
+`set_flare_sources([{position_or_direction,color,energy,radius,visible},...])` accepts at
+most four lights; the owning world ray determines visibility/occlusion. `reset()` clears
+damage/motion state. Environment energy changes only on option updates, not every frame.
+
+| Setting | Implemented behavior and source adaptation |
+| --- | --- |
+| `fxaa`, `msaa` 0/2/4 | Screen-space FXAA and actual viewport geometry MSAA. |
+| `bloom` | Bounded screen mip/downsample blur, threshold and original LensDustTexture; LDR rather than native HDR bright-pass pyramid. |
+| `lens` | Source radial chromatic separation (.008) and mild corner shading. |
+| `lens_flare` | Original flare images with halo and mirrored ghost, four world-visible lights; owner ray replaces native depth-scanner mask. |
+| `color_correction`, `saturation`, `exposure` | Source equal-channel grayscale, fog tint, smoothstep enhancement and `2^(exposure*.5)` adjustment. |
+| `tone_map` | Source ACES curve applied to LDR squared color; no true HDR render buffer or native automatic exposure. |
+| `camera_blur` | Five bounded radial/rotation samples, source .15-second hurt blur decay; no depth-aware velocity blur or retained previous-frame image. |
+| `dof`, `dof_strength` | Actual opaque depth, source automatic focal range `.054 + 13*ADS^3`, near-only CoC `1-depth/focalRange`; bounded 6/12 disk samples replace native hexagonal multi-pass bokeh. |
+| `manual_focus` | Near and far blur at half strength, using the provided focus distance; the owner supplies manual focus input. |
+| `ssao`, `ssao_strength` | Actual reconstructed opaque depth and derivative normals, bounded 6/12 neighbor samples; no native radiosity or temporal AO denoising. |
+| `ambient_energy` | Changes actual environment fill lighting. This is an explicit radiosity/GI visual replacement, without indirect light transport. |
+| `quality` 0/1/2 | Selects bloom mip scale and depth sample budget; HUD stays above postprocessing. |
+
+Source references: `Sources/Draw/GLSettings.cpp`, `GLRenderer.cpp`,
+`GLDepthOfFieldFilter.cpp`, `GLLensDustFilter.cpp`, `GLLensFlareFilter.cpp`,
+`Resources/Shaders/PostFilters/{ColorCorrection,Lens,DoFCoCGen,SSAO}.fs` and
+`Sources/Client/{Client_Scene,Client_Draw,HurtRingView}.cpp`. The shader integration uses
+Godot's documented [Compatibility depth reconstruction](https://docs.godotengine.org/en/stable/tutorials/shaders/advanced_postprocessing.html).
+The depth pass runs before transparent sprites and depth-hacked first-person equipment,
+so it cannot erase the weapon. The later color pass includes those transparent objects.
+
+Headless `test_post_effects.gd`: 79 assertions, zero failures. Real Intel UHD OpenGL
+Compatibility `render_post_effects.gd`: separate on/off image pairs for 13 visible
+effects, plus a first-person weapon preservation check, zero failures and clean logs.
+FXAA/MSAA, bloom, lens/flare, correction/tone map, blur, auto/manual DoF, SSAO,
+environment lighting and standalone hurt differences were all nonzero. The images were
+visually reviewed, including bounded smooth bloom and clear view equipment with depth
+effects enabled. This is adaptation evidence, not acceptance of exact native-renderer
+parity or browser performance. Screenshots stay in ignored `.cache/`.
+
+Resource override and first/third-person Godot skin entrypoints are documented in
+[extensions.md](extensions.md). Remaining character parity includes native third-person
+spade bash PitchBias, tool raise/cook action state and `Corpse.cpp` physical ragdoll
+behavior; the current dead model is a pose, not that physics simulation.

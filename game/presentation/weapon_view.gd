@@ -38,6 +38,31 @@ var _right_hand := Vector3.ZERO
 func _ready() -> void:
 	_ensure_built()
 
+func refresh_resources() -> void:
+	if not _built:
+		return
+	var sprint_state := _sprint
+	var reload_state := [_reloading,_reload_elapsed,_reload_progress,_last_external_reload,_fire_elapsed]
+	for node in [_rig] + _forearms + _upperarms:
+		node.hide()
+		node.queue_free()
+	_built = false
+	_parts.clear()
+	_forearms.clear()
+	_upperarms.clear()
+	_ensure_built()
+	_sprint = sprint_state
+	_reloading = reload_state[0]
+	_reload_elapsed = reload_state[1]
+	_reload_progress = reload_state[2]
+	_last_external_reload = reload_state[3]
+	_fire_elapsed = reload_state[4]
+	if _tool == 2:
+		_update_gun(Vector3.ZERO)
+	else:
+		_update_tool(Vector3.ZERO)
+	_update_view_arms()
+
 func _ensure_built() -> void:
 	if _built:
 		return

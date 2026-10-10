@@ -1,9 +1,13 @@
 class_name LabSoldier
 extends Node3D
 
+func refresh_resources() -> void:
+	if character!=null:character.refresh_resources()
+
 var target_id: int = -1
 var session: LocalSession
-var character: CharacterView
+var character: Node3D
+var skin_id := "original"
 var _label: Label3D
 var _zones: Array[Area3D] = []
 var _origin := Vector3.ZERO
@@ -14,7 +18,7 @@ func setup(local_session: LocalSession, identifier: int, point: Vector3) -> void
 	target_id = identifier
 	_origin = point
 	position = point
-	character = CharacterView.new()
+	character = OpenSpadesExtensions.create_third_person_skin(skin_id,{"session":session,"target_id":target_id})
 	add_child(character)
 	_make_zone("head",Vector3(0,2.35,0),Vector3(0.6,0.6,0.6))
 	_make_zone("torso",Vector3(0,1.65,0),Vector3(0.8,0.9,0.4))
@@ -29,6 +33,17 @@ func setup(local_session: LocalSession, identifier: int, point: Vector3) -> void
 	_label.no_depth_test=false
 	add_child(_label)
 	_phase=randf()*TAU
+
+func set_skin(id: String) -> void:
+	if id not in OpenSpadesExtensions.get_skins():return
+	var replacement:=OpenSpadesExtensions.create_third_person_skin(id,{"session":session,"target_id":target_id})
+	if replacement==null:return
+	if character!=null:
+		character.hide()
+		character.queue_free()
+	skin_id=id
+	character=replacement
+	add_child(character)
 
 func _make_zone(part: String, center: Vector3, size: Vector3) -> void:
 	var area:=Area3D.new()
