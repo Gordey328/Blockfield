@@ -84,7 +84,18 @@ static func modify_color(color: Color) -> Color:
 	return Color((color.r+average)*.4+.2,(color.g+average)*.4+.2,(color.b+average)*.4+.2,1)
 
 func player_color(id: int, team: int) -> Color:
-	return modify_color(Color(PLAYER_PALETTE[posmod(id,32)])) if per_player_colors else modify_color(TEAM_COLORS[clampi(team,0,2)])
+	return modify_color(Color(PLAYER_PALETTE[posmod(id,32)])) if per_player_colors else modify_color(team_color_for(session,team))
+
+static func team_color_for(local_session: LocalSession,index: int) -> Color:
+	return local_session.get_team_info(index).color if local_session != null else TEAM_COLORS[clampi(index,0,2)]
+
+static func team_name_for(local_session: LocalSession,index: int) -> String:
+	if index >= 2: return OpenSpadesLocalization.lab("Наблюдатель")
+	var name: String = str(local_session.get_team_info(index).name)
+	# Keep localized lab defaults; match-provided custom names are literal text.
+	if name == ["Blue","Green"][clampi(index,0,1)]:
+		return OpenSpadesLocalization.lab(["Синяя команда","Зелёная команда"][index])
+	return name
 
 func _process(delta: float) -> void:
 	_scale=move_toward(_scale,SCALES[scale_mode],maxf(absf(_scale-SCALES[scale_mode])*10.0,.2)*delta)
@@ -137,12 +148,12 @@ func _draw() -> void:
 			if center.x>5 and center.x<size.x-6:draw_string(font,Vector2(center.x-5,14),String.chr(65+index),HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color.WHITE)
 			if center.y>20 and center.y<size.y-5:draw_string(font,Vector2(4,center.y+4),str(index+1),HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color.WHITE)
 	if session.mode=="ctf":
-		for index in session.ctf_bases.size():_draw_icon("CommandPost",map_point(session.ctf_bases[index]),TEAM_COLORS[index],0,22)
+		for index in session.ctf_bases.size():_draw_icon("CommandPost",map_point(session.ctf_bases[index]),team_color_for(session,index),0,22)
 		for flag in session.ctf_flags:
-			if int(flag.carrier)<0:_draw_icon("Intel",map_point(flag.position),TEAM_COLORS[int(flag.team)],0,22)
-			elif session.team<2:_draw_icon("Intel",map_point(flag.position),TEAM_COLORS[int(flag.team)]*Color(1,1,1,absf(sin(session.session_time*4))),0,22)
+			if int(flag.carrier)<0:_draw_icon("Intel",map_point(flag.position),team_color_for(session,int(flag.team)),0,22)
+			elif session.team<2:_draw_icon("Intel",map_point(flag.position),team_color_for(session,int(flag.team))*Color(1,1,1,absf(sin(session.session_time*4))),0,22)
 	elif session.mode=="tc":
-		for territory in session.territories:_draw_icon("CommandPost",map_point(territory.position),TEAM_COLORS[clampi(int(territory.owner),0,2)],0,22)
+		for territory in session.territories:_draw_icon("CommandPost",map_point(territory.position),team_color_for(session,int(territory.owner)),0,22)
 	for target in session.targets:
 		if int(target.id) not in get_visible_target_ids():continue
 		var kind: String=["Rifle","SMG","Shotgun"][clampi(int(target.get("weapon",0)),0,2)] if show_weapon_icons else "Player"

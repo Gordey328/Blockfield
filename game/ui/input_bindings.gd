@@ -3,7 +3,7 @@ extends RefCounted
 ## Preferences.as: binding a used key clears the other action; Delete unbinds.
 ## Only physical keyboard keys and mouse buttons are persisted by this client.
 
-const ACTIONS: Array[String] = ["forward", "back", "left", "right", "jump", "crouch", "sprint", "sneak", "primary", "secondary", "reload", "last_tool", "tool_spade", "tool_block", "tool_weapon", "tool_grenade", "eyedropper", "view_toggle", "map", "map_scale", "scoreboard", "pause", "chat", "chat_team", "chat_log", "hide_hud", "stats", "screenshot", "sceneshot", "save_map", "flashlight"]
+const ACTIONS: Array[String] = ["forward", "back", "left", "right", "jump", "crouch", "sprint", "sneak", "primary", "secondary", "reload", "last_tool", "tool_spade", "tool_block", "tool_weapon", "tool_grenade", "eyedropper", "palette_left", "palette_right", "palette_up", "palette_down", "view_toggle", "map", "map_scale", "scoreboard", "pause", "chat", "chat_team", "chat_log", "hide_hud", "stats", "screenshot", "sceneshot", "save_map", "flashlight", "autofocus"]
 static var _defaults: Dictionary = {}
 
 static func capture_defaults() -> void:

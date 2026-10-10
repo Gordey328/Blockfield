@@ -130,6 +130,11 @@ func _run() -> void:
 	var ambient_ao: Image = await capture("06-ambient-ao-on")
 	var ambient_difference := difference(ambient_open, ambient_ao)
 	check(ambient_difference.darkened_pixels > 50 and ambient_difference.mean > 0.0002, "AO must visibly darken ambient-lit contact corners")
+	world.set_ambient_occlusion_atlas_enabled(false)
+	var ambient_corners: Image = await capture("06b-ambient-corner-approximation")
+	var atlas_detail := difference(ambient_corners, ambient_ao)
+	check(atlas_detail.absolute > 0.0001, "native per-pixel atlas must retain interior details absent from interpolated corner approximation")
+	world.set_ambient_occlusion_atlas_enabled(true)
 	environment.ambient_light_energy = 0.1
 	sun.visible = true
 	sun.shadow_enabled = false
@@ -153,7 +158,7 @@ func _run() -> void:
 	var point := Vector2i(camera.unproject_position(Vector3(5.5, 2.002, 10.5)))
 	var color := fullbright.get_pixel(point.x, point.y)
 	check(absf(color.r - 128.0 / 255.0) < 0.012 and absf(color.g - 96.0 / 255.0) < 0.012 and absf(color.b - 64.0 / 255.0) < 0.012, "fullbright fallback must preserve original palette at a real rendered pixel")
-	var metrics := {"renderer": RenderingServer.get_video_adapter_name(), "dark": mean_brightness(dark), "omni": mean_brightness(point_lit), "spot": mean_brightness(spot_lit), "direct_ao_difference": direct_ao, "ambient_ao_difference": ambient_difference, "shadow_difference": shadow_difference, "palette_pixel": [color.r, color.g, color.b], "assertions": assertions, "failures": failures}
+	var metrics := {"renderer": RenderingServer.get_video_adapter_name(), "dark": mean_brightness(dark), "omni": mean_brightness(point_lit), "spot": mean_brightness(spot_lit), "direct_ao_difference": direct_ao, "ambient_ao_difference": ambient_difference, "atlas_detail_difference": atlas_detail, "shadow_difference": shadow_difference, "palette_pixel": [color.r, color.g, color.b], "assertions": assertions, "failures": failures}
 	var report := FileAccess.open(_output.path_join("metrics.json"), FileAccess.WRITE)
 	report.store_string(JSON.stringify(metrics, "  "))
 	print("LIGHTING GPU TESTS: %d assertions, %d failures; %s" % [assertions, failures, _output])

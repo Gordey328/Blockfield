@@ -50,7 +50,8 @@ func _run() -> void:
 	character.set_pose(false, false, false)
 	character.set_intel_carrier(true)
 	_check(character.get_node("OriginalCharacterParts/CarriedEnemyIntel").visible, "Living soldier carries original enemy intel model")
-	_check(character.get_node("OriginalCharacterParts/CarriedEnemyIntel").scale.is_equal_approx(Vector3.ONE * 0.1), "Original carried intel scale is retained")
+	var intel_basis: Basis = character.get_node("OriginalCharacterParts/CarriedEnemyIntel").transform.basis
+	_check(is_equal_approx(intel_basis.x.length(),0.1) and is_equal_approx(intel_basis.y.length(),0.1) and is_equal_approx(intel_basis.z.length(),0.1), "Original carried intel scale is retained")
 	character.set_pose(true, false, false)
 	_check_transforms(character)
 	character.set_pose(false, true, false)

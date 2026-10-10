@@ -37,6 +37,7 @@ func rebuild(world: Node3D, material: Material, rebuild_collision: bool = true) 
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var ao_uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	var collision_vertices := PackedVector3Array()
 	var collision_mask := PackedByteArray()
@@ -81,6 +82,7 @@ func rebuild(world: Node3D, material: Material, rebuild_collision: bool = true) 
 						vertices.append(local_cell + CORNERS[face][corner])
 						normals.append(Vector3(DIRECTIONS[face]))
 						colors.append(Color(color.r, color.g, color.b, AO.face_corner(tile, face, corner)))
+						ao_uvs.append(AO.face_uv(tile, face, corner))
 					for corner in TRIANGLES:
 						indices.append(first + corner)
 	if rebuild_collision:
@@ -100,6 +102,7 @@ func rebuild(world: Node3D, material: Material, rebuild_collision: bool = true) 
 		arrays[Mesh.ARRAY_VERTEX] = vertices
 		arrays[Mesh.ARRAY_NORMAL] = normals
 		arrays[Mesh.ARRAY_COLOR] = colors
+		arrays[Mesh.ARRAY_TEX_UV2] = ao_uvs
 		arrays[Mesh.ARRAY_INDEX] = indices
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)

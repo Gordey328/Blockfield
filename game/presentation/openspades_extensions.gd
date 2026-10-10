@@ -8,7 +8,7 @@ const MAX_ARCHIVE := 32 * 1024 * 1024
 const MAX_TOTAL := 64 * 1024 * 1024
 const MAX_FILE := 16 * 1024 * 1024
 const MAX_FILES := 512
-const FIRST_METHODS := ["set_selection","update_pose","fire","reload","set_team",
+const FIRST_METHODS := ["set_selection","is_changing_tool","update_pose","fire","reload","set_team",
 	"set_block_color","set_ammo","set_grenade_cook","set_spade_action","cancel_reload","reload_completed","get_muzzle_transform","refresh_resources"]
 const THIRD_METHODS := ["set_team","set_pose","set_weapon","animate_motion","set_aim","set_intel_carrier","refresh_resources"]
 static var _packs: Array[Dictionary] = []

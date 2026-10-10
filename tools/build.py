@@ -44,8 +44,13 @@ def main():
     run('import',['--editor','--import','--quit'])
     for label in ('world','session','integration'):
         path=ROOT/'tests'/label/f'test_{"lab" if label=="integration" else label}.gd'
-        if path.exists():run('test-'+label,['--script',str(path)])
+        if path.exists():run('test-'+label,(['--fixed-fps','60'] if label=='integration' else [])+['--script',str(path)])
     suites=[('grenade','tests/gameplay/test_grenade.gd'),('vxl-save','tests/world/test_vxl_save.gd'),('falling-clusters','tests/world/test_falling_clusters.gd'),('lighting','tests/world/test_lighting.gd'),('topdown','tests/world/test_topdown.gd'),('presentation','tests/presentation/test_presentation.gd'),('localization','tests/presentation/test_localization.gd'),('effects','tests/presentation/test_effects.gd'),('post-effects','tests/presentation/test_post_effects.gd'),('extensions','tests/presentation/test_extensions.gd'),('ui','tests/ui/test_ui.gd')]
+    suites += [('focus','tests/gameplay/test_focus.gd'),('source-parity','tests/gameplay/test_source_parity.gd'),('character-actions','tests/presentation/test_character_actions.gd'),('corpse','tests/presentation/test_corpse.gd'),('weapon-native','tests/presentation/test_weapon_native.gd'),('water','tests/world/test_water.gd'),('irradiance','tests/world/test_irradiance.gd'),('world-resources','tests/world/test_world_resources.gd'),('audio','tests/audio/test_audio.gd')]
+    suites += [('source-motion','tests/gameplay/test_source_motion.gd'),('spectator-view','tests/presentation/test_spectator_view.gd'),('reflection','tests/world/test_reflection.gd')]
+    suites += [('console','tests/ui/test_console.gd'),('camera-effects','tests/presentation/test_camera_effects.gd')]
+    suites += [('hdr-exposure','tests/presentation/test_hdr_exposure.gd'),('audio-pcm','tests/audio/render_audio.gd')]
+    suites += [('protocol','tests/network/test_protocol.gd')]
     for name,path in suites:
         path=ROOT/path
         if path.exists():run('test-'+name,['--script',str(path)],timeout=300)

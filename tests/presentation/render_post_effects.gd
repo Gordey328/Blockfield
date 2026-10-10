@@ -39,7 +39,7 @@ func _run() -> void:
 	post = Post.new()
 	root.add_child(post)
 	post.setup(camera,environment)
-	for effect in ["fxaa","bloom","lens","lens_flare","color_correction","tone_map","camera_blur","dof","ssao","ambient_energy","msaa","damage","manual_focus"]:
+	for effect in ["fxaa","bloom","lens","lens_flare","color_correction","tone_map","camera_blur","radial_blur","dof","ssao","ambient_energy","msaa","damage","manual_focus"]:
 		_off()
 		post.update_state(0,100,0.1 if effect == "camera_blur" else 10,false,0.0,10)
 		var before: Image = await _capture(effect+"-off")
@@ -54,6 +54,9 @@ func _run() -> void:
 		elif effect == "manual_focus":
 			post.set_options({"dof":true,"manual_focus":true})
 			post.update_state(0,100,10,false,0.0,3)
+		elif effect == "radial_blur":
+			post.set_options({"camera_blur":true})
+			post.update_state(0,100,10,false,0.0,10,.15)
 		else:
 			post.set_options({effect:true})
 			post.set_flare_sources([{"position":Vector3(3,2,-2),"energy":1.0,"radius":0.1}])

@@ -4,6 +4,9 @@
 - VoxelWorld: packed colored solid cells, VXL import, chunk meshes/collision, edit batching, block-ray intersection and unsupported-block collapse.
 - LocalSession: authoritative offline state for players, damage/ammo/grenades, respawn, teams and mode objectives. Presentation consumes session events. Future server runs equivalent rules.
 - PlayerController: input and movement; WeaponView/CharacterView: original models and animation; HUD/LabPanel: state display and test controls.
+- OpenSpadesAudio: per-view sound layers, environmental ray sampling and mono/stereo distance/pan routing. Main supplies the listener; presentation consumes authoritative events. See audio.md.
+- SourcePlayerMotion: native corner collision, step/climb and crouch eye geometry; controller owns acceleration and damage. SourceCameraEffects: isolated presentation noise, angular basis/FOV and radial blur; authoritative aim rays remain on the player head.
+- LabConsole: typed allowlist of local commands and saved preferences; LabChat owns input/history/completion, with no runtime script evaluation. See console.md.
 - Transport: absent from iteration-1 execution path. Future interface delivers commands/snapshots, not direct UI callbacks.
 
 ## Voxel interface

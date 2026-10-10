@@ -111,7 +111,7 @@ context dictionary and return an unattached `Node3D`. `get_skins()` includes `or
 Create a view with `create_first_person_skin(id,context)` or
 `create_third_person_skin(id,context)`. Missing contract methods reject the factory result.
 
-The first-person contract is `set_selection`, `update_pose`, `fire`, `reload`, `set_team`,
+The first-person contract is `set_selection`, `is_changing_tool`, `update_pose`, `fire`, `reload`, `set_team`,
 `set_block_color`, `set_ammo`, `set_grenade_cook`, `set_spade_action`, `cancel_reload`,
 `reload_completed`, `get_muzzle_transform`, `refresh_resources`. The original
 `WeaponView` implements it. The third-person contract is `set_team`, `set_pose`,
@@ -125,6 +125,22 @@ Uploaded packs change resources of existing animations. Custom animation logic r
 reviewed project code, registration and a new exported game build. First-person hand IK,
 eye-local positioning, third-person origins, pitch and source action state are owned by
 the corresponding skin rather than by an uploaded executable asset.
+
+Current callers pass `set_team(index, Color)` and third-person
+`set_intel_carrier(enabled, enemy_team_color)`. Factories must preserve these signatures.
+Optional first-person hooks are `initialize_selection(tool,weapon)` (immediate first
+attachment, no raise event), `set_tool_action(type,progress,ready_state)` and
+`set_motion_state(camera_local_velocity,walk_progress,front_delta,manual_offset=ZERO)`.
+Readiness can exceed1 after a grenade throw or firearm delay; do not clamp it globally.
+The optional `tool_raised(tool,weapon)` signal fires at the actual animated swap.
+Optional third-person hooks are `set_motion_state(forward_speed,strafe_speed,walk_progress)`,
+`set_tool_action(type,progress,cook_time,ready_state,raise_state=1)`,
+`set_block_color(Color)` and `set_ragdoll_enabled(bool)`.
+
+First-person visuals occupy layer19 (`1<<18`) so reflected-world cameras can exclude
+hands/equipment. Spectator factories receive a copied `snapshot`, `target_id`,
+`spectator:true` and `local_audio:false`; they must not fire authority actions or local
+player sounds. Snapshot presentation fields are documented in assets.md.
 
 ## Verification
 

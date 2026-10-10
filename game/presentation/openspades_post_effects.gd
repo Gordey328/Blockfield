@@ -25,6 +25,8 @@ var _health := 100.0
 var _hurt_angle := 0.0
 var _directional := false
 var _hurt_overlay_enabled := false
+var _hdr_active := false
+var _correction_tint := Vector3.ONE
 var _last_rotation := Vector3.ZERO
 var _flare_sources: Array[Dictionary] = []
 
@@ -47,6 +49,8 @@ func setup(view_camera: Camera3D, world_environment: WorldEnvironment = null) ->
 		var mesh := QuadMesh.new()
 		mesh.size = Vector2(2,2)
 		_depth_quad.mesh = mesh
+		# This camera-space quad must never enter a water-reflection scene.
+		_depth_quad.layers = 1 << 18
 		_depth_quad.material_override = _depth_material
 		_depth_quad.extra_cull_margin = 16384
 		_depth_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -70,6 +74,14 @@ func reload_resources() -> void:
 
 func get_options() -> Dictionary:
 	return _options.duplicate(true)
+
+func set_hdr_active(active: bool) -> void:
+	_hdr_active=active
+	if _color_material!=null:_apply_options()
+
+func get_hdr_correction() -> Dictionary:
+	var desaturate:=maxf(0.0,1.0-maxf(1.0-_hurt_age/0.2,0.0)*(0.5-_health/100.0*0.3)*4.0)
+	return {"tint":_correction_tint,"exposure":pow(2.0,_options.exposure*0.5),"saturation":_options.saturation*(0.8 if _options.bloom else 0.9)*desaturate,"enhancement":0.1 if _options.bloom else 0.0,"correction_enabled":_options.color_correction,"aces_enabled":true}
 
 func set_options(values: Dictionary) -> Dictionary:
 	var proposed := _options.duplicate()
@@ -108,10 +120,10 @@ func preset(name: String) -> Dictionary:
 
 func _apply_options() -> void:
 	for key in ["fxaa", "bloom", "lens"]:
-		_color_material.set_shader_parameter(key + "_enabled", _options[key])
+		_color_material.set_shader_parameter(key + "_enabled", _options[key] and not (_hdr_active and key=="bloom"))
 	_color_material.set_shader_parameter("flare_enabled", _options.lens_flare)
-	_color_material.set_shader_parameter("correction_enabled", _options.color_correction)
-	_color_material.set_shader_parameter("tone_map_enabled", _options.tone_map)
+	_color_material.set_shader_parameter("correction_enabled", _options.color_correction and not _hdr_active)
+	_color_material.set_shader_parameter("tone_map_enabled", _options.tone_map and not _hdr_active)
 	_color_material.set_shader_parameter("exposure", pow(2.0, _options.exposure * 0.5))
 	_color_material.set_shader_parameter("quality", _options.quality)
 	_color_material.set_shader_parameter("enhancement", (0.1 if _options.bloom else 0.0) if _options.tone_map else (0.7 if _options.bloom else 0.3))
@@ -129,7 +141,8 @@ func _apply_options() -> void:
 		var fog_color := environment.environment.fog_light_color
 		var tint := Color(1.0 / (fog_color.r+0.5), 1.0 / (fog_color.g+0.5), 1.0 / (fog_color.b+0.5)).lerp(Color.WHITE,0.2)
 		var minimum := minf(tint.r,minf(tint.g,tint.b))
-		_color_material.set_shader_parameter("tint", Vector3(tint.r,tint.g,tint.b)/maxf(minimum,0.001) if _options.color_correction else Vector3.ONE)
+		_correction_tint=Vector3(tint.r,tint.g,tint.b)/maxf(minimum,0.001) if _options.color_correction else Vector3.ONE
+		_color_material.set_shader_parameter("tint",_correction_tint)
 
 func damage(_amount: float, direction_angle: float = INF) -> void:
 	_hurt_age = 0.0
@@ -147,7 +160,7 @@ func reset() -> void:
 		_last_rotation = camera.global_rotation
 	update_state(0,100,10,false,0.0)
 
-func update_state(delta: float, health: float, hurt_age: float = -1, _sprinting: bool = false, aiming: float = 0.0, focus_distance: float = 10.0) -> void:
+func update_state(delta: float, health: float, hurt_age: float = -1, _sprinting: bool = false, aiming: float = 0.0, focus_distance: float = 10.0, source_radial: float = 0.0) -> void:
 	if _color_material == null:
 		return
 	_hurt_age = maxf(0.0,hurt_age) if hurt_age >= 0 else _hurt_age+maxf(delta,0.0)
@@ -160,7 +173,8 @@ func update_state(delta: float, health: float, hurt_age: float = -1, _sprinting:
 	_color_material.set_shader_parameter("hurt_direction_fade",minf(maxf(3.0-_hurt_age,0.0)*2.0,1.0) if _hurt_overlay_enabled and _directional and health > 0 else 0.0)
 	var source_saturation := (0.8 if _options.bloom else 0.9) if _options.tone_map else (0.85 if _options.bloom else 1.0)
 	_color_material.set_shader_parameter("saturation",_options.saturation*source_saturation*desaturate)
-	_color_material.set_shader_parameter("radial_blur",maxf(1.0-_hurt_age/0.15,0.0)*(0.5-_health/100.0*0.3)*6.0 if _options.camera_blur else 0.0)
+	_color_material.set_shader_parameter("hurt_blur",maxf(1.0-_hurt_age/0.15,0.0)*(0.5-_health/100.0*0.3)*6.0 if _options.camera_blur else 0.0)
+	_color_material.set_shader_parameter("radial_blur",clampf(source_radial,0.0,1.0) if _options.camera_blur else 0.0)
 	var motion := Vector2.ZERO
 	if is_instance_valid(camera):
 		var rotation := camera.global_rotation

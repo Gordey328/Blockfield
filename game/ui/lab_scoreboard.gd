@@ -47,8 +47,8 @@ func _process(_delta: float) -> void:
 	for team_index in 2:
 		var label:=_columns[team_index]
 		label.clear()
-		label.push_color(LabMap.TEAM_COLORS[team_index])
-		var team_name: String=["Синяя команда","Зелёная команда"][team_index] if ru else ["Blue team","Green team"][team_index]
+		label.push_color(LabMap.team_color_for(session,team_index))
+		var team_name := LabMap.team_name_for(session,team_index)
 		var score:=str(session.team_scores[team_index])
 		if session.mode=="ctf":score+=" / "+str(session.capture_limit)
 		elif session.mode=="tc":score+=" / "+str(session.territories.size())

@@ -30,6 +30,13 @@ func _run() -> void:
 	var chunk: Node3D = world._chunks[Vector3i.ZERO]
 	var isolated: Array = chunk.mesh_instance.mesh.surface_get_arrays(0)
 	check(isolated[Mesh.ARRAY_VERTEX].size() == 24 and isolated[Mesh.ARRAY_INDEX].size() == 36, "one block must use four indexed vertices per face")
+	var uv2: PackedVector2Array = isolated[Mesh.ARRAY_TEX_UV2]
+	var atlas_orientation := uv2.size() == 24
+	for face in range(6):
+		for corner in range(4):
+			atlas_orientation = atlas_orientation and uv2[face * 4 + corner].distance_to(AO.face_uv(0, face, corner)) < 0.00001
+	check(atlas_orientation, "all six face UV2 orientations must sample native half-pixel tile bounds")
+	check(AO.face_uv(255, 0, 0).is_equal_approx(Vector2(255.5, 240.5) / 256.0), "last native tile must not cross the atlas edge")
 	var all_exposed := true
 	for color in isolated[Mesh.ARRAY_COLOR]:
 		all_exposed = all_exposed and absf(color.a - 1.0) < 0.00001
@@ -58,6 +65,10 @@ func _run() -> void:
 	check(world._material.get_shader_parameter("ambient_occlusion_strength") == 0.0, "AO toggle must update shared material")
 	world.set_lighting_enabled(false)
 	check(not world._material.get_shader_parameter("lighting_enabled"), "lighting toggle must update shared material")
+	world.set_ambient_occlusion_atlas_enabled(false)
+	check(not world._material.get_shader_parameter("ambient_occlusion_atlas_enabled"), "explicit corner quality fallback must update shared shader only")
+	world.set_ambient_occlusion_atlas_enabled(true)
+	check(world._material.get_shader_parameter("ambient_occlusion_atlas") == AO.get_texture(), "shared terrain shader must bind actual source atlas")
 	check(chunk.mesh_instance.mesh == mesh_before and chunk.collision.shape == shape_before and world.get_stats().dirty_chunks == 0, "lighting toggles must not allocate mesh or rebuild collision")
 	world.set_lighting_enabled(true)
 	world.set_ambient_occlusion_enabled(true)

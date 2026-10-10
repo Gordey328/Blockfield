@@ -6,10 +6,13 @@ signal submitted(message: String, team_channel: bool)
 signal closed
 const HISTORY_LIMIT:=200
 var team_channel:=false
+var session: LocalSession
 var expanded:=false
 var is_open:=false
 var messages: Array[Dictionary]=[]
 var input_history: Array[Dictionary]=[]
+var completion_callable: Callable
+var completion_suggestions: Array[String] = []
 var _clock:=0.0
 var _draft: Dictionary={"text":"","caret":0}
 var _history_index:=0
@@ -18,6 +21,7 @@ var _entry: LineEdit
 var _channel: Button
 var _box: PanelContainer
 var _last_update:=-1.0
+var _completion_hint: Label
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -38,6 +42,7 @@ func _ready() -> void:
 	_entry.max_length=160
 	_entry.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	_entry.text_submitted.connect(_submit)
+	_entry.text_changed.connect(func(_text: String) -> void: _clear_completion())
 	row.add_child(_entry)
 	var send:=Button.new()
 	send.text=OpenSpadesLocalization.text("Say","Client")
@@ -48,6 +53,12 @@ func _ready() -> void:
 	cancel.pressed.connect(cancel_input)
 	row.add_child(cancel)
 	add_child(_box)
+	_completion_hint=Label.new()
+	_completion_hint.add_theme_font_size_override("font_size",13)
+	_completion_hint.modulate=Color(.8,.88,.9)
+	_completion_hint.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	_completion_hint.hide()
+	add_child(_completion_hint)
 	set_channel(false)
 	resized.connect(_layout)
 	_layout()
@@ -58,6 +69,8 @@ func _layout() -> void:
 	_log.size=Vector2(size.x,maxf(100,size.y-42))
 	_box.position=Vector2(0,size.y-38)
 	_box.size=Vector2(size.x,38)
+	_completion_hint.position=Vector2(0,size.y-78)
+	_completion_hint.size=Vector2(size.x,36)
 
 func set_channel(team_only: bool) -> void:
 	team_channel=team_only
@@ -79,6 +92,7 @@ func cancel_input() -> void:
 
 func _close() -> void:
 	is_open=false
+	_clear_completion()
 	_box.hide()
 	_entry.release_focus()
 	set_expanded(false)
@@ -105,8 +119,13 @@ func receive(message: String, author: String, team_only: bool=false, author_team
 	_render_log()
 
 func get_input_text() -> String:return _entry.text
-func set_input_text(text: String) -> void:_entry.text=text;_entry.caret_column=text.length()
+func set_input_text(text: String, caret: int = -1) -> void:
+	_entry.text=text
+	_entry.caret_column=text.length() if caret < 0 else clampi(caret,0,text.length())
 func get_log_text() -> String:return _log.get_parsed_text()
+
+func refresh_team_metadata() -> void:
+	if _log != null: _render_log()
 
 func handle_input(event: InputEvent) -> bool:
 	if not is_open:return false
@@ -114,9 +133,41 @@ func handle_input(event: InputEvent) -> bool:
 		if event.keycode==KEY_ESCAPE:cancel_input();return true
 		if event.keycode==KEY_UP:_navigate_history(-1);return true
 		if event.keycode==KEY_DOWN:_navigate_history(1);return true
-		if event.keycode==KEY_TAB:set_channel(not team_channel);return true
+		if event.keycode==KEY_TAB:
+			if _entry.text.begins_with("/"): _complete_command()
+			else: set_channel(not team_channel)
+			return true
 		if event.keycode in [KEY_ENTER,KEY_KP_ENTER]:_submit(_entry.text);return true
 	return false
+
+func _clear_completion() -> void:
+	completion_suggestions.clear()
+	if _completion_hint!=null:_completion_hint.hide()
+
+func _complete_command() -> void:
+	# ChatSayWindow.as:119–159 extends the case-insensitive common prefix only
+	# at the end of an unselected command; chat's ordinary Tab keeps its channel.
+	_clear_completion()
+	if not completion_callable.is_valid() or _entry.has_selection() or _entry.caret_column != _entry.text.length(): return
+	var candidates: Variant=completion_callable.call(_entry.text)
+	if not candidates is Array:return
+	for candidate: Variant in candidates:
+		if completion_suggestions.size()>=32:break
+		if candidate is String:
+			completion_suggestions.append(str(candidate).left(160))
+	if completion_suggestions.is_empty():return
+	var common: String=completion_suggestions[0]
+	for candidate: String in completion_suggestions:
+		var length: int=0
+		while length<mini(common.length(),candidate.length()) and common[length].to_lower()==candidate[length].to_lower():length+=1
+		common=common.left(length)
+	if common.length()>_entry.text.length():
+		# Programmatic assignment does not emit text_changed, so suggestions
+		# remain available for the visible ambiguity hint below.
+		_entry.text=common
+		_entry.caret_column=common.length()
+	_completion_hint.text="   ".join(completion_suggestions.slice(0,8))
+	_completion_hint.visible=completion_suggestions.size()>1
 
 func _navigate_history(direction: int) -> void:
 	if _history_index==input_history.size():_draft={"text":_entry.text,"caret":_entry.caret_column}
@@ -140,7 +191,7 @@ func _render_log() -> void:
 	for message in messages:
 		var age:=_clock-float(message.time)
 		if not expanded and age>15:continue
-		var color:=Color("66a7d6") if int(message.team)==0 else (Color("98b678") if int(message.team)==1 else Color.WHITE)
+		var color := LabMap.team_color_for(session,int(message.team)) if int(message.team)<2 else Color.WHITE
 		if not expanded:color.a=clampf(15-age,0,1)
 		_log.push_color(color)
 		_log.add_text(("[T] " if bool(message.team_channel) else "[G] ")+str(message.author)+": ")

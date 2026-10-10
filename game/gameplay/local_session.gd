@@ -6,6 +6,7 @@ extends Node
 signal changed
 signal shot_fired
 signal reloaded
+signal restocked
 signal player_died
 signal player_respawned
 signal target_died(target_id: int)
@@ -69,6 +70,8 @@ var grenades: int = 3
 var blocks: int = 50
 var health: int = 100
 var team: int = 0
+var team_names: Array[String]=["Blue","Green"]
+var team_colors: Array[Color]=[Color(.18,.42,.86),Color(.22,.66,.26)]
 var unlimited_ammo: bool = false
 var invulnerable: bool = false
 var is_reloading: bool = false
@@ -83,6 +86,7 @@ var player_position: Vector3 = Vector3.ZERO
 var score: int = 0
 var player_name: String = "Player"
 var player_deaths: int = 0
+var last_death_kind := "weapon"
 var event_log: Array[Dictionary] = []
 var shots_fired: int = 0
 var hits_landed: int = 0
@@ -104,6 +108,7 @@ var _next_target_id: int = 1
 var _next_grenade_id: int = 1
 var _resupply_cooldown: float = 0.0
 var _grenade_release_pending: bool = false
+var _trigger_held := false
 
 
 func _ready() -> void:
@@ -118,6 +123,19 @@ func get_weapon_info() -> Dictionary:
 	info["reserve"] = reserve
 	return info
 
+func get_team_info(index: int) -> Dictionary:
+	if index<0 or index>=2:return {"name":"Spectator","color":Color(.65,.65,.65)}
+	return {"name":team_names[index],"color":team_colors[index]}
+
+func set_team_info(index: int,name: String,color: Color) -> bool:
+	if index<0 or index>=2 or name.strip_edges().is_empty() or name.length()>64:return false
+	for value in [color.r,color.g,color.b]:
+		if not is_finite(value) or value<0 or value>1:return false
+	team_names[index]=name.strip_edges()
+	team_colors[index]=Color(color.r,color.g,color.b,1)
+	changed.emit()
+	return true
+
 
 func set_profile_version(version: String) -> void:
 	if not WEAPON_PROFILES.has(version) or profile_version == version:
@@ -129,10 +147,9 @@ func set_profile_version(version: String) -> void:
 func select_weapon(index: int) -> void:
 	if index < Weapon.RIFLE or index > Weapon.SHOTGUN:
 		return
+	_cancel_selection_actions()
 	current_weapon = index
 	current_tool = Tool.WEAPON
-	is_reloading = false
-	reload_remaining = 0.0
 	fire_cooldown = 0.0
 	var info := get_weapon_info()
 	magazine = int(info["clip_size"])
@@ -143,10 +160,22 @@ func select_weapon(index: int) -> void:
 func select_tool(index: int) -> void:
 	if index < Tool.SPADE or index > Tool.GRENADE or not is_tool_selectable(index):
 		return
-	if is_cooking_grenade and index != Tool.GRENADE:
-		release_grenade()
+	if index==current_tool:return
+	_cancel_selection_actions()
 	current_tool = index
 	changed.emit()
+
+
+func _cancel_selection_actions() -> void:
+	# Player.cpp:307–326 cancels a held grenade and reload when changing tools.
+	# Lab weapon/profile changes must also release the old trigger; already
+	# thrown projectiles retain their independent fuse and are left untouched.
+	is_cooking_grenade = false
+	_grenade_release_pending = false
+	grenade_cook_time = 0.0
+	is_reloading = false
+	reload_remaining = 0.0
+	set_trigger_held(false)
 
 
 func is_tool_selectable(index: int) -> bool:
@@ -192,12 +221,23 @@ func fire() -> bool:
 	reload_remaining = 0.0
 	if not unlimited_ammo:
 		magazine -= 1
-	fire_cooldown = float(get_weapon_info()["delay"])
+	fire_cooldown = (fire_cooldown if _trigger_held else 0.0) + float(get_weapon_info()["delay"])
 	last_shot_time = session_time
 	shots_fired += 1
 	shot_fired.emit()
 	changed.emit()
 	return true
+
+func set_trigger_held(held: bool) -> void:
+	# Weapon.cpp:86–111 preserves deadline overshoot only during one trigger hold.
+	if held and is_reloading:
+		if bool(get_weapon_info().slow_reload):
+			is_reloading=false
+			reload_remaining=0.0
+			changed.emit()
+		else:held=false
+	if held!=_trigger_held:fire_cooldown=maxf(0.0,fire_cooldown)
+	_trigger_held=held
 
 
 func reload_weapon() -> void:
@@ -221,7 +261,7 @@ func update(delta: float) -> void:
 	if delta <= 0.0:
 		return
 	session_time += delta
-	fire_cooldown = maxf(0.0, fire_cooldown - delta)
+	fire_cooldown = fire_cooldown-delta if _trigger_held else maxf(0.0,fire_cooldown-delta)
 	grenade_cooldown = maxf(0.0, grenade_cooldown - delta)
 	block_cooldown = maxf(0.0, block_cooldown - delta)
 	_resupply_cooldown = maxf(0.0, _resupply_cooldown - delta)
@@ -306,12 +346,14 @@ func damage_player(amount: float, origin: Vector3 = Vector3.INF, kind: String = 
 		respawn_remaining = LOCAL_RESPAWN_SECONDS
 		if is_cooking_grenade:
 			release_grenade()
+		last_death_kind=kind
 		player_died.emit()
 		_event("death", {"name":player_name,"team":team,"kind":kind,"origin":origin})
 	changed.emit()
 
 
 func respawn() -> void:
+	_trigger_held=false
 	health = 100
 	respawn_remaining = 0.0
 	is_reloading = false
@@ -340,6 +382,7 @@ func restock() -> void:
 	grenades = 3
 	blocks = 50
 	health = 100
+	restocked.emit()
 	changed.emit()
 
 
@@ -484,6 +527,8 @@ func apply_target_damage(target_id: int, amount: float, hit_part: String = "tors
 	last_damage = dealt
 	last_hit_part = hit_part
 	if int(target["health"]) == 0:
+		target["death_crouch"]=str(target.state)=="crouching"
+		target["death_velocity"]=Vector3(cos(float(target.phase))*3.0*(2.0 if str(target.state)=="sprinting" else 1.0),0,0) if bool(target.moving) else Vector3.ZERO
 		target["deaths"] = int(target.get("deaths",0)) + 1
 		target["alive"] = false
 		target["state"] = "dead"

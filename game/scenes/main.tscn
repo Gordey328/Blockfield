@@ -47,7 +47,7 @@ position=Vector3(0, 2.25, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Player/Head"]
 current=true
-fov=90.0
+fov=68.0
 near=0.05
 far=300.0
 

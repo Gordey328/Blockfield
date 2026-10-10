@@ -114,8 +114,9 @@ parts. Source references are `Sources/Client/ClientPlayer.cpp` and
 `Resources/Scripts/Skin/{BasicViewWeapon,Rifle,SMG,Shotgun,Spade,Block,Grenade}`.
 Walk/crouch/head poses, original view scales, separate sights/magazines/pump,
 source-stage reload hand targets and two-segment view arms are implemented there.
-`CharacterView.set_intel_carrier(bool)` adds the original enemy-colored intel at the
+`CharacterView.set_intel_carrier(bool,enemy_color_optional)` adds the original enemy-colored intel at the
 source torso offset `(0, .6, .5)`, scale 0.1, for living standing/crouching carriers.
+The optional color comes from team metadata; its value survives resource refresh.
 Input timing, recoil state, server state and camera behavior come from the owning
 controller/session; those must be verified with the full build. Matching imported
 resource counts alone does not verify gameplay or visual parity.
@@ -134,9 +135,253 @@ Optional GPU preview command:
 Body coordinates at feet anchor: standing head center 2.35, torso center 1.6,
 legs center 0.6, arms center 1.75; crouching head center 1.5, torso center 0.95,
 legs center 0.4, arms center 1.4. Hit zones must follow the same crouch state.
-Walking is a source-amplitude procedural approximation from speed/time; strafing
-gait input is not provided by the current API. The view-equipment depth hack is
-adapted with Godot materials, and room-dependent audio/reverb is owned elsewhere.
+`set_motion_state(forward_speed,strafe_speed,walk_progress)` uses the source gait:
+`sin(progress*2*pi)*.6`, forward velocity factor 4 and strafe factor 3. Speeds are
+world meters/second and are divided by 32 to obtain native velocity. The owner
+supplies the source walk phase; `Player.cpp` advances horizontal distance by `.3`
+only for grounded non-crouching/non-sneaking/non-ADS walking and exposes half that
+distance plus half the footstep count. Legacy `animate_motion(speed,time)` remains
+an explicit time-phase fallback. The view-equipment depth hack is adapted with
+Godot materials, and room-dependent audio/reverb is owned elsewhere.
+
+### Original third-person tool and corpse contract
+
+`CharacterView.set_tool_action(action,progress,cook_time,ready_state,raise_state)`
+accepts Idle=0, Bash=1, DigStart=2 and Dig=3. The original spade skin contributes
+`-(1-progress)*.7` pitch for Bash; the body combines it with head pitch and sprint
+`-.5`, then clamps/attenuates negative arm pitch by `.9`. Dig adds no pitch bias.
+Original third-person grenade/block skins store cook/ready/raise state but do not
+use it in their rendering functions; the default Godot view preserves that behavior.
+`set_block_color(Color)` changes the held block independently of the uniform.
+Gun/spade/grenade sentinel voxels retain `ModelRenderParam`'s original black default.
+`set_ragdoll_enabled(true)` hides the static dead model when an external corpse is
+spawned. The disabled-ragdoll `Dead.kv6` fallback retains source origin and has no
+player yaw/pitch, as in `ClientPlayer.cpp`.
+
+Live body model transforms now use explicit `W*native*S^-1`: source world vectors
+map through `W=(x,-z,+y)`, while imported mesh vectors use `S=(x,-z,-y)`. Treating
+these two conversions as identical mirrors the right-hand `.35` tool offset.
+Original body scale `(.1,.1,.1)*(-1,-1,1)`, crouch offsets, head/arm pitch, two-axis
+leg rotations and torso-attached enemy intel use the actual source matrices.
+
+`OpenSpadesCorpse` in `game/presentation/corpse.gd` adapts the original
+[nine-node spring simulation](https://github.com/yvt/openspades/blob/v0.1.3/Sources/Client/Corpse.cpp#L36)
+and its [six original mesh transforms](https://github.com/yvt/openspades/blob/v0.1.3/Sources/Client/Corpse.cpp#L620).
+It is scene-owned and never changes gameplay, voxel terrain or the owning player.
+
+```gdscript
+corpse.setup(world, {
+    "feet_position": feet, "yaw": yaw, "crouch": crouching,
+    "team": team, "color": team_color, "player_id": id,
+    "velocity": world_velocity, "impulse": kill_impulse, "seed": optional_seed
+})
+corpse.step(delta)
+corpse.add_impulse(world_impulse)
+corpse.get_center()
+corpse.is_visible_from(camera_position)
+corpse.refresh_resources()
+corpse.clear()
+```
+
+`feet_position`, velocity and impulses use Godot world coordinates and meters/second;
+yaw rotates around Godot +Y. Capture crouch, feet and velocity before respawn/reset.
+The nine points are four torso corners, two arms, two legs and head. Initial random
+horizontal velocities, `.8/.9/1.204/1` pair springs, arm/leg angle constraints, head
+spring, angular momentum, source gravity 32, submerged buoyancy 6, `.371` vertical
+damping, axis collision order/bounce/friction and line constraints are implemented.
+The owner supplies `world.clip_box(point)`, `get_block(cell)`, `dimensions` and
+`water_level`. Bodies use separate original `Torso/Head/Arm/Leg` meshes; carried
+equipment/intel is omitted as in upstream. Resource refresh keeps physics state.
+
+Native [kill impulses](https://github.com/yvt/openspades/blob/v0.1.3/Sources/Client/Client_Update.cpp#L823)
+are normalized victim-minus-killer direction times rifle 3.5, SMG 2.8, shotgun 4.5
+or melee 6, plus victim world velocity. Grenades use upward random 4..8 instead of
+that direction, including self kills. Other self kills add no directional impulse.
+The owner maintains original soft/hard list limits 6/16 and removes invisible bodies
+over the soft limit; no automatic 30-second expiry is added because the source's
+TTL field is unused. Clear bodies on map/lab reset and release their scene nodes.
+
+Explicit adapters: native four substeps per render frame are preserved at 60 Hz or
+faster; slower frames add substeps to retain at least 240 Hz and a paused browser
+resume processes at most `.25` seconds of cosmetic simulation. Zero-length/parallel
+bases retain the last valid render transform instead of producing NaNs. Horizontal
+voxel addressing wraps map dimensions. Native `LineCollision`/`IsVisibleFrom` pass
+an endpoint to the old direction-based `CastRay` prefilter, and visibility returns
+the hit rather than unobstructed state; that legacy inconsistency is replaced by
+finite-segment voxel DDA and intended any-unoccluded-point visibility (150 m limit).
+Line queries retain the source eight-cell budget, escape order and force/friction.
+This source adaptation is documented rather than claiming identical native bugs.
+
+Validation commands:
+
+```powershell
+godot --headless --path game --script ../tests/presentation/test_character_actions.gd
+godot --headless --path game --script ../tests/presentation/test_corpse.gd
+godot --path game --rendering-method gl_compatibility `
+  --script ../tests/presentation/render_character_corpse.gd -- --output=<absolute dir>
+```
+
+Behavior checks include literal source-formula first-frame point/mesh fixtures,
+crouch/yaw, black tool colors and independent block tint, Bash/sprint/head separation,
+forward/backward/strafe gait, velocity/impulse, gravity/buoyancy, floor and line
+collisions, occlusion, resource refresh, cleanup and 10-second finite-body stability.
+Headless character/corpse checks passed 30/9,046 assertions respectively, zero failures.
+Godot 4.7.2 real Intel UHD OpenGL Compatibility preview passed seven image-difference
+checks, with clean logs. Standing/crouching death frames, impulse/falling/settled
+bodies, forward/strafe poses, spade Bash and colored-block/intel previews were visually
+reviewed. These fixtures/renderer checks are module evidence; full-build event timing,
+death-camera following, corpse pruning and browser acceptance require full-build checks.
+
+### Original first-person skin contract
+
+`WeaponView` adapts the source
+[tool/ADS/sprint state](https://github.com/yvt/openspades/blob/v0.1.3/Sources/Client/ClientPlayer.cpp#L318),
+[view movement and two-segment arm IK](https://github.com/yvt/openspades/blob/v0.1.3/Sources/Client/ClientPlayer.cpp#L650)
+and all six original `Resources/Scripts/Skin/<tool>/View.as` renderers.
+The source eye matrix maps view coordinates through `E=(-x,-z,-y)`, rather than
+the imported-mesh conversion `S=(x,-z,-y)`. A single `SourceViewAxes` parent preserves
+this distinction: hip equipment sits on screen right, the source left/right shoulder
+anchors sit on their corresponding sides, and ADS centers the original front sight.
+Original weapon subpart pivots/scales, rifle half-resolution correction and source
+matrix multiplication order remain explicit.
+
+```gdscript
+view.set_selection(tool,weapon) # tool 0..3; weapon 0..2
+view.set_team(team,team_color_optional)
+view.set_ammo(ammo,clip_size)
+view.set_tool_action(action,progress,ready_state)
+view.set_motion_state(camera_local_velocity,walk_progress,front_delta,manual_offset)
+view.set_grenade_cook(seconds)
+view.update_pose(delta,aiming,sprinting,crouching,speed,reload_progress)
+view.fire()
+view.reload()
+view.reload_completed()
+view.cancel_reload()
+view.get_muzzle_transform()
+view.get_sprint_state()
+view.is_changing_tool()
+view.get_eye_bob()
+```
+
+Action values are Idle=0, Bash=1, DigStart=2 and Dig=3. First DigStart has the source
+quadratic preparation; repeated Dig begins in its ready pose. Block readiness hides
+the block and restores the source hand targets. Grenade readiness is normalized to
+the `.5` second cooldown, including the source throw arc, pin pull and bring-up.
+**Do not clamp ReadyState to one**: gun/grenade states may exceed one after cooldown;
+the grenade bring-up and completed shotgun reload depend on that source behavior.
+Gun state is `1-TimeToNextFire/GetDelay`, grenade state is `1-TimeToNextGrenade/.5`.
+For gun reloads, call `reload_completed()` on completion; shotgun progress continues
+above one for the source final pump, without simulating an extra shot. Per-shell
+ammo/clip values determine intermediate versus last-shell pump blending.
+
+Rifle/SMG resting and bolt/reach hand targets are calculated before sight alignment;
+magazine attachment targets are calculated after it. Shotgun reload reach/insert
+targets use the former transform, while pump/rest targets use the latter. The pump
+on firing uses remaining cooldown fraction, rather than elapsed cooldown fraction.
+Arm IK retains the source equal-length segments and bend side, with finite guards
+for degenerate segments. Original gun/spade/grenade custom color defaults to black;
+held blocks use their separate selected color and arm sentinels use team metadata.
+Original gun surfaces themselves have fixed vertex colors and no team-color faces.
+
+Raw sprint rises at `4/s` and falls at `3/s`; source smoothstep, squared skin input
+and `.001^delta` rising smoothing remain separate stages. ADS rises at `8/s` and
+falls at `3/s`. Tools lower before replacement, then raise at `4/s` through the
+source squared/clamped curve. `tool_raised(tool,weapon)` emits once at actual replacement,
+so the owner can play `RaiseLocal` then. Selecting another gun class in the offline
+lab has no native live-switch equivalent; it immediately replaces that class and
+uses the same raising curve. Ammunition remains authority-owned.
+
+`is_changing_tool()` is a required compiled skin contract for the owner's source tool-use
+gate: it compares displayed versus requested tool and the raw raise counter against
+`.999`, not the eased visual raise value. Original `Client::CanLocalPlayerUseToolNow`
+also rejects actions while `get_sprint_state()>0`, including sprint decay after the
+key is released. The controller applies those gates before committing an action.
+
+Movement velocity uses camera-local Godot meters/second and is divided by 32.
+`front_delta` is camera-local change of the owner's unshaken forward vector.
+The source inertia, decay, soft limits, gait bob and heartbeat pulse are retained.
+`manual_offset` retains native `cg_viewWeaponX/Y/Z` units: X screen-left, Y forward,
+Z down. The optional eye-bob getter returns the source positive camera-Y sprint bob;
+the owner applies it according to its shake setting. The muzzle getter preserves
+`ClientPlayer::FiredWeapon`'s fixed eye-local point `(-.13,1.5,.2)`, independent of
+weapon/ADS/reload. It is an effects origin rather than the animated mesh barrel.
+All FP equipment/arm meshes occupy render layer 19 (`1 << 18`), also after resource
+refresh; world reflection cameras exclude that layer, while the main camera sees it.
+
+`test_weapon_native.gd` passed 65 assertions with literal native pose/hand fixtures,
+all reload hand stages, final shotgun pump lifecycle, dig/grenade timing, source
+state rates, delayed tool-swap signal, custom uniform tint, reflection layer and refresh.
+`render_weapon_native.gd` passed ten actual Intel UHD OpenGL Compatibility image
+checks with clean logs: three hip/ADS pairs, first/repeated dig, ready/unready block,
+pin/throw movement. All three weapons' reload stage images, pump and custom-color
+arms were also captured and visually reviewed. Screenshots stay in ignored `.cache/`.
+Run both scripts with the same headless/GPU commands above, substituting their names.
+These tests establish source-formula/module rendering evidence; full controller event
+timing, native-renderer comparison and browser performance remain acceptance work.
+
+### Observed first-person soldiers
+
+`OpenSpadesSpectatorView` in `game/presentation/spectator_view.gd` supplies equipment
+for the live soldier selected by a first-person follow camera. This follows
+[ClientPlayer::AddToScene and ShouldRenderInThirdPersonView](https://github.com/yvt/openspades/blob/v0.1.3/Sources/Client/ClientPlayer.cpp#L992):
+the camera target receives a view skin regardless of whether it is the local player.
+The owning controller positions/rotates the camera and suppresses the followed
+soldier's third-person body as required by that camera mode.
+
+```gdscript
+camera.add_child(observed_view) # Identity transform; the camera owns its pose.
+observed_view.setup(camera,session,skin_id)
+# Each frame, after the owner updates the follow-camera transform:
+observed_view.show_target(followed_id,is_first_person_follow)
+observed_view.update_view(delta)
+observed_view.refresh_resources()
+observed_view.set_skin(id)
+observed_view.clear()
+```
+
+Updates are manual; there is no independent `_process` ordering to race the camera.
+Repeated `show_target` calls with unchanged arguments preserve motion samples.
+Missing, dead, zero-health, invalid-position and spectator-team targets hide the
+equipment. Changing target or respawning creates a fresh skin; `clear()` frees it
+and retains setup references for a subsequent follow. The original
+`WeaponView.initialize_selection(tool,weapon)` immediately selects the starting
+tool for a new view, without a live tool-change delay or `tool_raised` signal.
+Trusted skins may implement this optional API; otherwise their ordinary initial
+`set_selection` behavior applies. Later live tool changes retain native lowering.
+Every observed visual mesh is assigned layer 19, including custom skins and refresh.
+
+The adapter only queries `get_target(id)` and optional `get_team_info(team)` from
+the session. It never reads the local player's ammo/weapon, invokes game authority,
+changes the camera/snapshot, or attaches own-local audio. A trusted first-person
+factory receives `{target_id,snapshot,spectator:true,local_audio:false}`; the snapshot
+is copied and no live session reference is provided. Custom skins must honor that
+context and keep their presentation methods free of own-local sounds/game actions.
+
+Target fields are `position`, `team`, `weapon`, `tool` and optional `alive`, `health`,
+`state`, `pitch`, `yaw`. Explicit `team_color`/`color` overrides team metadata.
+The following optional snapshot fields drive the existing view-skin API:
+
+| Fields | Presentation behavior |
+| --- | --- |
+| `crouching`, `sprinting`, `aiming` | State booleans; corresponding `state` strings are fallbacks. |
+| `velocity`, `walk_progress` | World meters/second and native walk phase. Otherwise velocity comes from previous position and phase advances by horizontal distance times `.15`, when grounded/non-crouching/non-sneaking/non-ADS. Pitch/yaw convert motion and front changes to observed camera-local axes. |
+| `profile`, `clip_size`, `ammo`/`magazine` | Target profile overrides current session profile; absent ammo uses the full selected profile clip. |
+| `block_color`, `grenade_cook_time`/`cook_time` | Held resource color and original grenade pin/cook animation. |
+| `action_type`, `action_progress`, `ready_state` | Original tool action and unbounded readiness; alternatively `action:{type,progress,ready}`. Missing action is idle and readiness is fully ready. |
+| `is_reloading`/`reloading`, `reload_progress`, `reload_cancelled` | Source reload stages, repeated shell-cycle resets and completion/cancellation. |
+| `shot_sequence` | A changed sequence triggers only the skin's visual recoil; first observation establishes a baseline. |
+
+Absent remote action data deliberately produces an idle full-clip view rather than
+inventing remote gameplay. Animation steps are capped at `.25` seconds after a
+paused/slow frame. This module does not add multiplayer snapshots or remote firing
+to offline targets; supplying those fields is the owning session's responsibility.
+Headless `test_spectator_view.gd` passed 43 assertions, zero failures, including
+read-only authority, profile changes, optional states, motion, skin isolation,
+death/respawn/invalid hiding, reflection layers and cleanup. Actual Intel UHD OpenGL
+Compatibility `render_spectator_view.gd` passed 11 image checks with clean logs.
+Three observed hip/ADS weapons, grenade pin and spade actions were captured and
+visually reviewed; dead/missing targets matched the empty frame. Full follow-camera
+integration and browser acceptance remain separate checks.
 
 ## Localization contract
 
@@ -256,6 +501,72 @@ effects enabled. This is adaptation evidence, not acceptance of exact native-ren
 parity or browser performance. Screenshots stay in ignored `.cache/`.
 
 Resource override and first/third-person Godot skin entrypoints are documented in
-[extensions.md](extensions.md). Remaining character parity includes native third-person
-spade bash PitchBias, tool raise/cook action state and `Corpse.cpp` physical ragdoll
-behavior; the current dead model is a pose, not that physics simulation.
+[extensions.md](extensions.md). The source character/action and physical-corpse modules
+are implemented as above. Full character parity still requires full-build checks of
+walk/action timing, pre-reset death state/impulses, list pruning, local death-camera
+following and browser acceptance. Original third-person grenade/block cook/raise values
+are intentionally stored without adding an animation absent from those source skins.
+
+## Source camera effects
+
+`SourceCameraEffects` in `presentation/source_camera_effects.gd` ports
+`Client_Scene.cpp:111..119,201..247,384..440`, `NoiseSampler.cpp:29..83` and
+`Client_Update.cpp:248..258` from the pinned v0.1.3 source. It is a scene-independent
+`RefCounted` helper. It samples presentation effects without editing camera targets,
+authoritative aiming rays, movement, ADS state or gameplay RNG.
+
+`sample(input,time,dt)` accepts `shake_level`0/1/2, `first_person`, raw normalized
+`raw_ads`/`raw_sprint`, `walk_phase` in native cycles, `last_fire_time` on the same
+clock as `time`, native `tool`0=spade, `ads_zoom_scale` from the current local/follow
+camera target, and `grenade_fast`/`grenade_slow` intensities. Those intensities are
+already decayed by the owner; `sample` does not decay them again or mutate `input`.
+An optional separate `decay_intensities(input,dt)` returns the native subtract-dt,
+clamp-at-zero result. Use that helper or the existing effects-manager decay once.
+
+The100 ms fire envelope is squared before the spade0.4 multiplier. Shake level1
+adds its native random roll/FOV, pitch/yaw and radial blur, plus sine/cosine sprint
+angles. Sprint pitch uses cos^8; the separate view-skin eye bob uses cos^16.
+Level2 adds source coherent sprint angles and SmoothStep(sprint)*0.1 FOV widening.
+Fast grenade intensity multiplies10 and clamps at1, adding random angles/FOV and
+radial blur. Slow intensity multiplies4, clamps at1 then squares, adding coherent
+angles at time rates8/12/11. Grenade effects apply to all camera modes; fire/sprint
+effects require `first_person`. Level0 disables all these shake channels.
+
+The canonical result is `basis_delta`, a local proper rotation preserving native
+roll→pitch→yaw order and source-axis conversion. `rotation_delta` is its diagnostic
+Godot YXZ Euler decomposition in radians; it is not an additive world-space rotation.
+`fov_scale` multiplies **tan(current already-ADS FOV/2)**, not FOV degrees. Native fire
+and sprint modify scale before dividing by ADS zoom, while fast grenade modifies it
+afterwards. Therefore the relative result includes that grenade delta times the
+owner's zoom. `native_fov_scale` is the diagnostic complete multiplier for unzoomed
+FOV. This preserves ADS ownership and prevents duplicate zoom in local/follow views.
+
+```gdscript
+var sample := camera_effects.sample(camera_inputs, session_time, delta)
+camera.basis = unshaken_basis * sample.basis_delta
+camera.fov = SourceCameraEffects.apply_fov_degrees(zoomed_fov, sample.fov_scale)
+# Send sample.radial_blur_strength to the owning post chain; do not also add
+# the legacy OpenSpadesEffects.get_camera_rotation() offset.
+```
+
+The source coherent sampler uses three1024-entry value/gradient pairs, smooth cubic
+interpolation plus the native gradient polynomial, and1024-period wrapping including
+negative coordinates:24 KiB of packed float32 table data. Its private Godot RNG
+preserves source distributions but not native `std::uniform_real_distribution`
+seed sequences. `reset_noise(seed)` makes this stream reproducible and independent
+of gameplay. `set_noise_tables(axis,values,derivatives)` and sample inputs
+`random_values`, `sprint_noise`, `grenade_noise` permit fixed native fixtures without
+global RNG changes. Source formulas are checked within floating-point tolerance;
+bit-identical C++ float arithmetic is not claimed.
+
+Godot4.7.2 `ed1daf0bf`: `test_camera_effects.gd` passed45 numeric checks, including
+native combined angles(.021039,.007841016,.060663492), radial strength.0525 and
+base68°/ADS2.4 FOV34.857015°. `render_camera_effects.gd` passed7 real Intel UHD
+Compatibility GPU checks: tangent-FOV image difference.002852, independent angular
+difference.006013, rendered/projected marker agreement within2 pixels, and exact
+image restoration at shake level0. The PNGs were visually inspected. This demo
+verifies camera pose/FOV integration; actual radial-post integration and exported
+browser behavior are acceptance checks owned by the full client. Run the usual
+headless script command for numeric tests and graphics-enabled Compatibility with
+`-- --output=<absolute evidence directory>` for the GPU demo. Godot's Euler
+conventions are documented in [Basis](https://docs.godotengine.org/en/4.7/classes/class_basis.html).

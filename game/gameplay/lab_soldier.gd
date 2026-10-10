@@ -12,19 +12,20 @@ var _label: Label3D
 var _zones: Array[Area3D] = []
 var _origin := Vector3.ZERO
 var _phase := 0.0
+var _previous_position:=Vector3.ZERO
+var _walk_distance:=0.0
 
 func setup(local_session: LocalSession, identifier: int, point: Vector3) -> void:
 	session = local_session
 	target_id = identifier
 	_origin = point
 	position = point
+	_previous_position=point
 	character = OpenSpadesExtensions.create_third_person_skin(skin_id,{"session":session,"target_id":target_id})
 	add_child(character)
-	_make_zone("head",Vector3(0,2.35,0),Vector3(0.6,0.6,0.6))
-	_make_zone("torso",Vector3(0,1.65,0),Vector3(0.8,0.9,0.4))
-	_make_zone("legs",Vector3(0,0.6,0),Vector3(0.7,1.2,0.5))
-	_make_zone("arms",Vector3(-0.52,1.75,0),Vector3(0.3,0.9,0.45))
-	_make_zone("arms",Vector3(0.52,1.75,0),Vector3(0.3,0.9,0.45))
+	for volume in LabHitVolumes.volumes(false):
+		_make_zone(volume.part,Vector3.ZERO,volume.box.size)
+	_update_hit_zones(false,0.0)
 	_label=Label3D.new()
 	_label.position.y=2.65
 	_label.pixel_size=0.004
@@ -68,17 +69,37 @@ func _process(delta: float) -> void:
 	_phase+=delta
 	var moving: bool=target.get("moving",false)
 	position=target.position
-	var crouching: bool=str(target.get("state","standing"))=="crouching"
-	var sprinting: bool=str(target.get("state","standing"))=="sprinting"
-	character.set_team(int(target.get("team",1)))
+	rotation.y=float(target.get("yaw",0.0))
+	var crouching: bool=bool(target.get("crouching",str(target.get("state","standing"))=="crouching"))
+	var sprinting: bool=bool(target.get("sprinting",str(target.get("state","standing"))=="sprinting"))
+	character.set_team(int(target.get("team",1)),session.get_team_info(int(target.get("team",1))).color)
+	character.set_aim(float(target.get("pitch",0.0)))
 	character.set_pose(crouching,dead,sprinting)
 	character.set_weapon(int(target.get("weapon",0)),int(target.get("tool",2)))
-	character.set_intel_carrier(str(target.get("state","standing"))=="intel")
-	character.animate_motion((5.0 if sprinting else 3.0) if moving else 0.0,_phase)
-	_zones[0].position.y=1.5 if crouching else 2.35
-	_zones[1].position.y=0.95 if crouching else 1.65
-	_zones[3].position.y=1.4 if crouching else 1.75
-	_zones[4].position.y=1.4 if crouching else 1.75
+	if character.has_method("set_block_color"):
+		var color: Variant=target.get("block_color",Color(.6,.46,.32))
+		if color is Color:character.set_block_color(color)
+	if character.has_method("set_tool_action"):
+		var action: Variant=target.get("action",target.get("action_type",0))
+		var action_type:=int(action.get("type",0)) if action is Dictionary else int(action)
+		var progress:=float(action.get("progress",target.get("action_progress",0.0))) if action is Dictionary else float(target.get("action_progress",0.0))
+		var ready:=float(action.get("ready",target.get("ready_state",1.0))) if action is Dictionary else float(target.get("ready_state",1.0))
+		character.set_tool_action(clampi(action_type,0,3),clampf(progress,0,1),maxf(float(target.get("grenade_cook_time",0.0)),0),ready,float(target.get("raise_state",1.0)))
+	character.set_intel_carrier(str(target.get("state","standing"))=="intel",session.get_team_info(1-int(target.team)).color)
+	var motion:=((position-_previous_position)/maxf(delta,.00001)) if moving and not dead else Vector3.ZERO
+	_previous_position=position
+	if moving and not dead and not crouching and not bool(target.get("aiming",false)):_walk_distance+=Vector2(motion.x,motion.z).length()*delta*.15
+	if character.has_method("set_motion_state"):character.set_motion_state(motion.dot(-global_basis.z),motion.dot(global_basis.x),_walk_distance)
+	else:character.animate_motion((5.0 if sprinting else 3.0) if moving else 0.0,_phase)
+	_update_hit_zones(crouching,float(target.get("pitch",0.0)))
 	_label.text="TARGET %02d  /  %d HP"%[target_id,int(target.get("health",100))]
 	_label.modulate=Color("ed806d") if dead else Color("e8efe6")
 	for area in _zones: area.collision_layer=0 if dead else 2
+
+func _update_hit_zones(crouch: bool,pitch: float) -> void:
+	var volumes:=LabHitVolumes.volumes(crouch,pitch)
+	for index in range(_zones.size()):
+		var volume: Dictionary=volumes[index]
+		var box: AABB=volume.box
+		_zones[index].transform=volume.transform*Transform3D(Basis.IDENTITY,box.get_center())
+		(_zones[index].get_child(0).shape as BoxShape3D).size=box.size

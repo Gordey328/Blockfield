@@ -32,6 +32,7 @@ var _tracers: Array[Dictionary] = []
 var _lights: Array[Dictionary] = []
 var _textures: Dictionary = {}
 var _sounds: Array[AudioStreamPlayer3D] = []
+var audio_service: OpenSpadesAudio
 var _tracer_material: StandardMaterial3D
 var _tracer_mesh: QuadMesh
 var _fast_shake := 0.0
@@ -88,6 +89,11 @@ func get_camera_rotation() -> Vector3:
 func kick_camera(strength: float) -> void:
 	_fast_shake = minf(_fast_shake + maxf(strength, 0.0), 0.4)
 	_slow_shake = minf(_slow_shake + maxf(strength, 0.0) * 5.0, 0.4)
+
+func collapse_impact(position: Vector3,block_count: int) -> void:
+	var distance:=_distance(position)
+	if distance>170.0:return
+	_slow_shake=minf(1.0,_slow_shake+float(block_count)/100.0/(distance+5.0))
 
 func blood(position: Vector3) -> void:
 	if not blood_enabled or quality < 1 or _distance(position) > 150.0:
@@ -448,6 +454,10 @@ func _contact(position: Vector3, water: bool, weapon: int) -> void:
 	if not audio_enabled or _distance(position) >= 40.0 or _sounds.size() >= 16:
 		return
 	var relative: String = WEAPONS[weapon] + ("/ShellWater.ogg" if water else "/ShellDrop%d.ogg" % rng.randi_range(1, 2))
+	if audio_service!=null:
+		var voice: Node=audio_service.play_spatial("Weapons/"+relative.trim_suffix(".ogg"),position,1.0,.6)
+		if voice!=null:voice.pitch_scale=.9+rng.randf()*.2 if water else 1.0
+		return
 	var stream := EXTENSIONS.sound(SOUND_ROOT + relative)
 	if stream == null:
 		return

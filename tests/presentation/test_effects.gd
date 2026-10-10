@@ -28,6 +28,14 @@ func _run() -> void:
 	effects.rng.seed = 7341
 	effects.casing_contact.connect(func(_position: Vector3, _water: bool, _weapon: int): contacts += 1)
 	var origin := Vector3(0, 2, 0)
+	effects.collapse_impact(origin,100)
+	_check(is_equal_approx(effects._slow_shake,.1),"native100-block breakup at5m contributes .1 vibration")
+	effects.clear()
+	effects.collapse_impact(camera.position,1000)
+	_check(effects._slow_shake==1.0,"native breakup vibration clamps at1")
+	effects.clear()
+	effects.collapse_impact(Vector3(0,2,200),1000)
+	_check(effects._slow_shake==0.0,"native breakup beyond170m is culled")
 	effects.quality = 1
 	effects.blood(origin)
 	_check(effects.stats().particles == 10, "Low-quality blood has original ten droplets")

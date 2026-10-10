@@ -6,6 +6,7 @@ signal shattered(position: Vector3, block_count: int, reason: String)
 signal completed
 
 const CHUNK = preload("res://world/voxel_chunk.gd")
+const EXTENSIONS = preload("res://presentation/openspades_extensions.gd")
 const FALL_GRAVITY := 4.0
 const ROTATION_RATE := 1.4
 const FALL_LIFETIME := 1.0
@@ -15,6 +16,7 @@ const FRAGMENT_LIFETIME := 2.0
 enum Phase { FALLING, DEBRIS, COMPLETE }
 
 static var _smoke_frames: Dictionary = {}
+static var _texture_generation := -1
 var phase: int = Phase.FALLING
 var elapsed := 0.0
 var debris_elapsed := 0.0
@@ -160,7 +162,7 @@ func _create_batch(count: int, smoke: bool, origin: Vector3) -> MultiMeshInstanc
 		_smoke_material = material
 		material.albedo_texture = _smoke_frame(0)
 	else:
-		material.albedo_texture = load("res://assets/openspades/images/Gfx/White.png")
+		material.albedo_texture = EXTENSIONS.texture("res://assets/openspades/images/Gfx/White.png")
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE * 2.0
 	quad.material = material
@@ -176,10 +178,16 @@ func _create_batch(count: int, smoke: bool, origin: Vector3) -> MultiMeshInstanc
 	add_child(batch)
 	return batch
 
+static func clear_texture_cache() -> void:
+	_smoke_frames.clear()
+	_texture_generation = EXTENSIONS.get_generation()
+
 static func _smoke_frame(frame: int) -> Texture2D:
 	var index := frame % 180
+	if _texture_generation != EXTENSIONS.get_generation():
+		clear_texture_cache()
 	if not _smoke_frames.has(index):
-		_smoke_frames[index] = load("res://assets/openspades/images/Textures/Smoke1/%03d.png" % index)
+		_smoke_frames[index] = EXTENSIONS.texture("res://assets/openspades/images/Textures/Smoke1/%03d.png" % index)
 	return _smoke_frames[index]
 
 func _random_velocity(scale_value: float) -> Vector3:

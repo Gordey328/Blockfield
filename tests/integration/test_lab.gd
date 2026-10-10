@@ -1,6 +1,6 @@
 extends SceneTree
 ## Exercise the actual scene, menu callbacks, input, ray hits and world/session flow.
-## godot --headless --path game --script ../tests/integration/test_lab.gd
+## godot --headless --path game --fixed-fps 60 --script ../tests/integration/test_lab.gd
 
 const MAIN_SCENE = preload("res://scenes/main.tscn")
 var assertions: int = 0
@@ -44,7 +44,7 @@ func _run() -> void:
 	action("tool_spade",true)
 	action("tool_spade",false)
 	check(session.current_tool == startup_tool, "menu blocks gameplay tool shortcuts")
-	for scenario in ["test_menu_and_reset","test_movement_and_shooting","test_movement_input_and_camera","test_building_and_spade","test_grenade_pipeline"]:
+	for scenario in ["test_hdr_integration","test_menu_and_reset","test_tool_use_gate","test_movement_and_shooting","test_movement_input_and_camera","test_building_and_spade","test_grenade_pipeline"]:
 		var completed: Variant = await call(scenario)
 		check(completed == true, "scenario reaches completion: " + scenario)
 	release_actions()
@@ -74,6 +74,42 @@ func frames(count: int) -> void:
 	for frame in range(count):
 		await physics_frame
 		await process_frame
+
+func test_hdr_integration() -> bool:
+	var saved: Dictionary=app.get_graphics_options()
+	app.set_graphics_option("hdr",true)
+	await frames(3)
+	check(app.hdr_scene.enabled and root.disable_3d and not player.camera.current,"HDR switches the actual scene to a float viewport")
+	check(app.hdr_scene.scene_viewport.world_3d==root.world_3d,"HDR shares geometry without cloning the map or weapon")
+	# process_frame wakes before node _process callbacks; sample the explicit
+	# synchronization boundary rather than the previous rendered frame.
+	app.hdr_scene.synchronize()
+	check(app.hdr_scene.scene_camera.global_transform.is_equal_approx(player.camera.global_transform),"HDR reference camera follows current player pose")
+	app.set_graphics_option("msaa",2)
+	await frames(2)
+	check(app.hdr_scene.scene_viewport.msaa_3d==Viewport.MSAA_2X,"HDR scene receives requested MSAA")
+	app.set_graphics_option("bloom",true)
+	check(not app.post_effects._color_material.get_shader_parameter("bloom_enabled"),"Integrated HDR disables duplicate LDR bloom")
+	var material: ShaderMaterial=app.hdr_scene.exposure.get_present_material()
+	check(material.get_shader_parameter("bloom_enabled"),"Original dust bloom reaches the HDR scene")
+	check(material.get_shader_parameter("bloom_dust_texture")==OpenSpadesExtensions.texture("res://assets/openspades/images/Textures/LensDustTexture.png"),"HDR bloom uses the resolved original texture")
+	var result: Dictionary=app.console_service.execute("/r_hdrAutoExposureSpeed 0")
+	check(result.changed and app.hdr_scene.get_stats().options.speed==0,"Native HDR command updates the connected exposure pass")
+	var settings:=ConfigFile.new()
+	check(settings.load("user://settings.cfg")==OK and settings.get_value("graphics","hdr",false),"HDR preference persists through the application settings path")
+	check(root.get_audio_listener_3d()!=null and root.get_audio_listener_3d().get_parent()==player.camera,"HDR keeps positional audio on the reference camera")
+	app.set_graphics_option("hdr",false)
+	check(not root.disable_3d and player.camera.current and not app.hdr_scene.presentation.visible,"Disabling HDR restores ordinary rendering")
+	app.graphics_options=saved
+	app._apply_graphics()
+	return true
+
+
+func ready_tool() -> void:
+	for tick in 75:
+		await frames(1)
+		if player._sprint_state<=0 and player._weapon_view!=null and not player._weapon_view.is_changing_tool():return
+	check(false,"native tool reaches raised state before action fixture")
 
 
 func nodes_below(node: Node) -> Array[Node]:
@@ -177,9 +213,10 @@ func test_menu_and_reset() -> bool:
 func test_movement_and_shooting() -> bool:
 	session.unlimited_ammo = false
 	session.select_weapon(0)
+	await ready_tool()
 	session.select_team(0)
 	await frames(50)
-	check(player.is_on_floor(), "player lands on generated voxel collision")
+	check(player.is_grounded(), "player lands on generated voxel collision")
 	var before := player.global_position
 	action("forward", true)
 	await frames(30)
@@ -205,6 +242,52 @@ func test_movement_and_shooting() -> bool:
 	for node in nodes_below(player.camera):
 		if node is WeaponView: view_count += 1
 	check(view_count == 1, "all selections share one integrated original WeaponView")
+	session.select_weapon(1)
+	await ready_tool()
+	session.restock()
+	session.set_target_state(id,"standing",1,2)
+	session.get_target(id).health=100
+	player.respawn_at(session.get_target(id).position+Vector3(0,0,6))
+	await frames(4)
+	aim_at(session.get_target(id).position+Vector3.UP*2.35)
+	app.audio.stop()
+	player.aiming=true
+	player._shoot()
+	check(session.get_target(id).alive and session.get_target(id).health==25,"SMG native head hit is nonlethal at full target health")
+	var headshot_sounds:=0
+	for voice in app.audio._voices:
+		if voice.get_meta("path","")=="Feedback/HeadshotFeedback":headshot_sounds+=1
+	check(headshot_sounds==1,"Nonlethal local head hit plays one original feedback sound")
+	return true
+
+func test_tool_use_gate() -> bool:
+	release_actions()
+	session.unlimited_ammo=false
+	session.select_tool(0)
+	await ready_tool()
+	session.select_weapon(0)
+	session.restock()
+	check(not player.can_use_tool(),"switching from spade to rifle blocks gameplay before the old skin lowers")
+	var old_ammo:=session.magazine
+	action("primary",true)
+	await frames(2)
+	check(session.magazine==old_ammo,"held attack cannot fire through the native tool-switch interval")
+	await ready_tool()
+	await frames(2)
+	check(session.magazine<old_ammo,"held attack becomes effective after the new tool reaches raised state")
+	action("primary",false)
+	session.fire_cooldown=0
+	player._sprint_state=1.0
+	old_ammo=session.magazine
+	action("primary",true)
+	await frames(1)
+	check(session.magazine==old_ammo and not player.can_use_tool(),"residual sprint state blocks firing after sprint input stops")
+	await ready_tool()
+	await frames(2)
+	check(session.magazine<old_ammo,"firing resumes when residual sprint reaches zero")
+	release_actions()
+	app.reset_lab()
+	await frames(2)
 	return true
 
 
@@ -218,10 +301,34 @@ func wheel(button_index: int) -> void:
 
 func test_movement_input_and_camera() -> bool:
 	release_actions()
+	# Embedded browsers can deny pointer capture. The explicit drag fallback
+	# retains source sensitivity while ordinary cursor movement stays harmless.
+	var previous_mouse_mode:=Input.mouse_mode
+	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	app.browser_pointer_fallback=true
+	var fallback_yaw:=player.rotation.y
+	var mouse:=InputEventMouseMotion.new()
+	mouse.relative=Vector2(12,0)
+	player._unhandled_input(mouse)
+	check(player.rotation.y==fallback_yaw,"Denied pointer capture does not rotate on ordinary cursor motion")
+	var button:=InputEventMouseButton.new()
+	button.button_index=MOUSE_BUTTON_LEFT
+	button.pressed=true
+	button.position=Vector2(200,200)
+	player._unhandled_input(button)
+	mouse.button_mask=MOUSE_BUTTON_MASK_LEFT
+	mouse.position=Vector2(212,200)
+	mouse.relative=Vector2(10000,10000)
+	player._unhandled_input(mouse)
+	check(player.rotation.y!=fallback_yaw,"Denied pointer capture still permits explicit mouse drag to look")
+	check(absf(player.rotation.y-fallback_yaw)<.5,"Drag look uses the press anchor rather than stale captured-pointer deltas")
+	app.browser_pointer_fallback=false
+	Input.mouse_mode=previous_mouse_mode
 	player.respawn_at(Vector3(48.5,4.01,70.5))
 	player.rotation = Vector3.ZERO
 	player.head.rotation = Vector3.ZERO
 	session.select_weapon(0)
+	await ready_tool()
 	player.hold_aim_down_sight = false
 	await frames(8)
 	action("secondary",true)
@@ -273,6 +380,7 @@ func test_movement_input_and_camera() -> bool:
 	check(player.mouse_exponent == 1.0 and is_finite(player.head.rotation.x), "invalid mouse exponent recovers safely")
 	player.head.rotation.x = 0.0
 	session.select_tool(0)
+	await ready_tool()
 	session.blocks = 0
 	session.grenades = 0
 	wheel(MOUSE_BUTTON_WHEEL_UP)
@@ -284,8 +392,11 @@ func test_movement_input_and_camera() -> bool:
 	check(session.current_tool == 0, "disabled wheel switching leaves selection unchanged")
 	player.wheel_tool_direction = 1
 	session.select_weapon(0)
+	await ready_tool()
 	session.magazine = 0
-	session.reserve = 0
+	# Keep reserve ammunition so native depleted-tool selection does not
+	# automatically choose another tool before this dry-fire scenario.
+	session.reserve = 1
 	var dry_events: Array[int] = [0]
 	var dry_callback := func(): dry_events[0] += 1
 	player.dry_fired.connect(dry_callback)
@@ -300,6 +411,7 @@ func test_movement_input_and_camera() -> bool:
 	check(dry_events[0] == 2 and session.magazine == 0, "new empty trigger press clicks again without consuming ammo")
 	player.dry_fired.disconnect(dry_callback)
 	session.select_weapon(0)
+	await ready_tool()
 	session.restock()
 	action("crouch",true)
 	await frames(5)
@@ -342,8 +454,10 @@ func test_movement_input_and_camera() -> bool:
 	await frames(30)
 	var dry_speed := Vector2(player.velocity.x,player.velocity.z).length()
 	action("forward",false)
-	for x in range(59,66):
-		for z in range(73,81):
+	# Native corner movement can cover multiple physics ticks per observed
+	# process frame. Keep the pool long enough to measure friction, not its wall.
+	for x in range(57,68):
+		for z in range(50,90):
 			for y in range(1,4): world.set_block(Vector3i(x,y,z),0)
 	world.rebuild_now()
 	player.respawn_at(Vector3(62.5,1.01,78.5))
@@ -389,6 +503,7 @@ func test_movement_input_and_camera() -> bool:
 	action("jump",false)
 	await frames(2)
 	check(player.camera_mode == BlockfieldPlayer.CameraMode.FOLLOW_FIRST_PERSON, "spectator jump switches living follow target to first person")
+	check(player._spectator_view!=null and player._spectator_view.visible and player._spectator_view.get_child_count()>0,"first-person following displays the observed soldier's equipment")
 	action("reload",true)
 	action("reload",false)
 	await frames(2)
@@ -432,6 +547,7 @@ func test_building_and_spade() -> bool:
 	world.rebuild_now()
 	session.restock()
 	session.select_tool(1)
+	await ready_tool()
 	var blocks_before := session.blocks
 	aim_at(Vector3(48.5, 5.5, 68.5))
 	var preview := player.get_build_preview()
@@ -443,6 +559,7 @@ func test_building_and_spade() -> bool:
 		"block tool places adjacent cube and consumes one resource")
 	await frames(35)
 	session.select_tool(0)
+	await ready_tool()
 	aim_at(Vector3(48.5, 5.5, 69.5))
 	action("primary", true)
 	await frames(2)
@@ -470,6 +587,7 @@ func test_building_and_spade() -> bool:
 	player.respawn_at(Vector3(48.5, 4.01, 71.0))
 	await frames(5)
 	session.select_tool(1)
+	await ready_tool()
 	blocks_before = session.blocks
 	aim_at(Vector3(47.5, 5.5, 68.5))
 	action("secondary", true)
@@ -490,14 +608,17 @@ func test_building_and_spade() -> bool:
 func test_grenade_pipeline() -> bool:
 	release_actions()
 	session.select_tool(3)
+	await ready_tool()
 	session.grenade_cooldown = 0.0
 	session.restock()
 	var starting_stock := session.grenades
 	action("primary", true)
 	await frames(15)
+	var native_throw_origin:=player.get_aim_origin()+player.get_aim_direction()*.1
 	action("primary", false)
 	check(grenades_in_scene().size() == 1 and session.grenades == starting_stock - 1,
 		"cooked release spawns exactly one projectile through session event")
+	if not grenades_in_scene().is_empty():check(grenades_in_scene()[0].global_position.is_equal_approx(native_throw_origin),"grenade starts at native eye plus front .1")
 	# Detonate beside an exposed target to verify blast damage, not merely visuals.
 	if not grenades_in_scene().is_empty():
 		var grenade := grenades_in_scene()[0]

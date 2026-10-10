@@ -1,9 +1,10 @@
 class_name VoxelAmbientOcclusion
 extends RefCounted
-## GLMapChunk::calcAOID: native eight-neighbor atlas, sampled at four corners.
+## GLMapChunk::calcAOID: native eight-neighbor atlas with fragment UVs.
 ## Source tangent axes are mapped from Z-down to Godot Y-up.
 
 const ATLAS: Texture2D = preload("res://assets/openspades/images/Gfx/AmbientOcclusion.png")
+const EXTENSIONS = preload("res://presentation/openspades_extensions.gd")
 const HALO_SIZE := 18
 const HALO_VOLUME := HALO_SIZE * HALO_SIZE * HALO_SIZE
 # Offsets use y + 18 * (x + 18 * z). Each row is -u,+u,-v,+v,-u+v,-u-v,+u+v,+u-v.
@@ -18,13 +19,27 @@ const OFFSETS := [
 # Atlas corners are (0,0),(15,0),(0,15),(15,15); chunk corners follow VoxelChunk.
 const CORNER_LOOKUP := [[1, 0, 2, 3], [1, 0, 2, 3], [2, 3, 1, 0], [1, 0, 2, 3], [1, 0, 2, 3], [1, 0, 2, 3]]
 static var _corners := PackedFloat32Array()
+static var _uvs := PackedVector2Array()
+static var _texture: Texture2D
+static var _generation := -1
+
+static func get_texture() -> Texture2D:
+	if _texture == null or _generation != EXTENSIONS.get_generation():
+		_generation = EXTENSIONS.get_generation()
+		_texture = EXTENSIONS.texture("res://assets/openspades/images/Gfx/AmbientOcclusion.png")
+		if _texture == null or _texture.get_size() != Vector2(256, 256):
+			_texture = ATLAS
+		_corners.clear()
+	return _texture
 
 static func initialize() -> void:
+	get_texture()
 	if not _corners.is_empty():
 		return
-	var image := ATLAS.get_image()
+	var image := _texture.get_image()
 	assert(image != null and image.get_size() == Vector2i(256, 256), "Native AO atlas must be 256 x 256")
 	_corners.resize(256 * 4)
+	_uvs.resize(256 * 4)
 	for tile in range(256):
 		var x := (tile & 15) * 16
 		var y := (tile >> 4) * 16
@@ -32,6 +47,8 @@ static func initialize() -> void:
 		_corners[tile * 4 + 1] = image.get_pixel(x + 15, y).r
 		_corners[tile * 4 + 2] = image.get_pixel(x, y + 15).r
 		_corners[tile * 4 + 3] = image.get_pixel(x + 15, y + 15).r
+		for corner in range(4):
+			_uvs[tile * 4 + corner] = Vector2(x + (corner & 1) * 15 + 0.5, y + (corner >> 1) * 15 + 0.5) / 256.0
 
 static func atlas_corner(tile: int, corner: int) -> float:
 	initialize()
@@ -39,6 +56,9 @@ static func atlas_corner(tile: int, corner: int) -> float:
 
 static func face_corner(tile: int, face: int, corner: int) -> float:
 	return _corners[tile * 4 + CORNER_LOOKUP[face][corner]]
+
+static func face_uv(tile: int, face: int, corner: int) -> Vector2:
+	return _uvs[tile * 4 + CORNER_LOOKUP[face][corner]]
 
 static func tile_id(solids: PackedByteArray, center: int, face: int) -> int:
 	var mask := 0

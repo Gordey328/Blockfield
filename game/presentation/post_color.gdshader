@@ -18,6 +18,7 @@ uniform vec3 tint = vec3(1.0);
 uniform float exposure = 1.0;
 uniform int quality = 1;
 uniform float radial_blur = 0.0;
+uniform float hurt_blur = 0.0;
 uniform vec2 camera_motion = vec2(0.0);
 uniform float hurt_flash = 0.0;
 uniform float hurt_edge = 0.0;
@@ -55,11 +56,15 @@ void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 from_center = uv - 0.5;
 	vec3 color = fxaa_enabled ? antialias(uv,SCREEN_PIXEL_SIZE) : sample_color(uv);
-	if (radial_blur > 0.0001 || length(camera_motion) > 0.0001) {
+	if (radial_blur > 0.0001 || hurt_blur > 0.0001 || length(camera_motion) > 0.0001) {
 		vec3 blurred = color;
+		// Native GLCameraBlurFilter squares the retained radial scale. Hurt
+		// vignette is a distinct scene parameter, concentrated at the edge.
+		float radial_shift=1.0-pow(1.0-clamp(radial_blur,0.0,1.0),2.0);
+		float hurt_shift=hurt_blur*0.06*smoothstep(0.0,0.5,length(from_center));
 		for (int index=1;index<5;index++) {
 			float amount = float(index)/4.0;
-			blurred += sample_color(uv - from_center*radial_blur*0.06*amount + camera_motion*amount);
+			blurred += sample_color(uv - from_center*(radial_shift+hurt_shift)*amount + camera_motion*amount);
 		}
 		color = blurred/5.0;
 	}

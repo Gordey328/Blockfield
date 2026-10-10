@@ -26,6 +26,7 @@ func new_session() -> SESSION:
 func _run() -> void:
 	_test_profiles_and_damage()
 	_test_cadence_and_reload()
+	_test_selection_transitions()
 	_test_grenades_and_stocks()
 	_test_targets_and_life_cycle()
 	_test_ctf()
@@ -104,6 +105,72 @@ func _test_cadence_and_reload() -> void:
 	check(s.fire() and s.magazine == old_mag, "unlimited ammo does not consume rounds")
 	s.select_team(2)
 	check(not s.can_fire() and not s.fire(), "spectator cannot shoot")
+	s.free()
+
+
+func _select_test_weapon(s: SESSION, transition: String) -> void:
+	match transition:
+		"weapon": s.select_weapon(SESSION.Weapon.SMG)
+		"same_weapon": s.select_weapon(s.current_weapon)
+		"profile": s.set_profile_version("0.76")
+
+
+func _test_selection_transitions() -> void:
+	# Native SetTool cancels pending actions (Player.cpp:307–326). Live class
+	# and profile selection are lab controls and must obey that same boundary.
+	for transition: String in ["weapon", "same_weapon", "profile"]:
+		for quick_release: bool in [false, true]:
+			var s := new_session()
+			var throws: Array[Dictionary] = []
+			s.grenade_thrown.connect(func(data: Dictionary) -> void: throws.append(data))
+			s.select_tool(SESSION.Tool.GRENADE)
+			check(s.begin_grenade_cook(), "selection fixture starts grenade cook: " + transition)
+			s.update(0.05 if quick_release else 0.6)
+			if quick_release: s.release_grenade()
+			_select_test_weapon(s, transition)
+			check(s.current_tool == SESSION.Tool.WEAPON and not s.is_cooking_grenade,
+				"selection lowers a held grenade: " + transition)
+			s.update(3.1)
+			check(throws.is_empty() and s.live_grenades.is_empty() and s.grenades == 3,
+				"selection cannot later throw a cooked or pending grenade: %s, quick=%s" % [transition, quick_release])
+			s.free()
+		var s := new_session()
+		var completions: Array[int] = []
+		s.reloaded.connect(func() -> void: completions.append(1))
+		s.magazine = 2
+		s.reload_weapon()
+		s.update(0.2)
+		_select_test_weapon(s, transition)
+		s.update(3.0)
+		var info := s.get_weapon_info()
+		check(not s.is_reloading and completions.is_empty() and s.magazine == int(info.clip_size)
+			and s.reserve == int(info.max_stock), "selection discards old reload completion: " + transition)
+		s.set_trigger_held(true)
+		check(s.fire(), "selection fixture holds a firing trigger: " + transition)
+		s.update(1.0)
+		# Re-select after a held deadline becomes overdue; idling the new weapon
+		# must not accumulate fire debt, as a continuing trigger hold would.
+		if transition == "profile": s.set_profile_version("0.75")
+		else: _select_test_weapon(s, transition)
+		s.update(2.0)
+		check(is_zero_approx(s.fire_cooldown), "selection releases the held trigger: " + transition)
+		check(s.fire() and is_equal_approx(s.fire_cooldown, float(s.get_weapon_info().delay)),
+			"new weapon's first shot starts a fresh deadline: " + transition)
+		s.free()
+	# Changing selection cancels a grenade still in hand, never one already
+	# thrown. Its projectile and fuse remain authoritative until explosion.
+	var s := new_session()
+	var explosions: Array[int] = []
+	s.grenade_exploded.connect(func(data: Dictionary) -> void: explosions.append(int(data.id)))
+	s.select_tool(SESSION.Tool.GRENADE)
+	s.begin_grenade_cook()
+	s.update(0.2)
+	var projectile := s.release_grenade()
+	s.select_weapon(SESSION.Weapon.SMG)
+	check(s.live_grenades.size() == 1 and s.grenades == 2, "weapon selection retains an already thrown grenade")
+	s.update(2.81)
+	check(explosions == [int(projectile.id)] and s.live_grenades.is_empty(),
+		"already thrown grenade still explodes once after weapon selection")
 	s.free()
 
 

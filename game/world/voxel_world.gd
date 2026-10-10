@@ -15,6 +15,10 @@ const CHUNK_SCRIPT = preload("res://world/voxel_chunk.gd")
 const FALLING_CLUSTER = preload("res://world/falling_cluster.gd")
 const WATER_SHADER = preload("res://world/water.gdshader")
 const TERRAIN_SHADER = preload("res://world/terrain.gdshader")
+const AO = preload("res://world/voxel_ao.gd")
+const WAVE_FIELD = preload("res://world/spectral_wave.gd")
+const IRRADIANCE = preload("res://world/voxel_irradiance.gd")
+const REFLECTION = preload("res://world/planar_reflection.gd")
 
 var dimensions := Vector3i(96, 32, 96)
 var map_name := "Blockfield Test Grounds"
@@ -23,9 +27,21 @@ var rebuild_budget := 3
 var rebuild_time_budget_ms := 4.0
 var lighting_enabled := true
 var ambient_occlusion_enabled := true
+var irradiance_enabled := false
+var _irradiance: RefCounted
+var _irradiance_light := Vector3.ONE
 var water_level := 1.0
 var wade_origin_level := 2.0
 var water_enabled := true
+var water_waves_enabled := true
+var water_refraction_enabled := true
+var water_reflections_enabled := false
+var water_fog_enabled := true
+var _reflection_camera: Camera3D
+var _reflection: Node
+var _reflection_size := Vector2i(320, 240)
+var _reflection_frequency := 20.0
+var _reflection_geometry_budget := 768
 var visual_effects_enabled := true
 var max_active_clusters := 24
 var fragment_limit_per_cluster := 4096
@@ -41,6 +57,7 @@ var _material: ShaderMaterial
 var _falling_clusters: Array[Node3D] = []
 var _effects_observer := Vector3(48.5, 5.0, 70.5)
 var _water_mesh: MeshInstance3D
+var _wave_field: Node
 var _topdown_image: Image
 var _topdown_heights := PackedInt32Array()
 var _topdown_dirty: Dictionary = {}
@@ -60,6 +77,9 @@ func _process(_delta: float) -> void:
 			rebuilt += 1
 			if rebuilt >= rebuild_budget or Time.get_ticks_usec() - started >= rebuild_time_budget_ms * 1000.0:
 				break
+	if irradiance_enabled:
+		_ensure_irradiance()
+		_irradiance.update()
 
 static func pack_color(color: Color) -> int:
 	return 0x01000000 | (clampi(roundi(color.r * 255.0), 0, 255) << 16) | (clampi(roundi(color.g * 255.0), 0, 255) << 8) | clampi(roundi(color.b * 255.0), 0, 255)
@@ -131,6 +151,8 @@ func remove_blocks(cells: Array[Vector3i], protect_lower_layer: bool = false) ->
 func _change_block(cell: Vector3i, color: int, changes: Array, collapsed: bool = false) -> void:
 	var before := get_block(cell)
 	_blocks[_index(cell)] = color
+	if _irradiance != null:
+		_irradiance.invalidate(cell)
 	if _topdown_image != null:
 		var column := cell.x + dimensions.x * cell.z
 		var top := _topdown_heights[column]
@@ -329,6 +351,9 @@ func _column_top(column: int, from_y: int) -> Vector2i:
 	return Vector2i(0, -1)
 
 func clear_world(size: Vector3i) -> void:
+	_irradiance = null
+	if _material != null:
+		_material.set_shader_parameter("irradiance_enabled", false)
 	for cluster in _falling_clusters:
 		remove_child(cluster)
 		cluster.queue_free()
@@ -337,6 +362,14 @@ func clear_world(size: Vector3i) -> void:
 		remove_child(_water_mesh)
 		_water_mesh.queue_free()
 		_water_mesh = null
+	if is_instance_valid(_wave_field):
+		remove_child(_wave_field)
+		_wave_field.queue_free()
+		_wave_field = null
+	if is_instance_valid(_reflection):
+		remove_child(_reflection)
+		_reflection.queue_free()
+		_reflection = null
 	for chunk in _chunks.values():
 		remove_child(chunk)
 		chunk.queue_free()
@@ -463,11 +496,18 @@ func set_view_position(position: Vector3) -> void:
 
 func set_effects_observer(position: Vector3) -> void:
 	_effects_observer = position
+	if irradiance_enabled and _irradiance != null and _irradiance.configure(position):
+		_bind_irradiance()
 
 func get_effects_observer() -> Vector3:
 	return _effects_observer
 
 func _create_water() -> void:
+	_wave_field = WAVE_FIELD.new()
+	_wave_field.name = "SpectralWaterWaves"
+	add_child(_wave_field)
+	_wave_field.setup()
+	_wave_field.set_enabled(water_enabled and water_waves_enabled)
 	var image := Image.create(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8)
 	for z in range(dimensions.z):
 		for x in range(dimensions.x):
@@ -477,6 +517,11 @@ func _create_water() -> void:
 	material.set_shader_parameter("bottom_color", ImageTexture.create_from_image(image))
 	material.set_shader_parameter("map_size", Vector2(dimensions.x, dimensions.z))
 	material.set_shader_parameter("fog_distance", float(render_radius * CHUNK_SIZE))
+	material.set_shader_parameter("fog_enabled", water_fog_enabled)
+	material.set_shader_parameter("wave_texture", _wave_field.get_texture())
+	material.set_shader_parameter("lighting_enabled", lighting_enabled)
+	material.set_shader_parameter("waves_enabled", water_waves_enabled)
+	material.set_shader_parameter("refraction_enabled", water_refraction_enabled)
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(dimensions.x, dimensions.z)
 	plane.material = material
@@ -485,13 +530,66 @@ func _create_water() -> void:
 	_water_mesh.mesh = plane
 	_water_mesh.position = Vector3(dimensions.x * 0.5, water_level + 0.002, dimensions.z * 0.5)
 	_water_mesh.visible = water_enabled
+	_water_mesh.layers = REFLECTION.WATER_LAYER
 	_water_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_water_mesh)
+	_setup_reflection()
+
+func _setup_reflection() -> void:
+	if not is_instance_valid(_water_mesh) or not is_instance_valid(_reflection_camera):
+		return
+	if not is_instance_valid(_reflection):
+		_reflection = REFLECTION.new()
+		_reflection.name = "PlanarWaterReflection"
+		add_child(_reflection)
+	_reflection.setup(_reflection_camera, _water_mesh.mesh.surface_get_material(0), _water_mesh.global_position.y, get_draw_distance())
+	_reflection.set_budget(_reflection_size, _reflection_frequency, _reflection_geometry_budget)
+	_reflection.set_enabled(water_enabled and water_reflections_enabled)
+
+func set_reflection_camera(camera: Camera3D) -> void:
+	_reflection_camera = camera
+	_setup_reflection()
+
+func set_water_reflections_enabled(enabled: bool) -> void:
+	water_reflections_enabled = enabled
+	if is_instance_valid(_reflection):
+		_reflection.set_enabled(enabled and water_enabled)
+	elif enabled:
+		_setup_reflection()
+
+func set_water_reflection_budget(size: Vector2i, frequency: float, instances: int) -> void:
+	_reflection_size = size
+	_reflection_frequency = frequency
+	_reflection_geometry_budget = instances
+	if is_instance_valid(_reflection):
+		_reflection.set_budget(size, frequency, instances)
+
+func get_reflection_stats() -> Dictionary:
+	return _reflection.get_stats() if is_instance_valid(_reflection) else {"enabled": false, "requested": water_reflections_enabled, "geometry": 0}
+
+func set_water_waves_enabled(enabled: bool) -> void:
+	water_waves_enabled = enabled
+	if is_instance_valid(_water_mesh):
+		_water_mesh.mesh.surface_get_material(0).set_shader_parameter("waves_enabled", enabled)
+	if is_instance_valid(_wave_field):
+		_wave_field.set_enabled(water_enabled and enabled)
+
+func set_water_refraction_enabled(enabled: bool) -> void:
+	water_refraction_enabled = enabled
+	if is_instance_valid(_water_mesh):
+		_water_mesh.mesh.surface_get_material(0).set_shader_parameter("refraction_enabled", enabled)
+
+func get_water_stats() -> Dictionary:
+	return _wave_field.get_stats() if is_instance_valid(_wave_field) else {}
 
 func set_water_enabled(enabled: bool) -> void:
 	water_enabled = enabled
 	if is_instance_valid(_water_mesh):
 		_water_mesh.visible = enabled
+	if is_instance_valid(_wave_field):
+		_wave_field.set_enabled(enabled and water_waves_enabled)
+	if is_instance_valid(_reflection):
+		_reflection.set_enabled(enabled and water_reflections_enabled)
 	_mark_all_chunks(false)
 
 func set_water_fog(color: Color, distance: float) -> void:
@@ -499,6 +597,13 @@ func set_water_fog(color: Color, distance: float) -> void:
 		var material: ShaderMaterial = _water_mesh.mesh.surface_get_material(0)
 		material.set_shader_parameter("fog_color", Vector3(color.r, color.g, color.b))
 		material.set_shader_parameter("fog_distance", maxf(distance, 1.0))
+
+func set_water_fog_enabled(enabled: bool) -> void:
+	# Water implements native channel-dependent fog itself, so Environment's
+	# fog_enabled does not control this material's fog_disabled shader.
+	water_fog_enabled = enabled
+	if is_instance_valid(_water_mesh):
+		_water_mesh.mesh.surface_get_material(0).set_shader_parameter("fog_enabled", enabled)
 
 func _is_chunk_near(key: Vector3i) -> bool:
 	return abs(key.x - _view_chunk.x) <= render_radius and abs(key.z - _view_chunk.z) <= render_radius
@@ -540,16 +645,78 @@ func _ensure_material() -> void:
 		_material.shader = TERRAIN_SHADER
 		_material.set_shader_parameter("lighting_enabled", lighting_enabled)
 		_material.set_shader_parameter("ambient_occlusion_strength", 1.0 if ambient_occlusion_enabled else 0.0)
+		_material.set_shader_parameter("ambient_occlusion_atlas", AO.get_texture())
+
+func set_ambient_occlusion_atlas_enabled(enabled: bool) -> void:
+	# Explicit quality/diagnostic fallback; native atlas sampling is the default.
+	_ensure_material()
+	_material.set_shader_parameter("ambient_occlusion_atlas_enabled", enabled)
+
+func reload_resources() -> void:
+	if is_instance_valid(_reflection):
+		_reflection.clear_cache()
+	for cluster in _falling_clusters:
+		if is_instance_valid(cluster):
+			cluster.queue_free()
+	_falling_clusters.clear()
+	FALLING_CLUSTER.clear_texture_cache()
+	AO.initialize()
+	_ensure_material()
+	_material.set_shader_parameter("ambient_occlusion_atlas", AO.get_texture())
+	_mark_all_chunks(false)
 
 func set_lighting_enabled(enabled: bool) -> void:
 	lighting_enabled = enabled
 	_ensure_material()
 	_material.set_shader_parameter("lighting_enabled", enabled)
+	if is_instance_valid(_water_mesh):
+		_water_mesh.mesh.surface_get_material(0).set_shader_parameter("lighting_enabled", enabled)
 
 func set_ambient_occlusion_enabled(enabled: bool) -> void:
 	ambient_occlusion_enabled = enabled
 	_ensure_material()
 	_material.set_shader_parameter("ambient_occlusion_strength", 1.0 if enabled else 0.0)
+
+func _ensure_irradiance() -> void:
+	_ensure_material()
+	if _irradiance == null:
+		_irradiance = IRRADIANCE.new(self)
+		_irradiance.configure(_effects_observer)
+		_bind_irradiance()
+	elif _irradiance.configure(_effects_observer):
+		_bind_irradiance()
+
+func _bind_irradiance() -> void:
+	_material.set_shader_parameter("irradiance_origin", _irradiance.origin)
+	_material.set_shader_parameter("irradiance_size", Vector3(_irradiance.size))
+	_material.set_shader_parameter("irradiance_spacing", IRRADIANCE.STEP)
+	for index in range(4):
+		_material.set_shader_parameter(["irradiance_base", "irradiance_x", "irradiance_y", "irradiance_z"][index], _irradiance.textures[index])
+	_material.set_shader_parameter("irradiance_enabled", irradiance_enabled)
+	_material.set_shader_parameter("irradiance_light", _irradiance_light)
+
+func set_irradiance_enabled(enabled: bool) -> void:
+	irradiance_enabled = enabled
+	_ensure_material()
+	if enabled:
+		_ensure_irradiance()
+	_material.set_shader_parameter("irradiance_enabled", enabled)
+
+func set_irradiance_light(color: Color, energy: float = 1.0) -> void:
+	_irradiance_light = Vector3(color.r, color.g, color.b) * maxf(0.0, energy)
+	_ensure_material()
+	_material.set_shader_parameter("irradiance_light", _irradiance_light)
+
+func get_irradiance_at(position: Vector3, normal: Vector3) -> Color:
+	if not irradiance_enabled or _irradiance == null:
+		return Color(0, 0, 0)
+	var radiance: Vector3 = _irradiance.sample(position, normal.normalized()) * _irradiance_light
+	return Color(radiance.x, radiance.y, radiance.z)
+
+func get_irradiance_stats() -> Dictionary:
+	var stats: Dictionary = _irradiance.get_stats() if _irradiance != null else {"dirty_probes":0,"probes":0}
+	stats["enabled"] = irradiance_enabled
+	return stats
 
 func get_draw_distance() -> float:
 	return float(render_radius * CHUNK_SIZE)
@@ -563,6 +730,8 @@ func set_draw_distance(meters: float) -> float:
 	if is_instance_valid(_water_mesh):
 		var material: ShaderMaterial = _water_mesh.mesh.surface_get_material(0)
 		material.set_shader_parameter("fog_distance", get_draw_distance())
+	if is_instance_valid(_reflection):
+		_reflection.distance_limit = get_draw_distance()
 	return get_draw_distance()
 
 func get_stats() -> Dictionary:
