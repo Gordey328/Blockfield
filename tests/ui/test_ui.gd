@@ -84,6 +84,7 @@ func test_mobile_bridge() -> bool:
 	check(not Input.emulate_mouse_from_touch and Input.mouse_mode==Input.MOUSE_MODE_VISIBLE,"touch gameplay needs no mouse capture/emulation")
 	check(not InputMap.action_has_event("primary",mouse),"physical mouse primary filtered while overlay active")
 	var regions: Dictionary=hud.mobile_controls.get_hit_regions()
+	check(hud._native_palette.get_global_rect().end.y+8<=regions.reload.position.y,"mobile block palette stays above the action buttons")
 	var jump: Rect2=regions.jump
 	mouse.position=hud.mobile_controls.get_global_transform_with_canvas()*jump.get_center()
 	mouse.window_id=root.get_window_id()

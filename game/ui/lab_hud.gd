@@ -824,7 +824,7 @@ func _update_mobile_layout() -> void:
 	_set_hud_rect(_ammo,Rect2(-220,-50,204,32) if mobile else Rect2(-380,-90,352,60))
 	_weapon_status.add_theme_font_size_override("font_size",12 if mobile else 16)
 	_set_hud_rect(_weapon_status,Rect2(-220,-18,204,18) if mobile else Rect2(-420,-30,392,25))
-	_set_hud_rect(_native_palette,Rect2(-100,-270,90,90) if mobile else Rect2(-100,-146,90,90))
+	_set_hud_rect(_native_palette,Rect2(-100,-320,90,90) if mobile else Rect2(-100,-146,90,90))
 	_set_hud_rect(_intel_icon,Rect2(-265,-48,32,32) if mobile else Rect2(-280,-65,48,48))
 	_performance.add_theme_font_size_override("font_size",11 if mobile else 13)
 	_set_hud_rect(_performance,Rect2(16,-18,440,18) if mobile else Rect2(28,-30,750,25))
