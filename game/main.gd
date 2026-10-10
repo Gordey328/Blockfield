@@ -65,6 +65,8 @@ var _last_player_corpse: OpenSpadesCorpse
 
 func _ready() -> void:
 	if network_mode:
+		# Receive the latest authority/terminal event before the player's commands.
+		process_physics_priority = player.process_physics_priority-1
 		network_client = NETWORK_CLIENT.new()
 		network_client.set_map_callbacks(_network_install_map,_network_apply_map)
 		(session as NETWORK_SESSION).bind_replica(network_client)
@@ -155,6 +157,9 @@ func _ready() -> void:
 		_spawn_targets()
 		_setup_objectives()
 	hud.set_menu_visible(true)
+
+func _physics_process(_delta: float) -> void:
+	if network_mode and network_client != null: _poll_network()
 
 func _process(delta: float) -> void:
 	if network_mode: _poll_network()

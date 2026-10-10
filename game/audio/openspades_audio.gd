@@ -187,7 +187,8 @@ static func is_stereo(stream: AudioStream) -> bool:
 	return false
 
 func _play(path: String,gain: float,point: Vector3,local: bool,reference_distance: float) -> Node:
-	if gain<=0.0 or camera==null:return null
+	# A button's later signal listener can outlive immediate scene replacement.
+	if gain<=0.0 or not is_instance_valid(camera) or not is_inside_tree() or not camera.is_inside_tree():return null
 	var stream:=OpenSpadesExtensions.sound("res://assets/openspades/sounds/"+path+".ogg")
 	if stream==null:return null
 	return _start_voice(stream,path,gain,point,local,reference_distance)

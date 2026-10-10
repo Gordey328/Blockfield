@@ -71,6 +71,57 @@ Registry/session ownership is resumable guest identity, not account login. Compl
 ## Known external limitation
 GitHub Actions is blocked before job steps by account billing (run38031633237). Local pinned validation and Pages branch publication work; no payment settings were changed. See decisions/0003-pages-publication.md.
 
+## Latest coherent validation and browser correction
+
+Frozen `c55ad92a473c398d185fed6a11552afef83a8675` passed the complete registered
+suite, release Web export, Linux dedicated export and exported-PCK Title launcher
+with clean exit/diagnostics. Logs: `.cache/release-c55ad92a473c/.cache/logs`.
+The shaped latency run passed504 checks (variable441 step checks plus63 fixed
+checks). This supersedes the failed514 fixture-teardown attempt above. These
+artifacts have not yet been published.
+
+The c55 actual browser exercised rifle, SMG and shotgun, both team colors,
+third-person body, block palette, grenade/spade, large minimap, toggle ADS through
+the local console and scene-PNG preview. Local startup/lab needed no server.
+Observed lab20–29FPS on this workstation/IAB; the displayed0.9MiB static-memory
+counter is not total WASM/process/GPU memory. No saved browser download or
+subjective listening was confirmed. Current IAB pointer lock raises
+WrongDocumentError; ordinary drag-look is functional.
+
+One c55 exported browser also genuinely joined the native CTF server, adopted its
+map and rendered playable owner inventory. A later command rejection closed it:
+server input_rejections1, transport backpressure/timeouts0. The old client
+incorrectly labeled all send failures backpressure. Root now preserves fixed
+transport reasons/code, polls before player physics input, and keeps transmitted
+input ticks independent of locally retimed prediction replay. A new specialist
+24Hz-client/60Hz-authority scheduler fixture is pending; this is not yet a browser
+network acceptance pass. Limits remain late15/future8/pending32.
+
+A later ignored native TraceTransport captured the exact c55 rejection:
+server tick14681, input ticks14690/14691 (lead9/10), pending3, close1008
+invalid input stream. Prior commands reached lead8. No capability/payload was
+logged; `.cache/previews/browser-c55-future-rejection.log` preserves aggregate
+stats and the16 integer clock samples. This confirms the future-window failure,
+not a transport-pressure guess. The corrected clock's initial independent native
+scheduler's final now-deadline run passes47/0 with130 callbacks targeting24Hz
+and360 inputs, source rifle30tick cadence and three same-ID resume cases. The
+corrected quiet40ms-each-direction shaped run passes49/0 over20s,426 callbacks/
+1200 inputs, actual wire lead-3..3 while the replay-derived candidate reached14;
+peak pending19. The fixture implements a
+single current frame, bounded8-step catch-up and dropping excess elapsed steps.
+Failed host-pause artifacts remain separate and inconclusive. See
+client-schedule.md. All specialist production/test ownership and engine leases
+have returned; root must freeze/retest/export and verify actual Web clients.
+
+Scene replacement exposed a later button-signal audio callback against detached
+nodes. Root audio now rejects detached service/camera playback before reading
+transforms or starting a voice. Actual source-input35/0, audio routing128/0,
+original post-DSP PCM134/0, Main network27/0 and Main epoch83/0 are clean after
+the focused corrections. The clock correction requires a fresh frozen release.
+All production ownership is root; source_audit owns only the new scheduler test
+and its document, with a headless-only engine lease. Root's ignored diagnostic
+native server owns only loopback8765/8766 and aggregate clock/queue logs.
+
 ## Commands and recovery
 Python: `C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`.
 Godot: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe`.

@@ -9,6 +9,7 @@ const RULES = preload("res://simulation/player_rules.gd")
 const COMPATIBILITY = preload("res://network/compatibility.gd")
 const STATE_KIND := 14
 const MAX_EVENTS := 512
+const CLOSE_REASONS := ["ping timeout","idle timeout","handshake timeout","heartbeat backpressure","transport stopped","socket send failed","invalid protocol frame","invalid input stream","input clock needs resync","connection lost","map connection lost","HELLO rejected","HELLO timeout","admission unavailable","map join timeout","map preparation queue timeout","invalid map readiness","gameplay before map readiness","invalid client packet direction","transport event overflow"]
 var game := TRANSPORT.new()
 var bulk := TRANSPORT.new()
 var transfer := TRANSFER.new()
@@ -37,6 +38,7 @@ var _event_cursor := 0
 var _predicted_effects: Dictionary[String,int] = {}
 var _predicted_order: Array[String] = []
 var _last_snapshot_tick := -1
+var _last_input_tick := -1
 var _snapshot_time_ms := 0
 var _install_map: Callable
 var _apply_map: Callable
@@ -93,6 +95,7 @@ func close() -> void:
 	_predicted_effects.clear()
 	_predicted_order.clear()
 	_last_snapshot_tick = -1
+	_last_input_tick = -1
 	status = "closed"
 
 func _fail(message: String) -> void:
@@ -106,6 +109,16 @@ func _emit(event: Dictionary) -> void:
 		return
 	_events.append(event.duplicate(true))
 
+static func terminal_error(channel: String, event: Dictionary) -> String:
+	# Peer text is not trusted diagnostics; expose only known constant reasons.
+	var reason := str(event.get("reason",""))
+	if reason not in CLOSE_REASONS: reason = "remote close"
+	match str(event.get("type","")):
+		"timeout": return "%s timeout: %s" % [channel,reason]
+		"protocol_error": return "%s protocol error" % channel
+		"overflow": return "%s event queue overflow" % channel
+		_: return "%s closed (%d): %s" % [channel,int(event.get("code",-1)),reason]
+
 func poll() -> void:
 	if status in ["idle","closed","failed"]: return
 	game.poll()
@@ -117,7 +130,7 @@ func poll() -> void:
 				if not game.send(_game_id,_hello()).ok: _fail("HELLO send failed")
 				else: status = "joining"
 			"packet": _game_packet(event.packet)
-			"closed", "timeout", "protocol_error", "overflow": _fail("game connection lost")
+			"closed", "timeout", "protocol_error", "overflow": _fail(terminal_error("game",event))
 	for event: Dictionary in bulk.drain_events():
 		if status == "failed": break
 		match event.type:
@@ -127,7 +140,7 @@ func poll() -> void:
 				if status != "loading" or event.packet.kind != P.Kind.MAP_CHUNK: _fail("invalid bulk packet direction")
 				elif not transfer.consume(event.packet).ok: _fail("map chunk rejected")
 			"closed", "timeout", "protocol_error", "overflow":
-				if status == "loading": _fail("map connection lost")
+				if status == "loading": _fail(terminal_error("map",event))
 	if status == "loading":
 		var progress := transfer.poll(-1,2)
 		if not progress.ok:
@@ -193,6 +206,7 @@ func _discard_epoch_stream(new_epoch: int) -> void:
 	_chat_intent = 0; _chat_sequence = 0; _request_sequence = 0; _event_cursor = 0
 	_predicted_effects.clear(); _predicted_order.clear()
 	_last_snapshot_tick = -1; _snapshot_time_ms = 0
+	_last_input_tick = -1
 	_welcome = null
 	last_error = ""
 
@@ -294,6 +308,8 @@ func _apply_snapshot(packet: P.Packet) -> void:
 	if packet.tick <= _last_snapshot_tick: return
 	var result: Dictionary
 	var old_owner := prediction.get_state()
+	if old_owner == null or old_owner.spawn_generation != p.owner_state.spawn_generation or status == "synchronizing":
+		_last_input_tick = packet.tick
 	if old_owner != null and old_owner.spawn_generation != p.owner_state.spawn_generation: _request_sequence = 0
 	if status == "synchronizing": result = prediction.reset(p.owner_state,p.tick,p.map_sequence)
 	else:
@@ -334,14 +350,19 @@ func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: i
 	command.pitch = pitch
 	command.tool = tool
 	command.weapon = weapon
-	var record := {"input_sequence":command.sequence,"input_tick":owner.last_tick+1,"buttons":buttons,"tool":tool,"weapon":weapon,
+	# Replay retimes pending commands for local prediction. It must never move
+	# the transmitted command clock forward again on every authority snapshot.
+	var input_tick := maxi(_last_input_tick+1,_last_snapshot_tick+1)
+	var record := {"input_sequence":command.sequence,"input_tick":input_tick,"buttons":buttons,"tool":tool,"weapon":weapon,
 		"move_x":move.x,"move_z":move.y,"yaw":yaw,"pitch":pitch}
 	var packet := P.make_packet(P.Kind.INPUT_BATCH,{"records":[record]},epoch,record.input_tick,command.spawn_generation)
 	if not command.valid() or not P.encode(packet).ok: return {"ok":false,"error":"invalid input"}
 	# A send failure ends this stream; never predict a command absent from authority.
-	if not game.send(_game_id,packet).ok:
-		_fail("input transport backpressure")
+	var sent := game.send(_game_id,packet)
+	if not sent.ok:
+		_fail("input send failed: "+str(sent.error))
 		return {"ok":false,"error":last_error}
+	_last_input_tick = input_tick
 	var result := prediction.predict(command,data)
 	if not result.ok:
 		_fail(result.error)
