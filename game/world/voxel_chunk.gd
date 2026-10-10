@@ -31,6 +31,7 @@ func rebuild(world: Node3D, material: Material) -> void:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var collision_vertices := PackedVector3Array()
 	var base := coordinate * CHUNK_SIZE
 	face_count = 0
 	for local_z in range(CHUNK_SIZE):
@@ -42,20 +43,30 @@ func rebuild(world: Node3D, material: Material) -> void:
 				if packed == 0:
 					continue
 				var color := Color(float((packed >> 16) & 255) / 255.0, float((packed >> 8) & 255) / 255.0, float(packed & 255) / 255.0)
+				var render_voxel: bool = not world.is_water_floor(cell)
 				for face in range(6):
 					if world.get_block(cell + DIRECTIONS[face]) != 0:
 						continue
-					face_count += 1
+					if render_voxel:
+						face_count += 1
 					# Slight face shading keeps shape legible without costly lights.
 					var shade := 1.0 if face == 2 else (0.55 if face == 3 else (0.83 if face < 2 else 0.70))
 					var face_color := Color(color.r * shade, color.g * shade, color.b * shade, 1.0)
 					for corner in TRIANGLES:
-						vertices.append(Vector3(local_cell) + CORNERS[face][corner])
-						normals.append(Vector3(DIRECTIONS[face]))
-						colors.append(face_color)
+						var vertex: Vector3 = Vector3(local_cell) + CORNERS[face][corner]
+						collision_vertices.append(vertex)
+						if render_voxel:
+							vertices.append(vertex)
+							normals.append(Vector3(DIRECTIONS[face]))
+							colors.append(face_color)
+	if collision_vertices.is_empty():
+		collision.shape = null
+	else:
+		var shape := ConcavePolygonShape3D.new()
+		shape.set_faces(collision_vertices)
+		collision.shape = shape
 	if vertices.is_empty():
 		mesh_instance.mesh = null
-		collision.shape = null
 		return
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -66,6 +77,3 @@ func rebuild(world: Node3D, material: Material) -> void:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh.surface_set_material(0, material)
 	mesh_instance.mesh = mesh
-	var shape := ConcavePolygonShape3D.new()
-	shape.set_faces(vertices)
-	collision.shape = shape

@@ -12,6 +12,11 @@ from bootstrap import VERSION, main as bootstrap
 
 ROOT=Path(__file__).resolve().parents[1]
 
+def source_state():
+    revision=subprocess.run(['git','rev-parse','HEAD'],cwd=ROOT,capture_output=True,text=True,check=True).stdout.strip()
+    dirty=subprocess.run(['git','status','--porcelain'],cwd=ROOT,capture_output=True,text=True,check=True).stdout.strip()
+    return {'source_commit':revision,'source_dirty':bool(dirty)}
+
 def engine():
     suffix='win64_console.exe' if sys.platform=='win32' else 'linux.x86_64'
     path=ROOT/'.tools'/'godot'/f'Godot_v{VERSION}-stable_{suffix}'
@@ -40,7 +45,7 @@ def main():
     for label in ('world','session','integration'):
         path=ROOT/'tests'/label/f'test_{"lab" if label=="integration" else label}.gd'
         if path.exists():run('test-'+label,['--script',str(path)])
-    for name,path in [('vxl-save','tests/world/test_vxl_save.gd'),('presentation','tests/presentation/test_presentation.gd')]:
+    for name,path in [('vxl-save','tests/world/test_vxl_save.gd'),('falling-clusters','tests/world/test_falling_clusters.gd'),('presentation','tests/presentation/test_presentation.gd'),('localization','tests/presentation/test_localization.gd'),('effects','tests/presentation/test_effects.gd')]:
         path=ROOT/path
         if path.exists():run('test-'+name,['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
@@ -48,9 +53,10 @@ def main():
         folder=ROOT/'build'/'web';folder.mkdir(parents=True,exist_ok=True)
         run('export',['--export-release','Web',str(folder/'index.html')])
         (folder/'.nojekyll').write_text('')
-        (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961'}),encoding='utf-8')
+        (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961',**source_state()},indent=2)+'\n',encoding='utf-8')
         shutil.copy2(ROOT/'LICENSE',folder/'LICENSE.txt')
         shutil.copytree(ROOT/'game'/'assets'/'openspades'/'licenses',folder/'notices',dirs_exist_ok=True)
+        shutil.copytree(ROOT/'licenses',folder/'notices'/'engine',dirs_exist_ok=True)
         print(f'Web build: {folder}',flush=True)
 
 if __name__=='__main__':main()

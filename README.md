@@ -16,7 +16,9 @@ python tools/serve.py
 
 Open http://127.0.0.1:8060. On Windows without Python on PATH, use the bundled runtime documented in [docs/status.md](docs/status.md). For desktop development open `game/project.godot` in the pinned engine.
 
-GitHub Actions builds and publishes `main` to GitHub Pages. Current deployments are development builds until the iteration acceptance gate is passed.
+The [development build](https://gordey328.github.io/Blockfield/) runs on GitHub Pages. Current deployments remain development builds until the iteration acceptance gate is passed.
+
+GitHub Actions is currently blocked by an account billing condition before any build steps start. Checked local exports are published with `python tools/publish_pages.py` to the `gh-pages` branch. See [publication decision](docs/decisions/0003-pages-publication.md). Each export includes its source revision in `build-info.json`.
 
 ## Durable project context
 

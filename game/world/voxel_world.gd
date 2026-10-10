@@ -5,16 +5,27 @@ extends Node3D
 
 signal blocks_changed(changes: Array)
 signal map_loaded(map_name: String)
+signal falling_cluster_created(cluster: Node3D)
+signal falling_cluster_finished(position: Vector3, block_count: int, reason: String)
 
 const CHUNK_SIZE := 16
 const DIRECTIONS: Array[Vector3i] = [Vector3i.DOWN, Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK, Vector3i.UP]
 const VXL_READER = preload("res://world/vxl_reader.gd")
 const CHUNK_SCRIPT = preload("res://world/voxel_chunk.gd")
+const FALLING_CLUSTER = preload("res://world/falling_cluster.gd")
+const WATER_SHADER = preload("res://world/water.gdshader")
 
 var dimensions := Vector3i(96, 32, 96)
 var map_name := "Blockfield Test Grounds"
 var render_radius := 4
 var rebuild_budget := 3
+var water_level := 1.0
+var wade_origin_level := 2.0
+var water_enabled := true
+var visual_effects_enabled := true
+var max_active_clusters := 24
+var fragment_limit_per_cluster := 4096
+var smoke_limit_per_cluster := 1024
 var _blocks := PackedInt32Array()
 var _chunks: Dictionary = {}
 var _dirty: Dictionary = {}
@@ -22,6 +33,9 @@ var _streaming := false
 var _view_chunk := Vector3i(-1000, 0, -1000)
 var _spawn := Vector3(48.5, 5.0, 70.5)
 var _material: StandardMaterial3D
+var _falling_clusters: Array[Node3D] = []
+var _effects_observer := Vector3(48.5, 5.0, 70.5)
+var _water_mesh: MeshInstance3D
 
 func _ready() -> void:
 	_material = StandardMaterial3D.new()
@@ -57,6 +71,31 @@ func get_block(cell: Vector3i) -> int:
 	if not is_in_bounds(cell) or _blocks.is_empty():
 		return 0
 	return _blocks[_index(cell)]
+
+func clip_box(position: Vector3) -> bool:
+	var cell := Vector3i(position.floor())
+	if cell.x < 0 or cell.z < 0 or cell.x >= dimensions.x or cell.z >= dimensions.z:
+		return true
+	if cell.y < 0:
+		return true
+	if cell.y >= dimensions.y:
+		return false
+	if cell.y == 0:
+		cell.y = 1
+	return get_block(cell) != 0
+
+func clip_world(position: Vector3) -> bool:
+	var cell := Vector3i(position.floor())
+	if cell.x < 0 or cell.z < 0 or cell.x >= dimensions.x or cell.z >= dimensions.z or cell.y >= dimensions.y:
+		return false
+	if cell.y < 0:
+		return true
+	if cell.y == 0:
+		cell.y = 1
+	return get_block(cell) != 0
+
+func is_water_floor(cell: Vector3i) -> bool:
+	return water_enabled and cell.y == 0 and get_block(cell + Vector3i.UP) == 0
 
 func set_block(cell: Vector3i, color: int) -> void:
 	if not is_in_bounds(cell) or cell.y == 0:
@@ -136,9 +175,47 @@ func _collapse_neighbors(removed: Array[Vector3i], changes: Array) -> void:
 				for member in component:
 					checked[member] = true
 			else:
+				var colors := PackedInt32Array()
+				for member in component:
+					colors.append(get_block(member))
 				for member in component:
 					checked[member] = true
 					_change_block(member, 0, changes, true)
+				_spawn_falling_cluster(component, colors)
+
+func _spawn_falling_cluster(cells: Array[Vector3i], colors: PackedInt32Array) -> void:
+	if not visual_effects_enabled or cells.is_empty():
+		return
+	if _falling_clusters.size() >= max_active_clusters:
+		var oldest: Node3D = _falling_clusters.pop_front()
+		oldest.queue_free()
+	var cluster: Node3D = FALLING_CLUSTER.new()
+	cluster.fragment_limit = fragment_limit_per_cluster
+	cluster.smoke_limit = smoke_limit_per_cluster
+	add_child(cluster)
+	cluster.setup(self, cells, colors, _effects_observer, _material)
+	cluster.shattered.connect(_on_cluster_shattered)
+	cluster.completed.connect(_on_cluster_completed.bind(cluster))
+	_falling_clusters.append(cluster)
+	falling_cluster_created.emit(cluster)
+
+func _on_cluster_shattered(position: Vector3, block_count: int, reason: String) -> void:
+	falling_cluster_finished.emit(position, block_count, reason)
+
+func _on_cluster_completed(cluster: Node3D) -> void:
+	_falling_clusters.erase(cluster)
+
+func get_effect_stats() -> Dictionary:
+	var falling := 0
+	var fragments := 0
+	var smoke := 0
+	for cluster in _falling_clusters:
+		var stats: Dictionary = cluster.get_effect_stats()
+		if stats.phase == 0:
+			falling += 1
+		fragments += stats.fragments
+		smoke += stats.smoke
+	return {"clusters": _falling_clusters.size(), "falling": falling, "fragments": fragments, "smoke": smoke}
 
 func explode(position: Vector3, _radius: float = 1.6) -> void:
 	# Native grenade terrain damage is always a centered 3 x 3 x 3 cube.
@@ -199,6 +276,14 @@ func get_spawn_position() -> Vector3:
 	return _spawn
 
 func clear_world(size: Vector3i) -> void:
+	for cluster in _falling_clusters:
+		remove_child(cluster)
+		cluster.queue_free()
+	_falling_clusters.clear()
+	if is_instance_valid(_water_mesh):
+		remove_child(_water_mesh)
+		_water_mesh.queue_free()
+		_water_mesh = null
 	for chunk in _chunks.values():
 		remove_child(chunk)
 		chunk.queue_free()
@@ -240,6 +325,9 @@ func generate_lab() -> void:
 	for step_number in range(6):
 		_fill_box(Vector3i(68 + step_number * 2, 4, 58), Vector3i(70 + step_number * 2, 5 + step_number, 66), 0x018b936a)
 	_fill_box(Vector3i(38, 2, 53), Vector3i(56, 4, 56), 0)
+	# Water/wading exercise outside the central spawn and firing lanes.
+	_fill_box(Vector3i(72, 1, 72), Vector3i(88, 4, 88), 0)
+	_create_water()
 	_mark_all_chunks()
 	rebuild_now()
 	map_loaded.emit(map_name)
@@ -275,6 +363,7 @@ func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL") -> E
 			surface_y = y + 1
 			break
 	_spawn = Vector3(center_x + 0.5, surface_y + 1.0, center_z + 0.5)
+	_create_water()
 	set_view_position(_spawn)
 	rebuild_now()
 	map_loaded.emit(map_name)
@@ -295,6 +384,7 @@ func save_vxl(path: String) -> Error:
 	return file.get_error()
 
 func set_view_position(position: Vector3) -> void:
+	_effects_observer = position
 	if not _streaming:
 		return
 	var center := _chunk_of(Vector3i(position.floor()))
@@ -313,6 +403,45 @@ func set_view_position(position: Vector3) -> void:
 				var key := Vector3i(x, y, z)
 				if not _chunks.has(key):
 					_dirty[key] = true
+
+func set_effects_observer(position: Vector3) -> void:
+	_effects_observer = position
+
+func get_effects_observer() -> Vector3:
+	return _effects_observer
+
+func _create_water() -> void:
+	var image := Image.create(dimensions.x, dimensions.z, false, Image.FORMAT_RGBA8)
+	for z in range(dimensions.z):
+		for x in range(dimensions.x):
+			image.set_pixel(x, z, block_color(get_block(Vector3i(x, 0, z))))
+	var material := ShaderMaterial.new()
+	material.shader = WATER_SHADER
+	material.set_shader_parameter("bottom_color", ImageTexture.create_from_image(image))
+	material.set_shader_parameter("map_size", Vector2(dimensions.x, dimensions.z))
+	material.set_shader_parameter("fog_distance", float(render_radius * CHUNK_SIZE))
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(dimensions.x, dimensions.z)
+	plane.material = material
+	_water_mesh = MeshInstance3D.new()
+	_water_mesh.name = "WaterSurface"
+	_water_mesh.mesh = plane
+	_water_mesh.position = Vector3(dimensions.x * 0.5, water_level + 0.002, dimensions.z * 0.5)
+	_water_mesh.visible = water_enabled
+	_water_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_water_mesh)
+
+func set_water_enabled(enabled: bool) -> void:
+	water_enabled = enabled
+	if is_instance_valid(_water_mesh):
+		_water_mesh.visible = enabled
+	_mark_all_chunks()
+
+func set_water_fog(color: Color, distance: float) -> void:
+	if is_instance_valid(_water_mesh):
+		var material: ShaderMaterial = _water_mesh.mesh.surface_get_material(0)
+		material.set_shader_parameter("fog_color", Vector3(color.r, color.g, color.b))
+		material.set_shader_parameter("fog_distance", maxf(distance, 1.0))
 
 func _is_chunk_near(key: Vector3i) -> bool:
 	return abs(key.x - _view_chunk.x) <= render_radius and abs(key.z - _view_chunk.z) <= render_radius

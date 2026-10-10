@@ -58,6 +58,7 @@ func _process(delta: float) -> void:
 	character.set_team(int(target.get("team",1)))
 	character.set_pose(crouching,dead,sprinting)
 	character.set_weapon(int(target.get("weapon",0)),int(target.get("tool",2)))
+	character.set_intel_carrier(str(target.get("state","standing"))=="intel")
 	character.animate_motion((5.0 if sprinting else 3.0) if moving else 0.0,_phase)
 	_zones[0].position.y=1.5 if crouching else 2.35
 	_zones[1].position.y=0.95 if crouching else 1.65

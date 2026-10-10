@@ -23,6 +23,7 @@ var _notice_time:=0.0
 var _hit_time:=0.0
 var _live: Label
 var _palette: ColorPickerButton
+const LANGUAGE=preload("res://presentation/openspades_localization.gd")
 
 func setup(app: Node3D, local_session: LocalSession, local_player: BlockfieldPlayer, map_world: VoxelWorld) -> void:
 	main=app
@@ -32,6 +33,9 @@ func setup(app: Node3D, local_session: LocalSession, local_player: BlockfieldPla
 	_root=Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var theme:=Theme.new()
+	theme.default_font=LANGUAGE.get_ui_font()
+	_root.theme=theme
 	add_child(_root)
 	_create_hud()
 	_create_menu()
@@ -50,14 +54,16 @@ func _style(background: Color, border: Color=Color.TRANSPARENT) -> StyleBoxFlat:
 
 func _label(text: String, font_size: int=16, color: Color=Color("e8eee7")) -> Label:
 	var node:=Label.new()
-	node.text=text
+	node.text=LANGUAGE.lab(text)
+	node.set_meta("lab_text",text)
 	node.add_theme_font_size_override("font_size",font_size)
 	node.add_theme_color_override("font_color",color)
 	return node
 
 func _button(text: String, callback: Callable, accent: bool=false) -> Button:
 	var node:=Button.new()
-	node.text=text
+	node.text=LANGUAGE.lab(text)
+	node.set_meta("lab_text",text)
 	node.custom_minimum_size=Vector2(0,42)
 	node.add_theme_font_size_override("font_size",16)
 	node.add_theme_stylebox_override("normal",_style(Color("679374") if accent else Color("273b42"),Color("6c918b") if accent else Color("45606a")))
@@ -202,8 +208,10 @@ func _create_menu() -> void:
 func _tab(tabs: TabContainer, title: String) -> VBoxContainer:
 	var panel:=MarginContainer.new()
 	panel.name=title
+	panel.set_meta("lab_title",title)
 	for side in ["left","right","top","bottom"]:panel.add_theme_constant_override("margin_"+side,20)
 	tabs.add_child(panel)
+	tabs.set_tab_title(tabs.get_tab_count()-1,LANGUAGE.lab(title))
 	var scroll:=ScrollContainer.new()
 	scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
@@ -238,6 +246,8 @@ func _build_arsenal(column: VBoxContainer) -> void:
 	column.add_child(profile)
 	var unlimited:=CheckButton.new()
 	unlimited.text="Неограниченные боеприпасы и материалы"
+	unlimited.set_meta("lab_text",unlimited.text)
+	unlimited.text=LANGUAGE.lab(unlimited.text)
 	unlimited.button_pressed=true
 	session.unlimited_ammo=true
 	unlimited.toggled.connect(func(enabled):session.unlimited_ammo=enabled)
@@ -261,6 +271,8 @@ func _build_soldiers(column: VBoxContainer) -> void:
 		row.add_child(button)
 	var invulnerable:=CheckButton.new()
 	invulnerable.text="Неуязвимость для испытаний"
+	invulnerable.set_meta("lab_text",invulnerable.text)
+	invulnerable.text=LANGUAGE.lab(invulnerable.text)
 	invulnerable.button_pressed=true
 	session.invulnerable=true
 	invulnerable.toggled.connect(func(enabled):session.invulnerable=enabled)
@@ -271,12 +283,16 @@ func _build_soldiers(column: VBoxContainer) -> void:
 	column.add_child(_button("Вид от первого / третьего лица",func():player.third_person=not player.third_person))
 	column.add_child(_label("ПОЗЫ МИШЕНЕЙ — применяются ко всем солдатам",14))
 	var poses:=OptionButton.new()
-	for text in ["Стоя","Присев","Ходьба","Бег","После смерти"]:poses.add_item(text)
+	var pose_texts:=["Стоя","Присев","Ходьба","Бег","После смерти","С разведданными"]
+	poses.set_meta("lab_items",pose_texts)
+	for text in pose_texts:poses.add_item(LANGUAGE.lab(text))
 	poses.item_selected.connect(func(index):
-		for target in session.targets:session.set_target_state(int(target.id),["standing","crouching","walking","sprinting","dead"][index],int(target.weapon),int(target.tool)))
+		for target in session.targets:session.set_target_state(int(target.id),["standing","crouching","walking","sprinting","dead","intel"][index],int(target.weapon),int(target.tool)))
 	column.add_child(poses)
 	var items:=OptionButton.new()
-	for text in ["Винтовка","Пистолет-пулемёт","Дробовик","Лопата","Блок","Граната"]:items.add_item(text)
+	var item_texts:=["Винтовка","Пистолет-пулемёт","Дробовик","Лопата","Блок","Граната"]
+	items.set_meta("lab_items",item_texts)
+	for text in item_texts:items.add_item(LANGUAGE.lab(text))
 	items.item_selected.connect(func(index):
 		for target in session.targets:session.set_target_state(int(target.id),str(target.state),mini(index,2),2 if index<3 else [0,1,3][index-3]))
 	column.add_child(items)
@@ -287,14 +303,28 @@ func _build_world(column: VBoxContainer) -> void:
 	column.add_child(_button("Сохранить изменённую карту .vxl",main.save_map))
 	column.add_child(_label("Локальные правила матча",16))
 	var mode:=OptionButton.new()
-	mode.add_item("Свободные испытания")
-	mode.add_item("CTF — захват разведданных")
-	mode.add_item("TC — контроль территорий")
+	var mode_texts:=["Свободные испытания","CTF — захват разведданных","TC — контроль территорий"]
+	mode.set_meta("lab_items",mode_texts)
+	for text in mode_texts:mode.add_item(LANGUAGE.lab(text))
 	mode.item_selected.connect(func(index):session.set_mode(["sandbox","ctf","tc"][index]))
 	column.add_child(mode)
 	column.add_child(_label("Лопата: ЛКМ бьёт блок, ПКМ копает три блока.\nБлоки: ЛКМ поставить, ПКМ удерживать и отпустить для линии.\nГраната: удерживайте ЛКМ для приготовления, отпустите для броска.",15,Color("a6bdc2")))
 
 func _build_settings(column: VBoxContainer) -> void:
+	column.add_child(_label("Имя игрока",15))
+	var name_field:=LineEdit.new()
+	name_field.text=main.player_name
+	name_field.max_length=24
+	name_field.text_changed.connect(func(value):main.player_name=value;main.save_settings())
+	column.add_child(name_field)
+	column.add_child(_label("Язык",15))
+	var language:=OptionButton.new()
+	var languages:=LANGUAGE.get_languages()
+	for choice in languages:
+		language.add_item(str(choice.label))
+		if str(choice.locale)==main.locale:language.select(language.item_count-1)
+	language.item_selected.connect(func(index):main.set_locale(str(languages[index].locale)))
+	column.add_child(language)
 	column.add_child(_label("Поле зрения",15))
 	var fov:=HSlider.new()
 	fov.min_value=60
@@ -310,6 +340,36 @@ func _build_settings(column: VBoxContainer) -> void:
 	sensitivity.value=player.sensitivity
 	sensitivity.value_changed.connect(func(value):player.sensitivity=value;main.save_settings())
 	column.add_child(sensitivity)
+	var hold_aim:=CheckButton.new()
+	hold_aim.text="Удерживать ПКМ для прицеливания"
+	hold_aim.set_meta("lab_text",hold_aim.text)
+	hold_aim.text=LANGUAGE.lab(hold_aim.text)
+	hold_aim.button_pressed=player.hold_aim_down_sight
+	hold_aim.toggled.connect(func(enabled):player.hold_aim_down_sight=enabled;main.save_settings())
+	column.add_child(hold_aim)
+	var invert:=CheckButton.new()
+	invert.text="Инвертировать мышь по вертикали"
+	invert.set_meta("lab_text",invert.text)
+	invert.text=LANGUAGE.lab(invert.text)
+	invert.button_pressed=player.invert_mouse
+	invert.toggled.connect(func(enabled):player.invert_mouse=enabled;main.save_settings())
+	column.add_child(invert)
+	column.add_child(_label("Чувствительность при прицеливании",15))
+	var ads:=HSlider.new()
+	ads.min_value=0.1
+	ads.max_value=2.0
+	ads.step=0.05
+	ads.value=player.ads_sensitivity
+	ads.value_changed.connect(func(value):player.ads_sensitivity=value;main.save_settings())
+	column.add_child(ads)
+	column.add_child(_label("Экспонента движения мыши",15))
+	var exponent:=HSlider.new()
+	exponent.min_value=0.5
+	exponent.max_value=2.0
+	exponent.step=0.05
+	exponent.value=player.mouse_exponent
+	exponent.value_changed.connect(func(value):player.mouse_exponent=value;main.save_settings())
+	column.add_child(exponent)
 	column.add_child(_label("Громкость",15))
 	var volume:=HSlider.new()
 	volume.min_value=-40
@@ -317,6 +377,7 @@ func _build_settings(column: VBoxContainer) -> void:
 	volume.value=AudioServer.get_bus_volume_db(0)
 	volume.value_changed.connect(func(value):AudioServer.set_bus_volume_db(0,value);main.save_settings())
 	column.add_child(volume)
+	column.add_child(_button("Полный экран",func():DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if DisplayServer.window_get_mode()!=DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_WINDOWED)))
 
 func _build_checks(column: VBoxContainer) -> void:
 	column.add_child(_label("Проверяйте без подключения к серверу",20))
@@ -332,7 +393,7 @@ func _process(delta: float) -> void:
 	_notice.visible=_notice_time>0.0
 	_hit.visible=_hit_time>0.0
 	var tools:=["ЛОПАТА","БЛОКИ",str(session.get_weapon_info().name).to_upper(),"ГРАНАТА"]
-	_stats.text="%d HP   /   %d блоков   /   %d гранат"%[session.health,session.blocks,session.grenades]
+	_stats.text=LANGUAGE.lab("%d HP   /   %d блоков   /   %d гранат")%[session.health,session.blocks,session.grenades]
 	_ammo.text="%s\n%d / %d"%[tools[session.current_tool],session.magazine,session.reserve]
 	_mode.text="%s   ·   %s   ·   %d FPS"%[world.map_name,str(session.get("mode")),Engine.get_frames_per_second()]
 	if _live!=null:
@@ -373,3 +434,19 @@ func _send_chat(message: String) -> void:
 	_chat.visible=false
 	player.controls_enabled=true
 	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
+
+func _notification(what: int) -> void:
+	if what==NOTIFICATION_TRANSLATION_CHANGED and is_instance_valid(_root):
+		_translate_nodes(_root)
+
+func _translate_nodes(node: Node) -> void:
+	if node.has_meta("lab_text"):
+		node.set("text",LANGUAGE.lab(str(node.get_meta("lab_text"))))
+	if node is TabContainer:
+		for index in node.get_tab_count():
+			var panel: Control=node.get_tab_control(index)
+			if panel.has_meta("lab_title"):node.set_tab_title(index,LANGUAGE.lab(str(panel.get_meta("lab_title"))))
+	if node is OptionButton and node.has_meta("lab_items"):
+		var texts: Array=node.get_meta("lab_items")
+		for index in texts.size():node.set_item_text(index,LANGUAGE.lab(str(texts[index])))
+	for child in node.get_children():_translate_nodes(child)

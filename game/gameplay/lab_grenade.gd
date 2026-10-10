@@ -8,9 +8,10 @@ var fuse:=3.0
 var grenade_id: int=-1
 var finished:=false
 signal detonated(point: Vector3)
+signal bounced(point: Vector3,water: bool)
 
 func _ready() -> void:
-	var path:="res://assets/openspades/models/Grenade/Grenade.glb"
+	var path:="res://assets/openspades/models/Weapons/Grenade/Grenade.glb"
 	if ResourceLoader.exists(path):
 		var model: Node3D=(load(path) as PackedScene).instantiate()
 		model.scale=Vector3.ONE*0.025
@@ -29,8 +30,10 @@ func _physics_process(delta: float) -> void:
 	var offset:=velocity*delta
 	var hit:=world.cast_voxel(global_position,offset.normalized(),offset.length()+0.12)
 	if hit.hit:
+		var bounce_speed:=velocity.length()
 		global_position=hit.position+Vector3(hit.normal)*0.13
 		velocity=velocity.bounce(Vector3(hit.normal))*0.36
+		if bounce_speed>2.0:bounced.emit(global_position,global_position.y<world.water_level)
 	else: global_position+=offset
 	rotation+=Vector3(2,3,1)*delta
 	if session!=null:session.set_grenade_position(grenade_id,global_position)

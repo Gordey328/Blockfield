@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://7av63i7j4nub"
+path="res://.godot/imported/100-unifont.fnt-4e5c572af05f8a06b6a7e93080367ab2.fontdata"
+
+[deps]
+
+source_file="res://assets/openspades/fonts/Gfx/Fonts/100-unifont.fnt"
+dest_files=["res://.godot/imported/100-unifont.fnt-4e5c572af05f8a06b6a7e93080367ab2.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2

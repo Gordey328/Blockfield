@@ -7,7 +7,7 @@
 [ext_resource type="Script" path="res://ui/lab_hud.gd" id="5"]
 
 [sub_resource type="BoxShape3D" id="BodyShape"]
-size=Vector3(0.9, 2.4, 0.9)
+size=Vector3(0.9, 2.7, 0.9)
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color=Color(0.28, 0.48, 0.66, 1)
@@ -39,11 +39,11 @@ collision_mask=1
 script=ExtResource("4")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-position=Vector3(0, 1.2, 0)
+position=Vector3(0, 1.35, 0)
 shape=SubResource("BodyShape")
 
 [node name="Head" type="Node3D" parent="Player"]
-position=Vector3(0, 1.8, 0)
+position=Vector3(0, 2.25, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Player/Head"]
 current=true

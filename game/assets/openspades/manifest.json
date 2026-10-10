@@ -92,7 +92,8 @@
       "source_sha256": "212548bcb5eb2523227ca0ad7e4dd5216c693e4971cdc67896c60d74eb43d5db",
       "output_sha256": "931a47546e318a404180d334e18f86a7d7270dc21cb7a268d59c1672166b3151",
       "bytes": 90,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/DitherPattern4x4.png",
@@ -111,6 +112,33 @@
       "output_sha256": "af949ecce70511a76dc6c26a5bf701452985a6b8d468ab67899869c67eb3c7b4",
       "bytes": 1651,
       "placeholder": false
+    },
+    {
+      "virtual_path": "Gfx/Fonts/100-unifont.ospfont",
+      "output": "fonts/Gfx/Fonts/100-unifont.fnt",
+      "source": "r33:OfficialMods/font-unifont.pak!/Gfx/Fonts/100-unifont.ospfont",
+      "source_sha256": "698e9039043d81b9acf534f33b0f0b6d05af99a2527908816564420473e8101b",
+      "output_sha256": "8e515b1ac6324fc5103214999f0f2dd99ecca581fd728002994045a2763eded1",
+      "bytes": 5297926,
+      "placeholder": false,
+      "glyphs": 57085,
+      "font_size": 16,
+      "atlas_size": [
+        4096,
+        4096
+      ],
+      "atlas_output": "images/Gfx/Fonts/100-unifont.png",
+      "atlas_source_sha256": "ca1b4047c8b08f3a7e07343c4481c22a56c8bd02286da97bbb3eec891d4546d3"
+    },
+    {
+      "virtual_path": "Gfx/Fonts/100-unifont.tga",
+      "output": "images/Gfx/Fonts/100-unifont.png",
+      "source": "r33:OfficialMods/font-unifont.pak!/Gfx/Fonts/100-unifont.tga",
+      "source_sha256": "ca1b4047c8b08f3a7e07343c4481c22a56c8bd02286da97bbb3eec891d4546d3",
+      "output_sha256": "be89a3ad43af2c2a890b26a50e927241d9b7338357c87aca603bb6bb6514d768",
+      "bytes": 1987692,
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/Fonts/AlteDIN1451.ttf",
@@ -137,7 +165,8 @@
       "source_sha256": "57369098dbc108c549dfc95fa0958934acb2845de58b01a2809bf96e183b3089",
       "output_sha256": "571867963d32a428d12b51352d2baa7e7ce281b89f86d6aa831e2ebea5af70e2",
       "bytes": 716,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/Fonts/SquareFontBig.png",
@@ -171,9 +200,10 @@
       "output": "images/Gfx/HurtRing.png",
       "source": "source:Resources/Gfx/HurtRing.tga",
       "source_sha256": "64254c7777596fed96323b8a828905447bb411875d617dff08b584d52079d370",
-      "output_sha256": "cd078b4adeef6317b80d659d5f3c998e241417340801f24aee00c24c151bf054",
-      "bytes": 44508,
-      "placeholder": false
+      "output_sha256": "82d5f263eb726ff433875b6351721db045dd81321d9f6f28e55039527f007d08",
+      "bytes": 44409,
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/HurtRing2.png",
@@ -398,7 +428,8 @@
       "source_sha256": "e5b40d22548d19dadef674edff4166730ba8db723a142b09ab9848cf45ea81eb",
       "output_sha256": "f20f9817a380f491efbeea5cea004c221a4d5c8bb7c093134a806fb1f93a0086",
       "bytes": 75926,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/Palette.png",
@@ -443,7 +474,8 @@
       "source_sha256": "50223fda19e8911f850d3d8f1e4a2939b57e34ef69fff889186d55abcda93662",
       "output_sha256": "443c61404d81fcd16dce616e1740874deb1c0878cf28a38e57bd7cf7202f0d41",
       "bytes": 146,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/Sight.tga",
@@ -452,7 +484,8 @@
       "source_sha256": "2492742f47b55b4c066acb755a96961c4fe67ffe0106c2f00bf794cbd43624f9",
       "output_sha256": "cb8d638d961bddb32001ffe2809331d71677684db4f29047484a3bc95a921581",
       "bytes": 952,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Gfx/Spotlight.png",
@@ -578,7 +611,8 @@
       "source_sha256": "e34ba375dfcf0cd896b3016073fb495d7b1fc3732011e8c10b537b719208eb2a",
       "output_sha256": "f7b9da3b59df7c5a2d0ea2f7ce260c20fef37a0f550d150075a7f3c08b50a7de",
       "bytes": 108,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Locales/de.json",
@@ -5153,7 +5187,8 @@
       "source_sha256": "513597550d47622aa2a2a20bbd2bce01fadf2e191af65189333d9b2a387647e9",
       "output_sha256": "fce0163d6f722a25942711ef66571a380682b0dcff7b5d212beb5db4e6180f2e",
       "bytes": 698,
-      "placeholder": false
+      "placeholder": false,
+      "orientation": "OpenSpades TargaReader (ignores TGA origin flags)"
     },
     {
       "virtual_path": "Textures/WaterExpl.png",
@@ -5208,10 +5243,10 @@
   "counts": {
     "models": 34,
     "sounds": 146,
-    "images": 295,
+    "images": 296,
     "maps": 1,
     "locales": 34,
-    "fonts": 1
+    "fonts": 2
   },
-  "total_bytes": 13564784
+  "total_bytes": 20850303
 }

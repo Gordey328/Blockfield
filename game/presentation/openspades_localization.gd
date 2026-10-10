@@ -7,6 +7,7 @@ const ROOT := "res://assets/openspades/locales/"
 const SOURCE_IDS := ["en_us", "ru", "de", "el", "es", "fr", "hu", "id", "ja", "ko", "nl", "pl", "pt_br", "pt_pt", "uk", "vi", "zh_CN"]
 static var _installed := false
 static var _translations: Array[Translation] = []
+static var _ui_font: FontVariation
 
 # Authored offline-lab text falls back to English outside the original catalogs.
 # Keys are the current UI's Russian text so existing labels can use lab(text).
@@ -32,12 +33,16 @@ const LAB_RU_TO_EN := {
 	"Вид от первого / третьего лица": "First / third person view",
 	"ПОЗЫ МИШЕНЕЙ — применяются ко всем солдатам": "TARGET POSES — applied to every soldier",
 	"Стоя": "Standing", "Присев": "Crouching", "Ходьба": "Walking", "Бег": "Sprinting", "После смерти": "Dead",
+	"С разведданными": "Carrying intel",
 	"Сбросить испытательный полигон": "Reset test lab",
 	"Загрузить оригинальную карту OpenSpades": "Load original OpenSpades map",
 	"Сохранить изменённую карту .vxl": "Save edited .vxl map",
 	"Локальные правила матча": "Offline match rules",
 	"Свободные испытания": "Free testing", "CTF — захват разведданных": "CTF — capture the intel", "TC — контроль территорий": "TC — territorial control",
 	"Поле зрения": "Field of view", "Чувствительность мыши": "Mouse sensitivity", "Громкость": "Volume", "Язык": "Language",
+	"Имя игрока": "Player name", "Удерживать ПКМ для прицеливания": "Hold RMB to aim",
+	"Инвертировать мышь по вертикали": "Invert mouse vertically", "Чувствительность при прицеливании": "Aim sensitivity",
+	"Экспонента движения мыши": "Mouse movement exponent", "Полный экран": "Fullscreen",
 	"Проверяйте без подключения к серверу": "Test without connecting to a server",
 	"Текущий билд находится в разработке. Полная готовность\nпереноса фиксируется по проверкам возможностей исходной игры.": "This build is in development. Completion is tracked\nagainst verified original-game features.",
 	"ЛКМ  действие    ПКМ  прицел / копать / линия\nF  вид от третьего лица    N  карта    Tab  счёт": "LMB  action    RMB  aim / dig / block line\nF  third person    N  map    Tab  scoreboard",
@@ -112,12 +117,31 @@ static func text(message: String, context: String = "", arguments: Array = []) -
 	var translated: String = TranslationServer.translate(message, context)
 	return translated.format(arguments) if not arguments.is_empty() else translated
 
+static func plural(message: String, plural_message: String, count: int, context: String = "", arguments: Array = []) -> String:
+	install()
+	var translated: String = TranslationServer.translate_plural(message, plural_message, count, context)
+	return translated.format(arguments) if not arguments.is_empty() else translated
+
 static func lab(message: String) -> String:
 	var source: String = LAB_RU_TO_EN.get(message, message)
 	return text(source, "BlockfieldLab")
+
+static func get_ui_font() -> Font:
+	if _ui_font == null:
+		var original_fallback := load("res://assets/openspades/fonts/Gfx/Fonts/100-unifont.fnt") as FontFile
+		if original_fallback == null:
+			push_error("Original multilingual font is unavailable")
+			return ThemeDB.fallback_font
+		original_fallback.allow_system_fallback = false
+		# Godot's bitmap importer stores scaling_mode=2 (arbitrary-size scaling).
+		_ui_font = FontVariation.new()
+		_ui_font.base_font = ThemeDB.fallback_font
+		_ui_font.fallbacks = [original_fallback]
+	return _ui_font
 
 static func uninstall() -> void:
 	for translation in _translations:
 		TranslationServer.remove_translation(translation)
 	_translations.clear()
 	_installed = false
+	_ui_font = null

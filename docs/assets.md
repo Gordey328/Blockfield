@@ -29,8 +29,9 @@ virtual resource path to its output path and records original/output SHA-256,
 size, dimensions/pivot, geometry counts and unresolved placeholders.
 Identical inputs preserve existing audio and produce an identical manifest.
 
-Validated import: 494 files; 34 GLB models (25,016 triangles), 146 Vorbis sounds,
-295 PNG images, 1 VXL map, 17 locale JSON files and 1 TTF font; 12,565,280 bytes.
+Validated import: 513 files; 34 GLB models (25,016 triangles), 146 Vorbis sounds,
+296 PNG images, 1 VXL map, 17 locale descriptions, 16 original gettext PO catalogs,
+1 gettext POT source template, 1 TTF and 1 bitmap font; 20,850,303 bytes.
 Validation checks every output checksum, GLB buffer/accessor extents, finite values,
 vertex/index counts, outward triangle winding, PNG decoding and every sound decoding.
 Deterministic reimport was checked. Godot import and browser presentation remain separate checks.
@@ -83,12 +84,17 @@ remain recorded. Resource playback and spatial mixing still require game code.
   `sounds/Weapons/Grenade`, `sounds/Feedback` and `sounds/Misc`.
 - UI/effects preserve names under `images/Gfx` and `images/Textures`. Original TGA/JPEG
   resources become PNG, so `Gfx/Sight.tga` maps to `images/Gfx/Sight.png`.
+  TGA orientation follows `Core/TargaReader.cpp`, which deliberately ignores origin
+  flags. Pillow's spec-compliant origin adjustment is undone to match the source.
 - Original bundled map: `res://assets/openspades/maps/Title.vxl`. Export presets must
   include `*.vxl` explicitly; maps are data read by `FileAccess`, not Godot scenes.
-- Locale dictionaries are preserved under `locales/`; they need adaptation into
-  Godot translation messages before claiming localization parity.
-- Original font: `fonts/Gfx/Fonts/AlteDIN1451.ttf`. Its coverage does not imply all
-  original language glyphs are available. The optional Unifont pak is not imported.
+- Locale descriptions and original gettext messages are preserved under `locales/`.
+  `OpenSpadesLocalization` installs the original PO catalogs through Godot's native
+  loader with original message contexts and plural rules.
+- Original fonts: `fonts/Gfx/Fonts/AlteDIN1451.ttf` and `100-unifont.fnt`. The official
+  optional GNU Unifont pak supplies 57,085 original glyphs and a 4096² bitmap atlas.
+  The importer converts its `.ospfont` descriptor to AngelCode BMFont, preserving
+  coordinates/advances/offsets; the exact GPL/font-embedding-exception notice is included.
 
 ## Distribution notices
 
@@ -108,6 +114,8 @@ parts. Source references are `Sources/Client/ClientPlayer.cpp` and
 `Resources/Scripts/Skin/{BasicViewWeapon,Rifle,SMG,Shotgun,Spade,Block,Grenade}`.
 Walk/crouch/head poses, original view scales, separate sights/magazines/pump,
 source-stage reload hand targets and two-segment view arms are implemented there.
+`CharacterView.set_intel_carrier(bool)` adds the original enemy-colored intel at the
+source torso offset `(0, .6, .5)`, scale 0.1, for living standing/crouching carriers.
 Input timing, recoil state, server state and camera behavior come from the owning
 controller/session; those must be verified with the full build. Matching imported
 resource counts alone does not verify gameplay or visual parity.
@@ -129,3 +137,69 @@ legs center 0.4, arms center 1.4. Hit zones must follow the same crouch state.
 Walking is a source-amplitude procedural approximation from speed/time; strafing
 gait input is not provided by the current API. The view-equipment depth hack is
 adapted with Godot materials, and room-dependent audio/reverb is owned elsewhere.
+
+## Localization contract
+
+`OpenSpadesLocalization.install()` registers 16 original PO catalogs plus the authored
+Russian offline-lab catalog. English uses the original source strings. The 17 selectable
+languages come from `get_languages()`: English, Russian, German, Greek, Spanish, French,
+Hungarian, Indonesian, Japanese, Korean, Dutch, Polish, Brazilian Portuguese, Portuguese,
+Ukrainian, Vietnamese and Chinese. Original `pt_br`, `pt_pt` and `en_us` identifiers map
+to Godot `pt_BR`, `pt_PT` and `en_US`. Region variants select the available catalog.
+
+`set_locale(id)` changes Godot's `TranslationServer` locale. Existing controls must refresh
+on `NOTIFICATION_TRANSLATION_CHANGED`; `lab(original Russian label)` supplies authored
+English/Russian lab text. Other languages use English for lab-only text. Original messages
+use `text(message, context, arguments)` and `plural(message, plural, count, context, arguments)`.
+Weapon names use context `Client`, language settings `StartupScreen`. Original positional
+placeholders use `{0}`. New lab text is clearly separate from upstream catalogs; preserving
+catalogs does not imply that every source screen has already been ported.
+
+`godot --headless --path game --script ../tests/presentation/test_localization.gd`
+passed 76 assertions: catalog installation, all language descriptions, normalization,
+message contexts, original Russian 1/2/5 plural forms, numbered formatting, English/German
+lookups, lab fallback, original Cyrillic/CJK bitmap glyphs and teardown. `get_ui_font()`
+wraps the Godot default UI font with the original Unifont fallback; assign it to a parent
+control's theme default font. This supplies browser glyphs without host-installed fonts.
+Catalog bytes, provenance, checksums and GPL notices
+are included in the asset manifest/distribution.
+
+## Effects contract
+
+`OpenSpadesEffects` is a scene-owned `Node3D`; call `setup(world, camera)` once. It owns visual
+particles, casing contact audio and temporary lights, and never edits gameplay blocks.
+Use `muzzle_fire`, `blood`, `block_hit`, `block_destroy`, `water_hit`, `grenade_explosion`,
+`eject_shell`, `tracer` and `kick_camera` at the corresponding controller/session events.
+`block_destroy` is for directly deleted cells; world-owned falling-cluster batches handle
+collapsed components. `get_camera_rotation()` supplies a temporary pitch/yaw/roll offset
+to add to the unshaken camera pose. `clear()` resets a lab/map and `stop_audio()` releases
+stream/playback references before teardown.
+
+All 17 original language names, including Japanese, Korean and Chinese, were reviewed
+with the real OpenGL Compatibility renderer after matching the TGA atlas orientation.
+The bitmap-font descriptor includes atlas provenance so Godot invalidates its embedded
+font cache when the source atlas/orientation changes.
+
+Emission counts, color/radius/growth/trajectory/lifetime/fade parameters and 32 m/s² particle
+gravity are adapted from `Sources/Client/Client_LocalEnts.cpp` and `ParticleSpriteEntity.cpp`.
+`SmokeSpriteEntity.cpp` supplies original 180-frame steady Smoke1 and 48-frame explosion
+Smoke2 resources and playback rates. `GunCasing.cpp` supplies original KV6 casing scale 0.02,
+velocity, weak bounce, first contact sounds and two-second ground lifetime. Source rifle/SMG
+shells eject on firing; the source does not eject shotgun brass on firing (pump ejection is
+an upstream FIXME). `Tracer.cpp` supplies `Gfx/Ball.png`, source velocities slowed by 0.5 and
+moving 1/30-second streak segments. Local first-person tracers are suppressed as upstream.
+`Client_Scene.cpp` supplies random/coherent angular shake and `Client_Update.cpp` its decay.
+
+Adaptations requiring visual comparison: sprites use Godot's alpha blending rather than the
+original renderer's premultiplied pipeline; tracer streaks use one textured quad rather than
+11 layered long sprites; coherent shake uses Godot noise and omits original radial blur/FOV
+shake. Temporary point lights cannot light unshaded terrain materials. Particle, shell,
+tracer and light budgets (defaults 512/48/64/8) keep repeated lab events bounded in browsers.
+Casing collision uses the world voxel sampler and 60 Hz substeps; a 15-second flight limit
+also bounds shells falling beyond a map. Spatial impact/weapon audio remains controller-owned.
+
+`godot --headless --path game --script ../tests/presentation/test_effects.gd`
+checks source emission groups, shell/contact/lifetime behavior, all tracer velocity profiles,
+first-person suppression, budgets, finite transforms, animated frame updates, gravity and
+cleanup. `render_effects.gd` can capture the real OpenGL Compatibility renderer using the same
+`--output=<absolute dir>` convention as the model preview. Screenshots stay in ignored `.cache/`.

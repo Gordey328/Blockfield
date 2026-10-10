@@ -92,16 +92,18 @@ def read_resources(source: Path, pack: Path | None) -> tuple[dict[str, Resource]
                     continue
                 if "LICENSE" in name.upper() or "COPYING" in name.upper():
                     licenses[name.replace("/", "-")] = archive.read(info)
-            pak_bytes = archive.read("Nonfree/pak000-Nonfree.pak")
-        with zipfile.ZipFile(io.BytesIO(pak_bytes)) as pak:
-            for info in pak.infolist():
-                name = safe_name(info.filename)
-                if info.is_dir():
-                    continue
-                content = pak.read(info)
-                if "LICENSE" in name.upper() or "COPYING" in name.upper():
-                    licenses[f"pak000-{name.replace('/', '-')}"] = content
-                resources[name] = Resource(name, content, f"r33:Nonfree/pak000-Nonfree.pak!/{name}")
+            packs = [(name, archive.read(name)) for name in
+                     ("Nonfree/pak000-Nonfree.pak", "OfficialMods/font-unifont.pak")]
+        for pak_path, pak_bytes in packs:
+            with zipfile.ZipFile(io.BytesIO(pak_bytes)) as pak:
+                for info in pak.infolist():
+                    name = safe_name(info.filename)
+                    if info.is_dir():
+                        continue
+                    content = pak.read(info)
+                    if "LICENSE" in name.upper() or "COPYING" in name.upper():
+                        licenses[f"pak000-{name.replace('/', '-')}"] = content
+                    resources[name] = Resource(name, content, f"r33:{pak_path}!/{name}")
         if not any("Nonfree" in name for name in licenses):
             raise ValueError("Original pack is missing its license notice")
     return resources, licenses
@@ -271,6 +273,39 @@ def write_if_changed(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
+def ospfont_to_bmfont(data: bytes, atlas_data: bytes, atlas_name: str) -> tuple[bytes, dict]:
+    """Preserve original bitmap glyphs/offsets using Godot's AngelCode importer.
+
+    Structure matches Client/IFont.cpp and Tools/BdfToOSFont.cpp GlyphInfo.
+    """
+    from PIL import Image
+    if len(data) < 24 or data[:16] != b"OpenSpadesFontFl":
+        raise ValueError("Invalid OpenSpades bitmap font header")
+    count, size = struct.unpack_from("<II", data, 16)
+    if len(data) != 24 + count * 16 or not 1 <= size <= 256:
+        raise ValueError("Invalid OpenSpades bitmap font bounds")
+    with Image.open(io.BytesIO(atlas_data)) as atlas:
+        width, height = atlas.size
+    # Include atlas provenance/orientation in the descriptor so changing the
+    # atlas invalidates Godot's embedded bitmap-font cache as well.
+    face = f"OpenSpades GNU Unifont r33-{sha256(atlas_data)[:8]}-bottomup"
+    lines = [f'info face="{face}" size={size} bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=1 padding=0,0,0,0 spacing=0,0',
+             f"common lineHeight={size} base={size} scaleW={width} scaleH={height} pages=1 packed=0",
+             f'page id=0 file="{atlas_name}"', f"chars count={count}"]
+    seen = set()
+    for index in range(count):
+        code, x, y, w, h, advance, off_x, off_y = struct.unpack_from("<IHHBBHhh", data, 24 + index * 16)
+        if code in seen or code > 0x10ffff:
+            raise ValueError("Duplicate/invalid font Unicode character")
+        seen.add(code)
+        if w == 0 or h == 0:
+            x = y = 0
+        elif x + w > width or y + h > height:
+            raise ValueError("Bitmap font glyph outside atlas")
+        lines.append(f"char id={code} x={x} y={y} width={w} height={h} xoffset={off_x} yoffset={off_y} xadvance={advance} page=0 chnl=15")
+    return ("\n".join(lines) + "\n").encode("utf-8"), {"glyphs": count, "font_size": size, "atlas_size": [width, height]}
+
+
 def transcode_audio(content: bytes, source_path: str, destination: Path, ffmpeg: str) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(".source")
@@ -325,11 +360,33 @@ def import_assets(source: Path, pack: Path | None, output: Path, ffmpeg: str, al
                 from PIL import Image
                 image_bytes = io.BytesIO()
                 with Image.open(io.BytesIO(content)) as image:
-                    image.convert("RGBA").save(image_bytes, format="PNG")
+                    image = image.convert("RGBA")
+                    if extension == ".tga":
+                        # Core/TargaReader.cpp always decodes bottom-up/left-right;
+                        # its spec-compliant orientation adjustment is #if 0.
+                        # Pillow obeys descriptor flags, so undo those adjustments.
+                        if resource.content[17] & 0x20:
+                            image = image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+                        if resource.content[17] & 0x10:
+                            image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                        metadata["orientation"] = "OpenSpades TargaReader (ignores TGA origin flags)"
+                    image.save(image_bytes, format="PNG")
                 content = image_bytes.getvalue()
             write_if_changed(destination, content)
         elif extension in (".ttf", ".otf"):
             destination = output / "fonts" / Path(*parts)
+            write_if_changed(destination, content)
+        elif extension == ".ospfont":
+            destination = output / "fonts" / Path(*parts).with_suffix(".fnt")
+            atlas_path = str(PurePosixPath(virtual_path).with_suffix(".tga"))
+            if atlas_path not in resources:
+                raise ValueError(f"Font atlas missing: {atlas_path}")
+            atlas_output = output / "images" / Path(*parts).with_suffix(".png")
+            # Relative path from fonts/Gfx/Fonts to images/Gfx/Fonts.
+            atlas_name = "../../../images/" + PurePosixPath(virtual_path).with_suffix(".png").as_posix()
+            content, metadata = ospfont_to_bmfont(content, resources[atlas_path].content, atlas_name)
+            metadata["atlas_output"] = atlas_output.relative_to(output).as_posix()
+            metadata["atlas_source_sha256"] = sha256(resources[atlas_path].content)
             write_if_changed(destination, content)
         elif parts[0] == "Maps" and extension == ".vxl":
             destination = output / "maps" / Path(*parts[1:])

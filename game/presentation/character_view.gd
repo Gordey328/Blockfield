@@ -28,6 +28,8 @@ var _legs: Array[Node3D] = []
 var _crouch_legs: Array[Node3D] = []
 var _corpse: Node3D
 var _equipment: Node3D
+var _intel: Node3D
+var _carrying_intel := false
 
 func _ready() -> void:
 	_ensure_built()
@@ -72,6 +74,21 @@ func set_team(index: int, color: Color = Color(-1, -1, -1, 1)) -> void:
 		_team_color = next_color
 		MODELS.set_tint(_rig, _team_color)
 	visible = index < 2
+	_update_intel_tint()
+
+func set_intel_carrier(carrying: bool) -> void:
+	_ensure_built()
+	_carrying_intel = carrying
+	if carrying and not is_instance_valid(_intel):
+		_intel = MODELS.create("MapObjects/Intel")
+		_intel.name = "CarriedEnemyIntel"
+		_rig.add_child(_intel)
+		_update_intel_tint()
+	_apply_pose()
+
+func _update_intel_tint() -> void:
+	if is_instance_valid(_intel):
+		MODELS.set_tint(_intel, MODELS.TEAM_COLORS[1 - clampi(_team, 0, 1)])
 
 func set_pose(crouch: bool, dead: bool, sprint: bool) -> void:
 	_ensure_built()
@@ -133,6 +150,10 @@ func _apply_pose() -> void:
 	var torso_origin := Vector3(0, torso_height, 0)
 	_torso.transform = Transform3D(scaler, torso_origin)
 	_crouch_torso.transform = Transform3D(scaler, torso_origin)
+	if is_instance_valid(_intel):
+		# ClientPlayer.cpp: torso * Translate(0, .6, .5) * Scale(.1).
+		_intel.transform = Transform3D(scaler, torso_origin + MODELS.source_vector(Vector3(0, 0.6, 0.5)))
+		_intel.visible = _carrying_intel and not _dead
 	_head.transform = Transform3D(MODELS.source_rotation(Vector3.RIGHT, _pitch) * scaler, torso_origin)
 	var arm_pitch := _pitch - (0.5 if _sprinting else 0.0)
 	if arm_pitch < 0.0:

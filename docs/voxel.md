@@ -23,6 +23,10 @@ Original VXL `(x, y, z)` maps to Godot `(x, 63-z, y)`. The original 512 × 512 �
 - `rebuild_now()` flushes pending mesh and collision changes, useful after a reset, import or deterministic test.
 - `blocks_changed(changes)` sends entries `{cell, before, after, collapsed}`. It exposes collapse removals to sound/particles, UI diagnostics, replay and future network transport.
 - `map_loaded(map_name)` announces a completed reset/import. `get_stats()` reports loaded chunks, visible faces, dirty chunks and packed data memory.
+- `falling_cluster_created(cluster)` announces one cosmetic grouped mesh per unsupported connected component. `falling_cluster_finished(position, block_count, reason)` announces native collision/timeout breakup, useful for sound and camera shake; `get_effect_stats()` reports active clusters and allocated fragments/smoke.
+- `set_effects_observer(position)` updates observer distance for effects; `set_view_position()` also updates it on both lab and native maps. `get_effects_observer()` provides the current position at impact.
+- `water_level=1.0` is the original visible water plane (source geometric z=63), while `wade_origin_level=2.0` maps the original player's GetOrigin z>62 threshold. `set_water_enabled(bool)` toggles the plane and rebuilds dry/water floor drawing. `set_water_fog(color,distance)` aligns water fog with the environment.
+- `clip_box(position)` and `clip_world(position)` map native clipping rules for falling models and particles. Horizontal out-of-map coordinates are solid for ClipBox and air for ClipWorld; both clamp the bottom cell to y=1 and treat positions below the map as solid.
 
 ## Rendering and collapse
 
@@ -31,6 +35,20 @@ Each 16³ chunk is one `StaticBody3D`, one `MeshInstance3D`, and one `CollisionS
 After removal, neighboring solid components are tested for six-neighbor connectivity to the bottom two layers. Floating components are removed and marked `collapsed`. Downward search is prioritized. This preserves the native support rule; the implementation uses local depth-first searches instead of OpenSpades' maintained link forest. Floating components already present in an imported map remain until affected by a removal, as in the source.
 
 Support traversal stops as soon as a solid bottom-layer neighbor or a component already proven supported is found; it does not traverse the remaining terrain after finding ground.
+
+## Falling presentation (W09)
+
+`falling_cluster.gd` preserves `FallingBlock.cpp`'s cosmetic behavior: one mesh centered at the mean voxel center, gravity 4 m/s², local rotation around mapped source axis `(1,0,1)` with incremental angle `time * 1.4 * dt`, and breakup when elapsed time exceeds one second or its center enters ClipBox geometry. Authoritative blocks remain removed; fallen models never settle as new terrain.
+
+At breakup, only component surface cells emit particles. The normal count is six white fragments and one original animated Smoke1 sprite per surface cell. Two MultiMesh batches replace individual particle nodes. Smoke runs at source 70 fps, grows from radius 1 at 0.5 units/s, has lifetime 1–1.5 seconds and ignores collisions. Fragments have source triangular random velocity scaled by 13, radius 0.35–0.45, gravity 19.2 m/s², lifetime two seconds and a one-second fade. Near impacts (observer distance <16 m and cluster <1000 blocks) use native axis selection and 0.36 velocity damping for weak bounces; other fragment collisions delete the sprite. Impacts farther than 170 m allocate no particles.
+
+Browser budgets are explicit: at most 24 active clusters, 4096 fragments and 1024 smoke sprites per cluster. Larger surface sets are sampled uniformly. For sets below these budgets, counts follow the native six-plus-one rule. Source original rendering also emits camera vibration proportional to `block_count / 100 / (distance + 5)` clamped to one; the world emits the breakup event so presentation can apply it. These caps preserve map rules while adapting effect load.
+
+## Water and renderer baseline (U14)
+
+The lab contains a 16² pool at x/z=72..87, with y=1..3 excavated above immutable y=0. Native maps use the same plane. An animated Compatibility spatial shader uses map bottom colors, two analytic normal waves, Fresnel sky tint, specular highlights and the original per-channel horizontal fog curve. Submerged y=0 floor faces are hidden visually while static box-controller collision remains available.
+
+This is a renderer adaptation, not an exact port of OpenSpades' FFT water tanks, screen refraction, shadow visibility, radiosity or 8-neighbor AO lookup texture. Native defaults use horizontal fog/culling distance 128 m and release at 160 m; our default streaming radius four chunks implies a 64 m water fog distance. Root owns environment/fog/lighting decisions. The shader needs exported-browser visual verification; headless data/behavior checks cannot establish shader appearance.
 
 ## VXL saving
 
@@ -44,10 +62,14 @@ Run `godot --headless --path game --script ../tests/world/test_world.gd`. Tests 
 
 Run `godot --headless --path game --script ../tests/world/test_vxl_save.gd` for decode/edit/encode/decode, multiple non-contiguous spans, zero-upper-color spans, solid black, newly exposed interior colors, malformed data and failed-import preservation, lab padding and filesystem writes. Both suites use the committed `game/assets/openspades/maps/Title.vxl`, so CI does not require `.cache/openspades`. The original map roundtrip compares all 16,777,216 cells for occupancy and every source-defined exposed surface for color.
 
+Run `godot --headless --path game --script ../tests/world/test_falling_clusters.gd` for authoritative removal → grouped fall → COM collision → native debris → cleanup, pivot/rotation/gravity, timeout, far culling, explicit budgets, clipping and lab water metadata/settings. On 2026-10-10 this suite passed 21 assertions on Godot 4.7.2.
+
 Pinned `Title.vxl` is 2,106,956 bytes, SHA-256 `48fe6c8e9b8287c1aea12e67742362cd7001d72c7bc027b993f7a22982beed62`. An independent occupancy reconstruction using the native decoder's initially-solid columns reports 3,778,939 solid voxels; the Godot check uses this golden count to catch air-span mistakes.
 
 On 2026-10-10, Godot 4.7.2 `ed1daf0bf` headless passed 30 core assertions and 19 save assertions, including a real `CharacterBody3D` supported by generated chunk collision and falling after block removal, native grenade cube damage, and complete original-map geometry/surface-color save verification. `tests/world/benchmark_world.gd` measured lab generation/meshing at 642 ms (72 chunks, 25,044 visible faces, 1,179,648 data bytes), and original `Title.vxl` import plus initial streamed meshing at 2,906 ms (324 chunks, 48,627 visible faces, 67,108,864 data bytes). These are local CPU baselines, not browser timings.
 
-Full VXL import and initial chunk meshing are synchronous. Streaming rebuilds are deferred afterwards. Large, tall disconnected structures can cause a long connectivity pass. Hidden-face culling is implemented; greedy meshing, worker-thread generation, maintained connectivity links and fragment animation remain future performance/visual work. The raw storage alone is 64 MiB for a native map; browser heap limits and realistic map/frame-time measurements must be included in release verification.
+After water presentation and separate hidden-floor collision were added, the same headless benchmark measured lab generation at 781 ms (24,724 rendered faces), lab native-VXL encoding at 2,869 ms (2,112,288 bytes), original-map import/meshing at 3,878 ms (39,907 rendered faces) and original native-VXL encoding at 4,622 ms (2,106,956 bytes). Surface hiding lowers rendered face count without removing water-floor collision. Workload timings are local development baselines; save operations currently block the main thread.
+
+Full VXL import, save and initial chunk meshing are synchronous. Streaming rebuilds are deferred afterwards. Large, tall disconnected structures can cause a long connectivity pass. Hidden-face culling is implemented; greedy meshing, worker-thread generation and maintained connectivity links remain future performance work. The raw storage alone is 64 MiB for a native map; browser heap limits and realistic map/frame-time measurements must be included in release verification.
 
 Reference semantics come from pinned OpenSpades `Sources/Client/GameMap.cpp`, `GameMapWrapper.cpp`, and `World.cpp`. Godot mesh APIs: [ArrayMesh](https://docs.godotengine.org/en/stable/classes/class_arraymesh.html), [ConcavePolygonShape3D](https://docs.godotengine.org/en/stable/classes/class_concavepolygonshape3d.html).
