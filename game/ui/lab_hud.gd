@@ -1289,6 +1289,13 @@ func _apply_map_settings() -> void:
 		for action: String in ["tool_spade","tool_block","tool_weapon","tool_grenade","map","view_toggle","menu"]:
 			if regions.has(action):toolbar_bottom=maxf(toolbar_bottom,regions[action].end.y)
 		if toolbar_bottom>0.0:top=ceili(toolbar_bottom+16.0)
+		var actions_top: float=mobile_controls.size.y-52.0
+		for action: String in ["primary","secondary","reload","jump","crouch","sprint"]:
+			if regions.has(action):actions_top=minf(actions_top,regions[action].position.y)
+		# Leave the look hint its own row; building feedback must clear the
+		# action grid even when portrait controls grow into three rows.
+		var hint_width:=minf(640.0,mobile_controls.size.x-32.0)
+		_set_hud_rect(_build_status,Rect2(-hint_width*0.5,actions_top-64.0-mobile_controls.size.y,hint_width,24))
 	_map.size=Vector2(map_size,map_size)
 	_map.offset_left=-map_size-inset
 	_map.offset_right=-inset

@@ -90,7 +90,18 @@ expectation failed because float32 canvas round trips produced
 transform calculation with two events. The fixture now checks both event count
 and that calculation, with only0.0001px tolerance against the ideal displacement.
 No production repair was needed for this fixture issue; initial/diagnostic logs
-remain saved. Frozen full release and exported browser gates are pending.
+remain saved. Frozen3c408e818859 passed all79 behavioral/latency checks plus import,
+runtime/server-launcher smoke and Web export, with clean engine diagnostics.
+Logs/export: `.cache/release-3c408e818859`. Initial exported browser review at844×390,
+390×844 and568×320 verified size80/140%, floating movement, look, fire-drag rotation,
+tool selection, responsive toolbar/action rows and palette/map separation.
+Those browser actions use desktop mouse preview, not physical touch.
+
+Browser review found building feedback overlapping the lower action row at140%.
+A placement-only HUD follow-up positions it above the action grid and the look
+hint, with an actual HUD regression. Workspace repeat import/HUD272/0/touch-look144/0
+and runtime smoke passed (`.cache/logs/mobile-hint-*.log`). That exact diff still
+requires frozen follow-up export, final browser review and public artifact checks.
 
 ## Previous checkpoint regression
 

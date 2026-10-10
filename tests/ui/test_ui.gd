@@ -86,6 +86,7 @@ func test_mobile_bridge() -> bool:
 	var regions: Dictionary=hud.mobile_controls.get_hit_regions()
 	check(hud._native_palette.get_global_rect().end.y+8<=regions.reload.position.y,"mobile block palette stays above the action buttons")
 	check(not hud._native_palette.get_global_rect().intersects(hud._map.get_global_rect()),"mobile block palette stays clear of the minimap")
+	check(hud._build_status.get_global_rect().end.y+8<=regions.primary.position.y,"mobile building feedback stays above action buttons")
 	var jump: Rect2=regions.jump
 	mouse.position=hud.mobile_controls.get_global_transform_with_canvas()*jump.get_center()
 	mouse.window_id=root.get_window_id()
