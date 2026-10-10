@@ -98,6 +98,10 @@ func cleanup() -> void:
 	server.stop()
 	app.queue_free()
 	for frame in 8: await process_frame
+	var audio_deadline:=Time.get_ticks_msec()+200
+	while Time.get_ticks_msec()<audio_deadline:
+		OS.delay_msec(1)
+		await process_frame
 	if prefs_existed:
 		var file := FileAccess.open("user://settings.cfg",FileAccess.WRITE)
 		file.store_buffer(prefs);file.close()

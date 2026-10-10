@@ -50,6 +50,10 @@ func _run() -> void:
 		await frames(1)
 		if cleanup_frame >= 2 and scene_ref.get_ref() == null: break
 	check(scene_ref.get_ref() == null, "scene freed before exit")
+	var audio_deadline:=Time.get_ticks_msec()+200
+	while Time.get_ticks_msec()<audio_deadline:
+		OS.delay_msec(1)
+		await process_frame
 	if _settings_existed:
 		var file := FileAccess.open("user://settings.cfg", FileAccess.WRITE)
 		file.store_buffer(_settings_before)

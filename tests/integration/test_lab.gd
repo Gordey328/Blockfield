@@ -60,6 +60,11 @@ func _run() -> void:
 		if cleanup_frame >= 2 and scene_reference.get_ref() == null:
 			break
 	check(scene_reference.get_ref() == null, "the lab scene is fully freed before test exit")
+	# Fixed FPS advances virtual frames faster than decoder/mixer cleanup.
+	var audio_deadline:=Time.get_ticks_msec()+200
+	while Time.get_ticks_msec()<audio_deadline:
+		OS.delay_msec(1)
+		await process_frame
 	if _settings_existed:
 		var settings_file := FileAccess.open("user://settings.cfg",FileAccess.WRITE)
 		settings_file.store_buffer(_settings_before)

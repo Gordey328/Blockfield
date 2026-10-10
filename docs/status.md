@@ -56,6 +56,14 @@ On the preceding development export, PNG scene export displayed a valid image pr
 - Frozen9d186266fb8b passed the complete gameplay/network suite and Web export, including latency501/0 (438 step checks plus63 fixed checks), but the exported Linux PCK launcher rejected an empty global-class registry. This attempt is not released. Explicit authoritative script selections fix the filtered registry; a focused development re-export/Title.vxl PCK launcher passes cleanly. Final read-only source audit also corrected ADS audio readiness for shot cooldown/empty magazine and confirmed-network dry-fire gain1. Actual source-input34/0 covers these paths with clean diagnostics. Next: new frozen commit/full validation/export, exact browser offline/network checks, bounded original-map presentation, server ZIP/release and Pages. No iteration is complete yet.
 
 ## Dedicated server preparation
+
+Frozen514ef2e3f5d3 import/world/session passed, but actual lab assertions119/0
+were followed by retained Ogg decoder resources at process exit. A verbose
+reproduction identified only in-flight Vorbis playback; a200ms real-clock drain
+after scene deletion fixes clean119/0 teardown. The same drain is now used by
+the other older Main UI/source/network fixtures. Existing offline-lifecycle,
+source-input and epoch fixtures already drain the driver. A new frozen archive
+is required; failed attempts are preserved and are not published.
 User selected Docker/configuration preparation; hosting/domain remain open. Separate entry dispatch uses explicit --server/dedicated_server, leaving ordinary headless offline tests intact. Native server launcher starts cleanly without renderer/HUD/model nodes. `tools/build_server.py` installed the pinned Linux release template and passed server import, native60-frame launcher smoke and Linux dedicated release export. Output `build/server/` currently contains dirty-workspace development metadata, so it is not a published frozen release. Docker is unavailable here: container/Linux execution/TLS/WSS deployment unverified. See server-deployment.md and decisions/0005-authoritative-multiplayer.md.
 
 Registry/session ownership is resumable guest identity, not account login. Complete SimulationCodec2316/0 is now wired as MATCH_STATE14 and default native Runtime snapshots; two actual ClientReplicas138/0 verify full-state prediction/remote pose/chat/reconnect/spectator. Game-event feed and rendered network scene now have the native evidence above. N09's legacy compatibility decision is VERIFIED via ADR0005; other N rows still require the documented browser/deployment acceptance. Preparation/standalone foundation checks must not be described as iteration2 completion.
