@@ -10,6 +10,8 @@ const RULES = preload("res://simulation/player_rules.gd")
 const COMPAT = preload("res://network/compatibility.gd")
 const OLD_EPOCH := 1101
 const NEW_EPOCH := 1102
+const AUTHORITY_STEP_US := 16667
+const INPUT_WAIT_MS := 4000
 var assertions := 0
 var failures := 0
 var polls := 0
@@ -19,6 +21,9 @@ var other := CLIENT.new()
 var other_events: Array[Dictionary] = []
 var saved_files: Dictionary[String,Dictionary] = {}
 var render_capture := false
+var next_authority_step_us := 0
+var clock_waits := 0
+var remote_inputs := 0
 
 func _initialize() -> void: call_deferred("_run")
 
@@ -30,6 +35,13 @@ func check(value: bool, message: String) -> void:
 
 func pump(count: int = 1) -> void:
 	for frame in count:
+		# --fixed-fps advances simulation frames, not Time.get_ticks_usec().
+		# The production input clock deliberately uses wall time. Pace this
+		# independently stepped authority at no more than 60 real steps/second;
+		# after expensive scene work, drop the missed interval instead of a burst.
+		var now := Time.get_ticks_usec()
+		if now < next_authority_step_us: OS.delay_usec(next_authority_step_us - now)
+		next_authority_step_us = Time.get_ticks_usec() + AUTHORITY_STEP_US
 		server.poll()
 		other.poll()
 		for event: Dictionary in other.drain_events():
@@ -42,6 +54,29 @@ func pump(count: int = 1) -> void:
 		# process_frame is emitted before Node._process. Sample the actual mesh
 		# transforms only after Main and its soldier/HUD children finish this frame.
 		await create_timer(0.0).timeout
+
+func submit_remote(buttons: int, move: Vector2, yaw: float, pitch: float) -> bool:
+	# A real client can wait when its latest 20Hz snapshot has aged beyond the
+	# unchanged future window. Preserve every authored command; never edit its
+	# timestamps or treat a failed submit as successful input.
+	var deadline := Time.get_ticks_msec() + INPUT_WAIT_MS
+	while Time.get_ticks_msec() < deadline:
+		other.poll()
+		var before: Dictionary = other.prediction.get_status()
+		var submitted: Dictionary = other.submit_input(buttons, move, yaw, pitch)
+		if submitted.ok:
+			remote_inputs += 1
+			check(other.prediction.get_status().last_submitted == before.last_submitted + 1, "accepted remote input advances exactly one sequence")
+			return true
+		if other.status != "live" or submitted.error not in ["awaiting fresh authority clock", "awaiting fresh authority stream"]:
+			check(false, "unexpected remote input failure: " + str(submitted.error))
+			return false
+		var after: Dictionary = other.prediction.get_status()
+		check(after.last_submitted == before.last_submitted and after.pending == before.pending, "clock/ordered-stream wait cannot fabricate remote input or prediction")
+		clock_waits += 1
+		await pump()
+	check(false, "remote input readiness timed out")
+	return false
 
 func wait_for(predicate: Callable, message: String) -> bool:
 	var deadline := Time.get_ticks_msec() + 12000
@@ -161,8 +196,9 @@ func _run() -> void:
 	await pump(5)
 	remote_hp_private(other_id, 37)
 	for frame in 36:
-		var submitted: Dictionary = other.submit_input(RULES.Buttons.CROUCH | RULES.Buttons.SECONDARY, Vector2(.3,-.2), .7, -.25)
-		if not submitted.ok: check(false, "real remote input accepted: " + str(submitted.error))
+		var submitted := await submit_remote(RULES.Buttons.CROUCH | RULES.Buttons.SECONDARY, Vector2(.3,-.2), .7, -.25)
+		check(submitted, "real remote input accepted")
+		if not submitted: await cleanup(); return
 		await pump()
 	await pump(10)
 	var target: Dictionary = app.session.get_target(other_id)
@@ -171,8 +207,13 @@ func _run() -> void:
 	check(remote.position.distance_to(target.position) < .001 and absf(wrapf(remote.rotation.y - target.yaw, -PI, PI)) < .001, "actual soldier applies interpolated feet and canonical yaw: mesh=%s view=%s yaw=%f/%f" % [remote.position,target.position,remote.rotation.y,target.yaw])
 	check(remote.character._crouching and not remote.character._dead and absf(remote.character._pitch - target.pitch) < .001, "native character skin applies remote crouch/pitch without private HP")
 	await capture_scene("01-ctf-remote-pose", other_id)
-	check(other.submit_input(0, Vector2.ZERO, .7, -.25).ok, "remote source controls released")
+	var released := await submit_remote(0, Vector2.ZERO, .7, -.25)
+	check(released, "remote source controls released")
+	if not released: await cleanup(); return
 	await pump(5)
+	await wait_for(func(): return other.prediction.get_status().pending == 0, "all 36 pose commands and neutral release are acknowledged")
+	var remote_owner := simulation.get_actor(other_id)
+	check(remote_inputs == 37 and remote_owner.consumed_input_sequence == other.prediction.get_status().last_submitted and remote_owner.input_buttons == 0 and remote_owner.input_move == Vector2.ZERO, "actual authority consumed every authored remote command and neutralized controls")
 	var initial_magazine: int = simulation.get_actor(own_id).magazine
 	menu.controls.weapon_2.pressed.emit()
 	await wait_for(func(): return simulation.get_actor(own_id).pending_weapon == 2, "actual weapon UI queues a pending class")
@@ -295,5 +336,5 @@ func cleanup() -> void:
 		elif FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 		check(FileAccess.file_exists(path) == record.existed and (not record.existed or FileAccess.get_file_as_bytes(path) == record.bytes), "exact bytes/existence restored for " + path)
-	print("NETWORK SCENE EPOCH: %d assertions, %d failures, %d fixed-step polls" % [assertions,failures,polls])
+	print("NETWORK SCENE EPOCH: %d assertions, %d failures, %d fixed-step polls, %d remote inputs, %d bounded clock waits" % [assertions,failures,polls,remote_inputs,clock_waits])
 	quit(0 if failures == 0 else 1)
