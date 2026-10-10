@@ -5,6 +5,7 @@ const PROTOCOL = preload("res://network/protocol.gd")
 const MAX_ACTORS := 32
 const GRACE_MS := 30000
 const BULK_TOKEN_MS := 15000
+const MAX_CLOCK_MS := 0x7fffffffffffffff - GRACE_MS
 var epoch: int = 0
 var profile: int = 0
 var _build_hash: PackedByteArray
@@ -50,6 +51,56 @@ func _new_token() -> PackedByteArray:
 
 func _failure(message: String) -> Dictionary:
 	return {"ok":false,"error":message}
+
+func _epoch_failure(message: String) -> Dictionary:
+	return {"ok":false,"error":message,"welcomes":[],"close_bulk":[],"expired_actor_ids":[]}
+
+func advance_epoch(new_epoch: int, new_profile: int, now_ms: int) -> Dictionary:
+	# Trusted match replacement preserves the live game binding. Prepare every
+	# credential and wire packet before committing any epoch/session/clock state.
+	if epoch==0 or new_epoch<=epoch or new_epoch>PROTOCOL.U32_MAX or new_profile not in [0,1] \
+			or now_ms<0 or now_ms>MAX_CLOCK_MS or now_ms<_last_time:
+		return _epoch_failure("invalid epoch, profile or clock")
+	var ids: Array[int]=[]
+	ids.assign(_sessions.keys());ids.sort()
+	var credentials: Dictionary[int,Dictionary]={}
+	var used: Dictionary[String,bool]={}
+	for id: int in ids:
+		for digest: PackedByteArray in [_sessions[id].resume_hash,_sessions[id].bulk_hash]:
+			if digest.size()==32:used[digest.hex_encode()]=true
+	var welcomes: Array[PROTOCOL.Packet]=[]
+	var close_bulk: Array[int]=[]
+	var expired_actor_ids: Array[int]=[]
+	for id: int in ids:
+		var session: Dictionary=_sessions[id]
+		if session.game==0:
+			expired_actor_ids.append(id)
+			continue
+		var resume_token:=_new_token()
+		var bulk_token:=_new_token()
+		if resume_token.size()!=32 or bulk_token.size()!=32:return _epoch_failure("credential generation unavailable")
+		var resume_hash:=_hash(resume_token)
+		var bulk_hash:=_hash(bulk_token)
+		if used.has(resume_hash.hex_encode()) or used.has(bulk_hash.hex_encode()) or resume_hash==bulk_hash:
+			return _epoch_failure("fresh credentials unavailable")
+		used[resume_hash.hex_encode()]=true;used[bulk_hash.hex_encode()]=true
+		credentials[id]={"resume_hash":resume_hash,"bulk_hash":bulk_hash}
+		var welcome:=PROTOCOL.make_packet(PROTOCOL.Kind.WELCOME,{"actor_id":id,"spawn_generation":1,
+			"server_hz":60,"snapshot_hz":20,"profile":new_profile,"resume_token":resume_token,"bulk_token":bulk_token,
+			"build_hash":_build_hash.duplicate(),"rules_hash":_rules_hash.duplicate()},new_epoch)
+		if not PROTOCOL.encode(welcome).ok:return _epoch_failure("replacement WELCOME unavailable")
+		welcomes.append(welcome)
+		if session.bulk!=0:close_bulk.append(int(session.bulk))
+	# Nothing above changes an admitted binding or the monotonic clock.
+	for id: int in expired_actor_ids:_sessions.erase(id)
+	for id: int in credentials:
+		_sessions[id].merge({"generation":1,"bulk":0,"ready":false,"barrier":{},"expires":0,
+			"resume_hash":credentials[id].resume_hash,"bulk_hash":credentials[id].bulk_hash,
+			"bulk_expires":now_ms+BULK_TOKEN_MS},true)
+	_bulks.clear()
+	epoch=new_epoch;profile=new_profile;_last_time=now_ms
+	close_bulk.sort()
+	return {"ok":true,"error":"","welcomes":welcomes,"close_bulk":close_bulk,"expired_actor_ids":expired_actor_ids}
 
 func admit_game(connection_id: int, packet: BlockfieldProtocol.Packet, now_ms: int, allocate_actor: Callable) -> Dictionary:
 	if epoch == 0 or connection_id <= 0 or _games.has(connection_id) or not _clock(now_ms) or not _hello(packet) or packet.payload.role == 2:
@@ -105,6 +156,19 @@ func owner_of_game(connection_id: int, require_ready: bool = true) -> int:
 	var id: int = _games.get(connection_id,0)
 	if id == 0 or (require_ready and not _sessions[id].ready): return 0
 	return id
+
+func unused_bulk_capabilities() -> Array[Dictionary]:
+	# Trusted native reset coordination only. Digests are never sent to clients.
+	var result: Array[Dictionary] = []
+	for id: int in _sessions:
+		var session: Dictionary = _sessions[id]
+		if session.game != 0 and session.bulk_hash.size() == 32:
+			result.append({"owner":id,"digest":session.bulk_hash.duplicate(),"expires":session.bulk_expires})
+	return result
+
+func validated_bulk_digest(packet: BlockfieldProtocol.Packet) -> PackedByteArray:
+	if not _hello(packet) or packet.payload.role != 2 or not packet.payload.resume_token.is_empty(): return PackedByteArray()
+	return _hash(packet.payload.bulk_token)
 
 func owner_of_bulk(connection_id: int) -> int:
 	return _bulks.get(connection_id,0)

@@ -159,7 +159,7 @@ func _draw() -> void:
 		var kind: String=["Rifle","SMG","Shotgun"][clampi(int(target.get("weapon",0)),0,2)] if show_weapon_icons else "Player"
 		_draw_icon(kind,map_point(target.position),player_color(int(target.id),int(target.team)),float(target.get("yaw",0)))
 	if session.team<2 and session.health>0:
-		_draw_icon(["Rifle","SMG","Shotgun"][session.current_weapon] if show_weapon_icons else "Player",map_point(player.global_position),player_color(0,session.team),player.rotation.y)
+		_draw_icon(["Rifle","SMG","Shotgun"][session.current_weapon] if show_weapon_icons else "Player",map_point(player.global_position),player_color(session.local_player_id(),session.team),player.rotation.y)
 	var focus:=get_focus_position()
 	var facing:=-player.head.global_basis.z
 	if player.followed_target_id>=0:facing=Vector3.FORWARD.rotated(Vector3.UP,float(session.get_target(player.followed_target_id).get("yaw",0)))

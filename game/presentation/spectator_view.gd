@@ -63,7 +63,7 @@ func update_view(delta: float) -> void:
 	var target: Dictionary = value
 	var point: Variant = target.get("position")
 	var team := int(target.get("team",1))
-	if target.is_empty() or not point is Vector3 or not point.is_finite() or not bool(target.get("alive",true)) or _number(target,"health",100.0)<=0.0 or team<0 or team>1 or str(target.get("state","standing"))=="dead":
+	if target.is_empty() or not point is Vector3 or not point.is_finite() or not bool(target.get("alive",true)) or (bool(target.get("health_known",true)) and _number(target,"health",100.0)<=0.0) or team<0 or team>1 or str(target.get("state","standing"))=="dead":
 		_hide_target(true)
 		return
 	var new_skin := not is_instance_valid(_skin) or _skin_target != _target_id

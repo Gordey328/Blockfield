@@ -1,6 +1,6 @@
 # Blockfield binary protocol v1
 
-Implementation: `game/network/protocol.gd`, `class_name BlockfieldProtocol`. This is a transport-independent **codec**, not a connection, server, join implementation or implemented multiplayer. It is unused by the offline main scene. The design context is `multiplayer-plan.md`; this document describes actual implemented bytes.
+Implementation: `game/network/protocol.gd`, `class_name BlockfieldProtocol`. This transport-independent codec is used by the native authoritative Runtime and rendered ClientReplica. Connection ownership, joining and authority belong to their separate modules. The offline lab remains independent. This document describes actual bytes; architectural decisions are in ADR0005/0006.
 
 ## API and ownership
 
@@ -24,7 +24,7 @@ Every message is one complete binary frame. Integers are unsigned **big-endian**
 | --- | --- | --- |
 | 0 | u32 | Magic `0x42464E57`, bytes `42 46 4E 57` = `BFNW` |
 | 4 | u16 | Protocol version `1` |
-| 6 | u8 | Kind `1..13` from the table below |
+| 6 | u8 | Kind `1..16` from the table below |
 | 7 | u8 | Reserved, must equal `0` |
 | 8 | u32 | Payload length, exactly `frame_size - 24` |
 | 12 | u32 | Match epoch |
@@ -72,6 +72,9 @@ Fields in each row occur in the listed order. Sizes exclude the common 24-byte e
 | 11 | MAP_DELTA | Fragment prefix and changes described below |
 | 12 | MAP_READY | Same layout as MAP_END |
 | 13 | SNAPSHOT | Fixed owner prefix, actor count, actor records described below |
+| 14 | MATCH_STATE | Full typed simulation body; [simulation-codec.md](simulation-codec.md) |
+| 15 | GAME_EVENTS | Typed public/owner event batches; [events-codec.md](events-codec.md) |
+| 16 | PLAYER_REQUEST | `generation:u32, action:u8, value:u32` |
 
 HELLO roles: `0` player, `1` spectator, `2` bulk map connection. Role2 requires a 32-byte bulk token; roles0/1 require it empty. Optional resume token has zero or 32 bytes. Role/player names need not contain Latin characters. WELCOME actor ID is a stable positive ID, **not** a network peer ID; spawn generation permits zero during initial loading. Server rate is `1..240`, snapshot rate `1..server_hz`, profile `0` = 0.75, `1` = 0.76. REJECT code is `1..65535`; application-specific codes are not yet assigned.
 
@@ -103,7 +106,7 @@ The reserved decompressed baseline representation is canonical Godot-axis packed
 
 `chunk_count = ceil(compressed_size / 16346)`, at most 4106. MAP_CHUNK repeats the compressed `total_size`, validates `index < chunk_count`, and requires data length exactly `min(16346, total_size - index*16346)`. Chunk offset is implicit `index * 16346`; there is no independent offset that can disagree. Full chunks make an exactly 16 KiB frame. MAP_END/READY carry positive snapshot ID, u32 map barrier sequence and 32-byte hash.
 
-The future transfer manager must bind descriptors/chunks/end/ready to the same snapshot/session/epoch, verify order/duplicates/hash/compression size and apply complete deltas before activating the matching state barrier. The codec does not retain a transfer or assert that a chunk matches a prior MAP_BEGIN.
+The implemented [transfer manager](map-transfer.md), Registry, Runtime and Replica bind descriptors/chunks/end/ready to the same snapshot/session/epoch, verify order/hash/size and apply complete deltas before activating the matching state barrier. The codec itself does not retain a transfer or assert that a chunk matches a prior MAP_BEGIN.
 
 ### MAP_DELTA: transaction fragments
 
@@ -117,7 +120,7 @@ Map sequence and transaction ID are positive. Actor/action ID0 is permitted for 
 
 Dictionary representation is `{cell:Vector3i, before:int, after:int, flags:int}`. Cell coordinates must lie inside the declared dimensions. Color0 is air; nonzero solid colors must be exactly `0x01RRGGBB`. Flags only permits `0` or `1` (collapsed). Duplicate cells within a fragment are rejected. At 2048 changes the total frame is 30,776 bytes, within the ordinary cap.
 
-Cross-fragment duplicate detection, transaction identity/ordering, before-color comparison, ordered collapse application and historical terrain are future runtime responsibilities. The codec rejects an inconsistent fragment count but does not apply or commit any transaction. Sender ownership of actor/action fields also requires server validation.
+Cross-fragment duplicate detection, transaction ordering, before-color comparison, ordered collapse and historical terrain are implemented by MapTransfer, VoxelData, Runtime and HitHistory. The codec rejects inconsistent fragment counts; it does not commit authority edits. Clients cannot submit MAP_DELTA to the server.
 
 ### SNAPSHOT: actor poses and owner state only
 
@@ -141,9 +144,13 @@ Flag bits0..7 are alive, crouch, sprint, wade, grounded, connected, reloading, c
 
 The current snapshot has **no** CTF flags, territories, team metadata/score, grenades, block-health timers, kill/event payloads, animation action timestamps or corpse state. `event_sequence` is only a cursor and implements no event delivery. This snapshot is not a complete match/join snapshot.
 
-## Deliberately unimplemented families and integration
+## Current full-state and intention families
 
-ACTION_RESULT, GAME_EVENT, reconnect close/resync messages, team/class/mode requests, discovery/catalog, objectives/projectiles and compression/transfer assembly require a later schema change and tests. No WebSocket, authentication, clock scheduling, prediction/reconciliation, lag compensation, server authority or client replica is implemented by this file. New kind IDs are rejected until explicitly defined; do not silently encode an arbitrary dictionary as a substitute. Version compatibility will be recorded when peers exist.
+SNAPSHOT13 is retained for a transitional transport fixture. Production uses MATCH_STATE14 with complete private owner replay state and public actors, objectives and grenades. Envelope epoch/tick/generation must match its body. GAME_EVENTS15 implements typed effects/lifecycle/objective delivery with owner-only private feedback, strict sequence bounds and header/body identity. Predicted action effects deduplicate in Replica; arbitrary Variant bodies are unsupported.
+
+PLAYER_REQUEST16 is exactly9 bytes. Generation is positive; action0 requests team0..2, action1 requests canonical packed block color0x01RRGGBB. Envelope sequence is a positive owner intention counter, and envelope epoch/tick are subject to Runtime admission. Class/tool selection remains an INPUT_BATCH intention. Clients have no map/reset/mode/hit/resource authority. Discovery is the explicit direct-endpoint/favorites replacement in ADR0006. Compatibility identifiers are network-2/authority-2 with envelope version1.
+
+Native publication can prepare a shared validated snapshot/event capture, then an owned `FrozenFrame` per owner. Common records are validated once; every private owner replay record is independently validated against its captured public pose. Transport queues owned copies with exactly the same frame/byte/backpressure limits. This is internal trusted output, not a wire object or a script sandbox. Both sub-codecs validate fully during decode, so the envelope codec avoids repeating a second full encode on receive. [Fanout verification](serialization-fanout.md) proves byte equality and privacy.
 
 ## Verification
 

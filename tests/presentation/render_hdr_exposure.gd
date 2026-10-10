@@ -212,7 +212,10 @@ func _run() -> void:
 	var quad: QuadMesh = QuadMesh.new()
 	quad.size = Vector2(4,4)
 	var spatial: Shader = Shader.new()
-	spatial.code = "shader_type spatial;render_mode unshaded;void fragment(){ALBEDO=vec3(4.0,2.0,0.5);}"
+	# Authored ALBEDO is not radiance: Compatibility applies its sRGB polynomial
+	# before shading. ALBEDO4 implies 30.5 linear units, outside the native meter
+	# valid range <=16. This fixture's linear units are (2.584077,1,.214967).
+	spatial.code = "shader_type spatial;render_mode unshaded;void fragment(){ALBEDO=vec3(1.5,1.0,0.5);}"
 	var material: ShaderMaterial = ShaderMaterial.new()
 	material.shader = spatial
 	quad.material = material
@@ -228,8 +231,11 @@ func _run() -> void:
 	scene.set_enabled(true)
 	await settle()
 	var scene_image: Image = scene.scene_viewport.get_texture().get_image()
-	var scene_radiance: Color = await read_float(scene.scene_viewport.get_texture(),8.0)
-	check(scene_radiance.r > 3.9 and scene_radiance.g > 1.9,"shared-world 3D capture retains overbright radiance")
+	var scene_encoded: Color = await read_float(scene.scene_viewport.get_texture(),8.0)
+	var scene_radiance: Color = await read_float(scene.exposure.get_linear_texture(),4.0)
+	near(scene_radiance.r,2.584077103875,tolerance(.02,4.0),"shared-world boundary reconstructs overbright linear scene radiance")
+	near(scene_radiance.b,.214967468125,tolerance(.004,4.0),"shared-world boundary reconstructs sub-one linear scene radiance")
+	check(scene.exposure.get_stats().input_encoding == "compatibility_encoded","3D adapter explicitly identifies encoded input")
 	check(host.disable_3d and not camera.current and scene.scene_camera.current,"original render is disabled while cloned capture owns 3D")
 	scene.exposure.advance(0.5)
 	await settle()
@@ -238,8 +244,9 @@ func _run() -> void:
 	scene.set_enabled(false)
 	await settle()
 	var ordinary: Color = host.get_texture().get_image().get_pixel(48,32)
-	check(camera.current and not host.disable_3d and ordinary.r == 1.0 and ordinary.g == 1.0,"turning adapter off restores normal camera and LDR framebuffer")
+	check(camera.current and not host.disable_3d and ordinary.r == 1.0 and ordinary.g >= .996,"turning adapter off restores normal camera and LDR framebuffer")
 	metrics = {"renderer":RenderingServer.get_video_adapter_name(),"assertions":checks,"failures":failures,"raw_cpu_format":image.get_format(),"readback_mode":"gpu-range-encoded-rgba8" if OS.has_feature("web") else "direct-rgbaf","scene_radiance":color_array(radiance),"brightness_power":brightness,"gain_0_5s":gain1,"gain_1s":gain2,"dark_gain":dark_gain,"split_power":split_power,"hdr_display":color_array(display),"corrected_display":color_array(corrected),"ldr_display":color_array(clipped),"actual_3d_radiance":color_array(scene_radiance),"adapter_display":color_array(captured_hdr),"bloom_power":bloom_power,"bloom_gain":bloom_gain,"bloom_blur":color_array(constant_blur),"halo_off":color_array(halo_off),"halo_high":color_array(halo_high),"halo_low":color_array(halo_low),"budget":exposure.get_stats()}
+	metrics.actual_3d_encoded = color_array(scene_encoded)
 	FileAccess.open(output.path_join("metrics.json"),FileAccess.WRITE).store_string(JSON.stringify(metrics,"  "))
 	print("HDR GPU TESTS: %d assertions, %d failures; %s" % [checks,failures,output])
 	print(JSON.stringify(metrics))

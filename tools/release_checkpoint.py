@@ -7,6 +7,7 @@ import subprocess
 import sys
 import zipfile
 import build
+import build_server
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--revision', default='HEAD')
+    parser.add_argument('--server', action='store_true', help='Also export the same frozen authority revision')
     args = parser.parse_args()
     revision = subprocess.run(['git', 'rev-parse', '--verify', args.revision + '^{commit}'],
                               cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
@@ -30,6 +32,9 @@ def main():
     build.source_state = lambda: {'source_commit': revision, 'source_dirty': False}
     sys.argv = [str(folder / 'tools' / 'build.py'), '--export']
     build.main()
+    if args.server:
+        build_server.main()
+        shutil.copytree(folder / 'build' / 'server', ROOT / 'build' / 'server', dirs_exist_ok=True)
     source_web = folder / 'build' / 'web'
     destination = ROOT / 'build' / 'web'
     destination.mkdir(parents=True, exist_ok=True)

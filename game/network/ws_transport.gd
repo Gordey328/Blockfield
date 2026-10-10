@@ -98,15 +98,22 @@ func _new_connection() -> Connection:
 	return connection
 
 func send(connection_id: int, packet: PROTOCOL.Packet) -> Dictionary:
+	var encoded: PROTOCOL.Result = PROTOCOL.encode(packet)
+	if not encoded.ok: return _result(false,encoded.error)
+	return _enqueue_frame(connection_id,encoded.bytes)
+
+func send_prepared(connection_id: int, prepared: PROTOCOL.FrozenFrame) -> Dictionary:
+	if prepared == null or not prepared.valid(): return _result(false,"invalid prepared frame")
+	return _enqueue_frame(connection_id,prepared.bytes())
+
+func _enqueue_frame(connection_id: int, bytes: PackedByteArray) -> Dictionary:
 	if not _connections.has(connection_id): return _result(false,"unknown connection")
 	var connection: Connection = _connections[connection_id]
 	if connection.closing or not connection.opened or connection.socket.get_ready_state() != WebSocketPeer.STATE_OPEN: return _result(false,"connection is not open")
 	if connection.queue.size() >= MAX_QUEUE_FRAMES: _totals.backpressure += 1; return _result(false,"outbound backpressure")
-	var encoded: PROTOCOL.Result = PROTOCOL.encode(packet)
-	if not encoded.ok: return _result(false,encoded.error)
-	if connection.queue_bytes + connection.socket.get_current_outbound_buffered_amount() + encoded.bytes.size() > MAX_OUTBOUND_BYTES:
+	if connection.queue_bytes + connection.socket.get_current_outbound_buffered_amount() + bytes.size() > MAX_OUTBOUND_BYTES:
 		_totals.backpressure += 1; return _result(false,"outbound backpressure")
-	var frame: PendingFrame = PendingFrame.new(); frame.bytes = encoded.bytes
+	var frame: PendingFrame = PendingFrame.new(); frame.bytes = bytes
 	connection.queue.append(frame); connection.queue_bytes += frame.bytes.size()
 	return _result(true)
 

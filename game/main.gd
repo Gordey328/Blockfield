@@ -1,4 +1,14 @@
 extends Node3D
+@export var network_mode := false
+const NETWORK_CLIENT = preload("res://network/client_replica.gd")
+const NETWORK_SESSION = preload("res://network/network_session.gd")
+var network_client: NETWORK_CLIENT
+var _network_resume := PackedByteArray()
+var _network_objective_signature := ""
+var _network_status := ""
+var _impact_colors: Dictionary[Vector3i,int] = {}
+var _network_raise_key := ""
+var _network_raise := 1.0
 
 @onready var world: VoxelWorld=$VoxelWorld
 @onready var session: LocalSession=$LocalSession
@@ -45,6 +55,10 @@ var _corpses: Array[OpenSpadesCorpse]=[]
 var _last_player_corpse: OpenSpadesCorpse
 
 func _ready() -> void:
+	if network_mode:
+		network_client = NETWORK_CLIENT.new()
+		network_client.set_map_callbacks(_network_install_map,_network_apply_map)
+		(session as NETWORK_SESSION).bind_replica(network_client)
 	graphics_options.merge({"gi":false,"water_waves":true,"water_refraction":true,"water_reflections":false,"ragdolls":true})
 	graphics_options.merge({"hdr":false,"hdr_min_ev":-1.5,"hdr_max_ev":.5,"hdr_speed":1.0})
 	_setup_input()
@@ -114,7 +128,9 @@ func _ready() -> void:
 		_pointer_callback=JavaScriptBridge.create_callback(_pointer_capture_result)
 		JavaScriptBridge.get_interface("BlockfieldExports").setPointerCallback(_pointer_callback)
 	hud.ui_sound_requested.connect(func(kind: String):player._play_sound("Feedback/Limbo/"+kind.capitalize(),1.0,OpenSpadesAudio.LOCAL_ORIGIN))
-	session.player_respawned.connect(func():player.respawn_at(world.get_spawn_position()))
+	session.player_respawned.connect(func():
+		if not network_mode: player.respawn_at(world.get_spawn_position())
+		else: clear_corpses())
 	session.player_died.connect(_spawn_player_corpse)
 	session.reloaded.connect(func():hud.show_notice("Reload complete"))
 	session.restocked.connect(func():player._play_sound("Weapons/RestockLocal",1.0,OpenSpadesAudio.LOCAL_ORIGIN))
@@ -123,12 +139,15 @@ func _ready() -> void:
 	session.match_event.connect(_match_event_audio)
 	_player_view=OpenSpadesExtensions.create_third_person_skin(skin_id,{"player":player,"session":session})
 	player.add_child(_player_view)
-	_spawn_targets()
-	_setup_objectives()
+	if not network_mode:
+		_spawn_targets()
+		_setup_objectives()
 	hud.set_menu_visible(true)
 
 func _process(delta: float) -> void:
+	if network_mode: _poll_network()
 	session.update(delta)
+	if network_mode: _network_update_views()
 	audio.positional=positional_audio
 	audio.environmental=environmental_audio
 	for corpse in _corpses:corpse.step(delta)
@@ -147,15 +166,13 @@ func _process(delta: float) -> void:
 	if _player_view.has_method("set_tool_action"):
 		var action: Dictionary=player.get_tool_action()
 		_player_view.set_tool_action(action.type,action.progress,session.grenade_cook_time,action.ready)
-	var carries_intel:=false
-	for flag in session.ctf_flags:
-		if int(flag.carrier)==0:carries_intel=true
+	var carries_intel:=session.is_local_intel_carrier()
 	_player_view.set_intel_carrier(carries_intel,session.get_team_info(1-session.team if session.team<2 else 1).color)
 	_notice_time+=delta
 	_update_objective_views()
 	_hurt_age+=delta
 	_update_graphics(delta)
-	session.player_name=player_name
+	if not network_mode: session.player_name=player_name
 
 func _setup_input() -> void:
 	var actions:={"forward":KEY_W,"back":KEY_S,"left":KEY_A,"right":KEY_D,"jump":KEY_SPACE,"crouch":KEY_CTRL,"sprint":KEY_SHIFT,"sneak":KEY_V,"reload":KEY_R,"tool_spade":KEY_1,"tool_block":KEY_2,"tool_weapon":KEY_3,"tool_grenade":KEY_4,"eyedropper":KEY_E,"view_toggle":KEY_F,"map":KEY_N,"scoreboard":KEY_TAB,"pause":KEY_ESCAPE,"chat":KEY_T,"last_tool":KEY_Q,"map_scale":KEY_M,"chat_team":KEY_Y,"chat_log":KEY_H,"hide_hud":KEY_F6,"stats":KEY_F7,"screenshot":KEY_0,"sceneshot":KEY_9,"save_map":KEY_8,"flashlight":KEY_L}
@@ -185,6 +202,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _spawn_targets() -> void:
+	if network_mode: return
 	for target in _target_nodes:
 		session.remove_target(target.target_id)
 		target.queue_free()
@@ -204,10 +222,12 @@ func _spawn_targets() -> void:
 		_target_nodes.append(soldier)
 
 func reset_targets() -> void:
+	if network_mode: return
 	clear_corpses()
 	_spawn_targets()
 
 func spawn_lab_target(moving: bool=false,target_team: int=1) -> int:
+	if network_mode: return -1
 	if _target_nodes.size()>=32:
 		hud.show_notice("Target limit: 32")
 		return -1
@@ -224,6 +244,7 @@ func spawn_lab_target(moving: bool=false,target_team: int=1) -> int:
 	return identifier
 
 func _setup_objectives() -> void:
+	if network_mode: return
 	for node in _objective_nodes:node.queue_free()
 	_objective_nodes.clear()
 	var blue:=Vector3(20,4,70)
@@ -283,6 +304,7 @@ func _surface_position(x: float,z: float) -> Vector3:
 	return Vector3(cell.x+0.5,cell.y+1.0,cell.z+0.5)
 
 func reset_lab() -> void:
+	if network_mode: return
 	clear_corpses()
 	_map_baseline=PackedByteArray()
 	_map_baseline_name=""
@@ -299,6 +321,7 @@ func reset_lab() -> void:
 	hud.show_notice("Test grounds reset")
 
 func reset_match() -> void:
+	if network_mode: return
 	if _map_baseline.is_empty():
 		reset_lab()
 		return
@@ -325,6 +348,7 @@ func spawn_tracer(start: Vector3, end: Vector3) -> void:
 	get_tree().create_timer(0.055).timeout.connect(visual.queue_free)
 
 func _grenade_thrown(data: Dictionary) -> void:
+	if network_mode: return # Authoritative projectiles are snapshot visuals.
 	var forward: Vector3=player.get_aim_direction()
 	var point: Vector3=player.get_aim_origin()+forward*0.1
 	var speed: Vector3=player.velocity+forward*32.0
@@ -334,11 +358,15 @@ func _grenade_thrown(data: Dictionary) -> void:
 	session.set_grenade_position(int(data.id),point)
 
 func _grenade_exploded(data: Dictionary) -> void:
+	if network_mode:
+		_explosion(data.position)
+		return
 	var grenade: LabGrenade=_grenade_nodes.get(int(data.id))
 	if is_instance_valid(grenade):grenade.detonate()
 	_grenade_nodes.erase(int(data.id))
 
 func spawn_grenade(point: Vector3, speed: Vector3, fuse: float, identifier: int=-1) -> void:
+	if network_mode: return
 	var grenade:=LabGrenade.new()
 	grenade.world=world
 	grenade.session=session
@@ -373,6 +401,7 @@ func _play_spatial(path: String,point: Vector3) -> void:
 	if audio!=null:audio.play_spatial(path,point)
 
 func load_original_map() -> void:
+	if network_mode: return
 	hud.show_notice("Loading original OpenSpades map…")
 	await get_tree().process_frame
 	var error:=world.load_vxl("res://assets/openspades/maps/Title.vxl")
@@ -397,6 +426,7 @@ func _finish_map_load(error: Error) -> void:
 	else:hud.show_alert("Map load error: %s"%error_string(error),"error")
 
 func load_map_file() -> void:
+	if network_mode: return
 	_choose_upload("map")
 
 func import_resource_pack() -> void:
@@ -453,6 +483,7 @@ func _receive_upload(arguments: Array) -> void:
 
 func _apply_upload(bytes: PackedByteArray,filename: String) -> void:
 	_upload_pending=false
+	if network_mode and _upload_kind == "map": return
 	if _upload_kind=="map":
 		var error:=world.load_vxl_bytes(bytes,filename)
 		if error==OK:
@@ -816,7 +847,7 @@ func _spawn_target_corpse(event: Dictionary) -> void:
 func _spawn_player_corpse() -> void:
 	if not bool(graphics_options.ragdolls):return
 	var cause:=session.last_death_kind
-	_last_player_corpse=spawn_corpse({"player_id":0,"feet_position":player.global_position,"yaw":player.rotation.y,"crouch":player.crouching,"team":session.team,"color":session.get_team_info(session.team).color,"velocity":player.velocity,"impulse":Vector3.UP*randf_range(4,8) if cause=="grenade" else Vector3.ZERO})
+	_last_player_corpse=spawn_corpse({"player_id":session.local_player_id(),"feet_position":player.global_position,"yaw":player.rotation.y,"crouch":player.crouching,"team":session.team,"color":session.get_team_info(session.team).color,"velocity":player.velocity,"impulse":Vector3.UP*randf_range(4,8) if cause=="grenade" else Vector3.ZERO})
 
 func spawn_corpse(state: Dictionary) -> OpenSpadesCorpse:
 	var corpse:=OpenSpadesCorpse.new()
@@ -857,6 +888,204 @@ func stop_audio() -> void:
 	if player!=null:player.stop_audio()
 
 func _exit_tree() -> void:
+	if network_client != null: network_client.close()
 	stop_audio()
 	if OS.has_feature("web"):JavaScriptBridge.eval("delete window.BlockfieldFileReceiver; if(window.BlockfieldExports)window.BlockfieldExports.clear();")
 	OpenSpadesLocalization.uninstall()
+
+func open_network_game() -> void:
+	get_tree().change_scene_to_file("res://scenes/network.tscn")
+
+func open_offline_lab() -> void:
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+func network_can_resume() -> bool:
+	return _network_resume.size() == 32 or (network_client != null and network_client.resume_token().size() == 32)
+
+func network_connect(game_url: String, map_url: String, name_value: String, spectator: bool = false, resume: bool = false) -> Dictionary:
+	if not network_mode or network_client == null: return {"ok":false,"error":"Сетевой режим не открыт"}
+	if OS.has_feature("web") and str(JavaScriptBridge.eval("window.location.protocol")) == "https:" \
+			and (not game_url.begins_with("wss://") or not map_url.begins_with("wss://")):
+		return {"ok":false,"error":"Для этой страницы нужен адрес wss://"}
+	var token := network_client.resume_token() if network_client.resume_token().size() == 32 else _network_resume
+	if resume and token.size() != 32: return {"ok":false,"error":"Нет предыдущей сессии для повторного входа"}
+	network_disconnect()
+	player_name = name_value.strip_edges()
+	var result := network_client.connect_to(game_url.strip_edges(),map_url.strip_edges(),player_name,spectator,token if resume else PackedByteArray())
+	if result.ok and not resume: _network_resume.clear()
+	return result
+
+func network_disconnect() -> void:
+	if network_client == null: return
+	if network_client.resume_token().size() == 32: _network_resume = network_client.resume_token()
+	network_client.close()
+	(session as NETWORK_SESSION).update(0)
+	_clear_network_views()
+	if hud != null and hud._menu != null: hud.set_menu_visible(true)
+
+func _clear_network_views() -> void:
+	clear_corpses()
+	for target in _target_nodes: target.queue_free()
+	_target_nodes.clear()
+	for node in _objective_nodes: node.queue_free()
+	_objective_nodes.clear()
+	for node: Node3D in _grenade_nodes.values(): node.queue_free()
+	_grenade_nodes.clear()
+	_impact_colors.clear()
+	_network_raise_key = ""
+	_network_raise = 1.0
+	_network_objective_signature = ""
+	if effects != null: effects.clear()
+	if hud != null: hud.clear_match_feedback()
+
+func _network_install_map(data: VoxelData) -> bool:
+	_clear_network_views()
+	return world.set_map_data(data,"Network map") == OK
+
+func _network_apply_map(transaction: Dictionary) -> bool:
+	for change: Dictionary in transaction.changes:
+		if change.before != 0: _impact_colors[change.cell] = change.before
+	while _impact_colors.size() > 4096: _impact_colors.erase(_impact_colors.keys()[0])
+	return bool(world.apply_map_transaction(transaction).ok)
+
+func _poll_network() -> void:
+	network_client.poll()
+	(session as NETWORK_SESSION).update(0)
+	for event: Dictionary in network_client.drain_events():
+		if event.get("predicted",false):
+			(session as NETWORK_SESSION).ingest_cosmetic(event)
+			player.apply_network_cosmetic(event)
+			_network_cosmetic_audio(str(event.kind),event,true)
+		elif event.get("type","") == "chat":
+			var name_value := "Player %d" % event.sender_id
+			if event.sender_id == session.local_player_id(): name_value = session.player_name
+			else: name_value = session.get_target(event.sender_id).get("name",name_value)
+			hud._chat.receive(event.text,name_value,event.channel == 1,session.team if event.sender_id == session.local_player_id() else session.get_target(event.sender_id).get("team",2))
+			hud.chat_sound_requested.emit()
+		elif event.get("type","") == "epoch_reset":
+			_clear_network_views()
+			hud.set_menu_visible(true)
+		elif event.get("type","") != "map_installed":
+			var already_played: bool = event.get("predicted_already_played",false)
+			if (session as NETWORK_SESSION).ingest_event(event,already_played):
+				_network_present_event(event,already_played)
+	if network_client.resume_token().size() == 32: _network_resume = network_client.resume_token()
+	if network_client.status != _network_status:
+		_network_status = network_client.status
+		if _network_status in ["failed","closed"]:
+			_clear_network_views()
+			hud.set_menu_visible(true)
+
+func _network_update_views() -> void:
+	if network_client.status != "live": return
+	var owner := network_client.get_owner_state()
+	if owner != null and owner.is_alive():
+		var key := "%d:%d:%d:%d" % [owner.match_epoch,owner.spawn_generation,owner.displayed_tool,owner.displayed_weapon]
+		if key != _network_raise_key:
+			_network_raise_key = key
+			_network_raise = owner.tool_raise
+		elif _network_raise < 1.0 and owner.tool_raise >= 1.0:
+			var tool_name: String = ["Spade","Block",["Rifle","SMG","Shotgun"][owner.displayed_weapon],"Grenade"][owner.displayed_tool]
+			player._play_sound("Weapons/"+tool_name+"/RaiseLocal",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
+		_network_raise = owner.tool_raise
+	var present: Dictionary[int,bool] = {}
+	for target: Dictionary in session.targets:
+		if int(target.team) >= 2 or not target.get("connected",true): continue
+		present[target.id] = true
+		var exists := false
+		for node in _target_nodes:
+			if node.target_id == target.id: exists = true; break
+		if not exists:
+			var node := LabSoldier.new()
+			node.skin_id = skin_id
+			add_child(node)
+			node.setup(session,target.id,target.position)
+			_target_nodes.append(node)
+	for index in range(_target_nodes.size()-1,-1,-1):
+		if not present.has(_target_nodes[index].target_id):
+			_target_nodes[index].queue_free()
+			_target_nodes.remove_at(index)
+	var signature := "%s:%d:%d" % [session.mode,session.ctf_bases.size(),session.territories.size()]
+	if signature != _network_objective_signature and not session.ctf_bases.is_empty():
+		_network_objective_signature = signature
+		for node in _objective_nodes: node.queue_free()
+		_objective_nodes.clear()
+		if session.mode == "ctf":
+			for index in session.ctf_bases.size(): _network_objective("ctf_base",index,session.ctf_bases[index])
+			for index in session.ctf_flags.size(): _network_objective("intel",index,session.ctf_flags[index].position)
+		elif session.mode == "tc":
+			for index in session.territories.size(): _network_objective("tc",index,session.territories[index].position)
+	var projectiles: Dictionary[int,bool] = {}
+	for grenade: Dictionary in session.live_grenades:
+		projectiles[grenade.id] = true
+		if not _grenade_nodes.has(grenade.id):
+			var node := OpenSpadesModels.create("Weapons/Grenade/Grenade")
+			node.scale = Vector3.ONE*.03
+			add_child(node)
+			_grenade_nodes[grenade.id] = node
+		_grenade_nodes[grenade.id].position = grenade.position
+		_grenade_nodes[grenade.id].quaternion = grenade.orientation
+	for id: int in _grenade_nodes.keys():
+		if not projectiles.has(id):
+			_grenade_nodes[id].queue_free()
+			_grenade_nodes.erase(id)
+
+func _network_objective(kind: String, index: int, point: Vector3) -> void:
+	var node := OpenSpadesModels.create("MapObjects/Intel" if kind == "intel" else "MapObjects/CheckPoint")
+	node.scale = Vector3.ONE*(.1 if kind == "intel" else .3)
+	node.position = point
+	node.set_meta("objective",kind)
+	node.set_meta("index",index)
+	add_child(node)
+	_objective_nodes.append(node)
+
+func _network_present_event(event: Dictionary, already_played: bool) -> void:
+	var own: bool = event.owner_id == session.local_player_id()
+	if own and not already_played and event.type in ["shot","spade_bash","spade_dig"]:
+		var cosmetic := event.duplicate(true)
+		cosmetic.kind = event.type
+		player.apply_network_cosmetic(cosmetic)
+	match str(event.type):
+		"hit_confirmed":
+			player.hit_confirmed.emit(event.part,float(event.damage),event.friendly)
+			effects.blood(event.position)
+			if event.part == "melee": _play_spatial("Weapons/Spade/HitPlayer",event.position)
+			else: audio.flesh_hit(event.position,false)
+		"tracer": effects.tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
+		"block_hit", "spade_block_hit":
+			var color: int = world.get_block(event.cell)
+			if color == 0: color = _impact_colors.get(event.cell,0x016f6f6f)
+			effects.block_hit(event.position,Vector3(event.normal),VoxelWorld.block_color(color),event.position.y < world.water_level)
+			if event.type == "spade_block_hit": _play_spatial("Weapons/Spade/HitBlock",event.position)
+			else: audio.bullet_impact(event.position,Vector3(event.normal),event.position.y < world.water_level)
+		"grenade_bounced": _play_spatial("Weapons/Grenade/Bounce",event.position)
+		"grenade_water":
+			_play_spatial("Weapons/Grenade/DropWater",event.position)
+			effects.water_hit(event.position)
+		"spade_miss":
+			if own: player._play_sound("Weapons/Spade/Miss",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
+			else: _play_spatial("Weapons/Spade/Miss",session.get_target(event.owner_id).get("position",Vector3.ZERO))
+	if not (own and already_played): _network_cosmetic_audio(event.type,event,own)
+
+func _network_cosmetic_audio(kind: String, event: Dictionary, own: bool) -> void:
+	var point: Vector3 = player.get_aim_origin() if own else session.get_target(event.owner_id).get("position",Vector3.ZERO)+Vector3.UP*2.25
+	var first_person: bool = own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON
+	match kind:
+		"shot":
+			audio.weapon_fire(event.weapon,first_person,point,event.get("origin",point))
+			if not own: effects.muzzle_fire(event.origin,event.directions[0],event.weapon,false)
+		"reload_started":
+			if not own: audio.weapon_reload(event.weapon,false,point)
+		"reload_completed":
+			if not own: audio.weapon_reloaded(session.get_target(event.owner_id).get("weapon",0),false,point)
+		"dry_fire": player._play_sound("Weapons/DryFire",.1,OpenSpadesAudio.LOCAL_ORIGIN)
+		"grenade_pin":
+			if own: player._play_sound("Weapons/Grenade/Fire",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
+		"grenade_thrown", "grenade_release":
+			if own: player._play_sound("Weapons/Grenade/Throw",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
+			else: _play_spatial("Weapons/Grenade/Throw",point)
+		"jump":
+			if own: player._play_world_sound("Player/WaterJump" if player.wading else "Player/Jump")
+			else: _play_spatial("Player/Jump",point)
+		"land": _play_spatial("Player/Land",point)
+		"footstep": _play_spatial("Player/Wade1" if event.get("wade",false) else "Player/Footstep1",point)

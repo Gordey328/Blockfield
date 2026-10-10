@@ -33,16 +33,17 @@ func setup(app: Node3D, local_session: LocalSession) -> void:
 	content.add_child(_spectators)
 
 func get_rows() -> Array[Dictionary]:
-	var rows: Array[Dictionary]=[{"id":0,"name":str(main.player_name),"team":session.team,"score":session.score,"deaths":int(session.get("player_deaths")),"alive":session.health>0,"local":true}]
+	var rows: Array[Dictionary]=[{"id":session.local_player_id(),"name":str(main.player_name),"team":session.team,"score":session.score,"deaths":int(session.get("player_deaths")),"alive":session.health>0,"local":true}]
 	for target in session.targets:
-		rows.append({"id":int(target.id),"name":str(target.get("name","Target %02d"%int(target.id))),"team":int(target.team),"score":int(target.get("kills",0)),"deaths":int(target.get("deaths",0)),"alive":bool(target.alive),"local":false})
+		rows.append({"id":int(target.id),"name":str(target.get("name","Target %02d"%int(target.id))),"team":int(target.team),"score":int(target.get("score",target.get("kills",0))),"deaths":int(target.get("deaths",0)),"alive":bool(target.alive),"local":false})
 	rows.sort_custom(func(a:Dictionary,b:Dictionary):return int(a.score)>int(b.score) if int(a.score)!=int(b.score) else int(a.id)<int(b.id))
 	return rows
 
 func _process(_delta: float) -> void:
 	if session==null or not visible:return
 	var ru:=TranslationServer.get_locale().begins_with("ru")
-	_title.text=("ЛОКАЛЬНЫЙ МАТЧ" if ru else "OFFLINE MATCH")+" · "+session.mode.to_upper()
+	var online: bool=main!=null and main.get("network_mode")==true
+	_title.text=(("СЕТЕВОЙ МАТЧ" if ru else "MULTIPLAYER MATCH") if online else ("ЛОКАЛЬНЫЙ МАТЧ" if ru else "OFFLINE MATCH"))+" · "+session.mode.to_upper()
 	var rows:=get_rows()
 	for team_index in 2:
 		var label:=_columns[team_index]

@@ -62,11 +62,14 @@ func take(server_tick: int) -> Dictionary:
 		needs_resync = true
 		return _failure("input backlog expired; owner resync required")
 	var command: PlayerRules.Command = null
+	var input_tick := -1
 	if not _pending.is_empty() and _pending[0].input_tick <= server_tick:
-		command = _pending.pop_front().command
+		var admitted: Dictionary = _pending.pop_front()
+		command = admitted.command
+		input_tick = admitted.input_tick
 		input_ack = command.sequence
 		_last_command_tick = server_tick
-	return {"ok":true,"error":"","command":command,"clear_controls":server_tick-_last_command_tick >= LEASE_TICKS,"input_ack":input_ack}
+	return {"ok":true,"error":"","command":command,"input_tick":input_tick,"clear_controls":server_tick-_last_command_tick >= LEASE_TICKS,"input_ack":input_ack}
 
 func get_stats() -> Dictionary:
 	return {"pending":_pending.size(),"input_ack":input_ack,"tail_sequence":_tail_sequence,"epoch":epoch,"generation":generation,"needs_resync":needs_resync}

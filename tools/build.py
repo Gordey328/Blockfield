@@ -25,7 +25,26 @@ def engine():
 
 def run(name, args, timeout=180):
     command=[str(engine()),'--headless','--path',str(ROOT/'game'),*args]
-    result=subprocess.run(command,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=timeout)
+    with subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                          text=True,encoding='utf-8',errors='replace') as process:
+        try:
+            stdout,stderr=process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as failure:
+            # The Windows console launcher owns a GUI-binary child even when
+            # headless. Kill this exact invocation's tree before its parent;
+            # otherwise a timeout leaves the actual engine running forever.
+            if sys.platform=='win32':
+                subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],
+                               stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            else:
+                process.kill()
+            stdout,stderr=process.communicate()
+            output=stdout+'\n'+stderr
+            folder=ROOT/'.cache'/'logs'; folder.mkdir(parents=True,exist_ok=True)
+            (folder/(name+'.log')).write_text(output,encoding='utf-8')
+            print('\n'.join(output.splitlines()[-30:]),flush=True)
+            raise SystemExit(f'{name} timed out after {timeout}s; see .cache/logs/{name}.log') from failure
+        result=subprocess.CompletedProcess(command,process.returncode,stdout,stderr)
     output=result.stdout+'\n'+result.stderr
     folder=ROOT/'.cache'/'logs'; folder.mkdir(parents=True,exist_ok=True)
     (folder/(name+'.log')).write_text(output,encoding='utf-8')
@@ -56,9 +75,12 @@ def main():
     suites += [('match-simulation','tests/network/test_match_simulation.gd'),('client-prediction','tests/network/test_client_prediction.gd'),('map-transfer','tests/network/test_map_transfer.gd')]
     suites += [('session-registry','tests/network/test_session_registry.gd'),('input-queue','tests/network/test_input_queue.gd'),('server-runtime','tests/network/test_server_runtime.gd')]
     suites += [('simulation-codec','tests/network/test_simulation_codec.gd'),('client-replica','tests/network/test_client_replica.gd')]
+    suites += [('events-codec','tests/network/test_events_codec.gd'),('hit-history','tests/network/test_hit_history.gd'),('match-rewind','tests/network/test_match_rewind.gd'),('events-delivery','tests/network/test_events_delivery.gd'),('network-session','tests/network/test_network_session.gd'),('network-controller','tests/network/test_network_controller.gd'),('network-identity','tests/ui/test_network_identity.gd'),('network-menu','tests/ui/test_network_menu.gd'),('weapon-simulation','tests/presentation/test_weapon_simulation.gd'),('network-adversarial','tests/network/test_network_adversarial.gd'),('match-reset','tests/network/test_match_reset.gd'),('epoch-reset-contract','tests/network/test_epoch_reset_contract.gd'),('runtime-epoch','tests/network/test_runtime_epoch.gd'),('network-scene','tests/network/test_network_scene.gd')]
+    suites += [('dedicated-round','tests/network/test_dedicated_round.gd'),('server-book','tests/ui/test_server_book.gd')]
+    suites += [('snapshot-fanout','tests/network/test_snapshot_fanout.gd'),('hit-volume-acceleration','tests/gameplay/test_hit_volume_acceleration.gd'),('network-scene-epoch','tests/network/test_network_scene_epoch.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     run('server-launcher-smoke',['--quit-after','60','--','--server','--game-port=0','--map-port=0'])
     if args.export:

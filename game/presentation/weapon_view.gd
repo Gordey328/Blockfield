@@ -58,6 +58,8 @@ var _walk_progress := 0.0
 var _front_delta := Vector3.ZERO
 var _manual_offset := Vector3.ZERO
 var _view_offset := Vector3.ZERO
+var _simulation_state: Dictionary = {}
+const SIMULATION_FIELDS := ["desired_tool","displayed_tool","weapon","displayed_weapon","tool_raise","sprint_state","aim_down_state"]
 
 func _ready() -> void:
 	_ensure_built()
@@ -118,6 +120,7 @@ func _ensure_built() -> void:
 	update_pose(0.0, false, false, false, 0.0)
 
 func set_selection(tool: int, weapon: int) -> void:
+	if not _simulation_state.is_empty():return
 	_ensure_built()
 	tool = clampi(tool, 0, 3)
 	weapon = clampi(weapon, 0, 2)
@@ -202,6 +205,40 @@ func set_motion_state(local_velocity: Vector3, walk_progress: float,
 	_front_delta = front_delta if front_delta.is_finite() else Vector3.ZERO
 	_manual_offset = manual_offset if manual_offset.is_finite() else Vector3.ZERO
 
+func set_simulation_state(values: Dictionary) -> bool:
+	# A network skin mirrors approved predicted/confirmed owner state. Validate
+	# the complete scalar record atomically; render delta must not step gates.
+	if values.size()!=SIMULATION_FIELDS.size():return false
+	for field: String in SIMULATION_FIELDS:
+		if not values.has(field):return false
+	for field: String in ["desired_tool","displayed_tool","weapon","displayed_weapon"]:
+		if typeof(values[field])!=TYPE_INT:return false
+		var limit:=3 if field.ends_with("tool") else 2
+		if values[field]<0 or values[field]>limit:return false
+	for field: String in ["tool_raise","sprint_state","aim_down_state"]:
+		if typeof(values[field]) not in [TYPE_FLOAT,TYPE_INT]:return false
+		if not is_finite(float(values[field])) or values[field]<0 or values[field]>1:return false
+	_ensure_built()
+	_simulation_state=values.duplicate()
+	_apply_simulation_state()
+	return true
+
+func clear_simulation_state() -> void:
+	# Preserve the last presentation pose and resume the existing offline clocks.
+	_simulation_state.clear()
+
+func _apply_simulation_state() -> void:
+	var rebuild:=_tool!=int(_simulation_state.displayed_tool) or _weapon!=int(_simulation_state.displayed_weapon)
+	_requested_tool=int(_simulation_state.desired_tool)
+	_requested_weapon=int(_simulation_state.weapon)
+	_tool=int(_simulation_state.displayed_tool)
+	_weapon=int(_simulation_state.displayed_weapon)
+	_raise_raw=float(_simulation_state.tool_raise)
+	_raise=1.0-minf(pow(1.0-_raise_raw,2.0)*1.5,1.0)
+	_sprint_state=float(_simulation_state.sprint_state)
+	_aim=float(_simulation_state.aim_down_state)
+	if rebuild:_rebuild_parts()
+
 func fire() -> void:
 	_vibration = 1.0
 	_fire_elapsed = 0.0
@@ -234,10 +271,13 @@ func update_pose(delta: float, aiming: bool, sprinting: bool, crouching: bool,
 	_time += delta
 	_fire_elapsed += delta
 	_vibration = maxf(_vibration - delta * 10.0, 0.0)
-	_advance_selection(delta)
-	_aim = clampf(_aim+delta*(8.0 if aiming and _requested_tool==2 and not sprinting else -3.0),0.0,1.0)
-	if not _animations_enabled:_aim=1.0 if aiming and _requested_tool==2 and not sprinting else 0.0
-	_sprint_state = clampf(_sprint_state+delta*(4.0 if sprinting else -3.0),0.0,1.0)
+	if not _simulation_state.is_empty():
+		_apply_simulation_state()
+	else:
+		_advance_selection(delta)
+		_aim = clampf(_aim+delta*(8.0 if aiming and _requested_tool==2 and not sprinting else -3.0),0.0,1.0)
+		if not _animations_enabled:_aim=1.0 if aiming and _requested_tool==2 and not sprinting else 0.0
+		_sprint_state = clampf(_sprint_state+delta*(4.0 if sprinting else -3.0),0.0,1.0)
 	var sprint_target := pow(smoothstep(0.0,1.0,_sprint_state),2.0)
 	if sprint_target > _sprint:
 		_sprint += (sprint_target - _sprint) * (1.0 - pow(0.001, delta))

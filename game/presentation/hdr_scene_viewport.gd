@@ -44,7 +44,7 @@ func setup(source_camera: Camera3D, source_viewport: Viewport = null) -> void:
 		presentation.hide()
 	scene_viewport.world_3d = _source_viewport.world_3d
 	synchronize()
-	exposure.setup(scene_viewport.get_texture())
+	exposure.setup(scene_viewport.get_texture(),true)
 	presentation.texture = scene_viewport.get_texture()
 	presentation.material = exposure.get_present_material()
 
@@ -92,7 +92,7 @@ func synchronize() -> void:
 		scene_viewport.size = dimensions
 		presentation.size = Vector2(dimensions)
 		if exposure != null:
-			exposure.setup(scene_viewport.get_texture())
+			exposure.setup(scene_viewport.get_texture(),true)
 	scene_camera.global_transform = _source_camera.global_transform
 	scene_camera.projection = _source_camera.projection
 	scene_camera.keep_aspect = _source_camera.keep_aspect

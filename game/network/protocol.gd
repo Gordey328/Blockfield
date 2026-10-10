@@ -2,6 +2,7 @@ class_name BlockfieldProtocol
 extends RefCounted
 ## Bounded, big-endian wire schema. No transport or multiplayer authority.
 const SIMULATION_CODEC = preload("res://network/simulation_codec.gd")
+const EVENTS_CODEC = preload("res://network/events_codec.gd")
 
 const MAGIC: int = 0x42464e57 # BFNW
 const VERSION: int = 1
@@ -21,7 +22,7 @@ const INPUT_BUTTON_MASK: int = 0x7f # jump,crouch,sprint,sneak,primary,secondary
 const ACTOR_FLAG_MASK: int = 0xff # alive,crouch,sprint,wade,ground,connected,reload,cook
 
 enum Kind { HELLO = 1, WELCOME, REJECT, INPUT_BATCH, CHAT, PING, PONG,
-	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE }
+	MAP_BEGIN, MAP_CHUNK, MAP_END, MAP_DELTA, MAP_READY, SNAPSHOT, MATCH_STATE, GAME_EVENTS, PLAYER_REQUEST }
 
 class Packet extends RefCounted:
 	var kind: int = 0
@@ -35,6 +36,43 @@ class Result extends RefCounted:
 	var error: String = ""
 	var packet: Packet
 	var bytes: PackedByteArray = PackedByteArray()
+
+class FrozenFrame extends RefCounted:
+	# Owned already-validated native output. No remote packet can supply this
+	# object, and getters return owned bytes rather than mutable storage.
+	var _data := PackedByteArray()
+	func bytes() -> PackedByteArray: return _data.duplicate()
+	func valid() -> bool:
+		return _data.size() >= HEADER_SIZE and _data.size() <= MAX_FRAME
+
+static func prepare_state(shared: SIMULATION_CODEC.SharedFrame, owner: SharedPlayerState) -> Dictionary:
+	if shared == null: return {"ok":false,"error":"missing shared snapshot"}
+	var body := shared.encode_owner(owner)
+	if not body.ok: return body
+	return _prepare_body(Kind.MATCH_STATE,body.bytes,body.epoch,body.tick,body.generation)
+
+static func prepare_events(shared: EVENTS_CODEC.SharedEvents, owner_id: int) -> Dictionary:
+	if shared == null: return {"ok":false,"error":"missing shared events"}
+	var selected := shared.for_owner(owner_id)
+	if not selected.ok: return selected
+	var frames: Array[FrozenFrame] = []
+	for body: Dictionary in selected.bodies:
+		var prepared := _prepare_body(Kind.GAME_EVENTS,body.bytes,body.epoch,body.tick,body.sequence)
+		if not prepared.ok: return prepared
+		frames.append(prepared.frame)
+	return {"ok":true,"error":"","frames":frames}
+
+static func _prepare_body(kind: int, bytes: PackedByteArray, epoch: int, tick: int, sequence: int) -> Dictionary:
+	var writer := Writer.new()
+	writer.integer(MAGIC,4); writer.integer(VERSION,2); writer.integer(kind,1)
+	writer.integer(0,1); writer.integer(bytes.size(),4)
+	writer.integer(epoch,4,1); writer.integer(tick,4); writer.integer(sequence,4,1)
+	if not writer.error.is_empty(): return {"ok":false,"error":writer.error}
+	writer.stream.put_data(bytes)
+	var frame := FrozenFrame.new()
+	frame._data = writer.stream.data_array
+	if not frame.valid(): return {"ok":false,"error":"frame exceeds limit"}
+	return {"ok":true,"error":"","frame":frame}
 
 class Writer extends RefCounted:
 	var stream: StreamPeerBuffer = StreamPeerBuffer.new()
@@ -132,7 +170,7 @@ static func _failure(message: String) -> Result:
 
 static func encode(packet: Packet) -> Result:
 	if packet == null: return _failure("null packet")
-	if packet.kind < Kind.HELLO or packet.kind > Kind.MATCH_STATE: return _failure("unsupported kind")
+	if packet.kind < Kind.HELLO or packet.kind > Kind.PLAYER_REQUEST: return _failure("unsupported kind")
 	for value: int in [packet.epoch, packet.tick, packet.sequence]:
 		if value < 0 or value > U32_MAX: return _failure("header value out of range")
 	var payload_writer: Writer = Writer.new()
@@ -140,6 +178,8 @@ static func encode(packet: Packet) -> Result:
 	if not payload_writer.error.is_empty(): return _failure(payload_writer.error)
 	if packet.kind == Kind.MATCH_STATE and (packet.epoch != packet.payload.epoch or packet.tick != packet.payload.tick or packet.sequence != packet.payload.owner_state.spawn_generation):
 		return _failure("state header/body identity mismatch")
+	if packet.kind == Kind.GAME_EVENTS and not _event_header_matches(packet.payload,packet.epoch,packet.tick,packet.sequence):
+		return _failure("event header/body identity mismatch")
 	var data: PackedByteArray = payload_writer.stream.data_array
 	var limit: int = MAX_BULK_FRAME if packet.kind == Kind.MAP_CHUNK else MAX_FRAME
 	if data.size() > limit - HEADER_SIZE: return _failure("frame exceeds limit")
@@ -162,7 +202,7 @@ static func decode(data: PackedByteArray) -> Result:
 	if _header_u32(data, 0) != MAGIC: return _failure("wrong magic")
 	if (int(data[4]) << 8 | int(data[5])) != VERSION: return _failure("unsupported version")
 	var kind: int = data[6]
-	if kind < Kind.HELLO or kind > Kind.MATCH_STATE: return _failure("unsupported kind")
+	if kind < Kind.HELLO or kind > Kind.PLAYER_REQUEST: return _failure("unsupported kind")
 	if data[7] != 0: return _failure("reserved flags must be zero")
 	if kind == Kind.MAP_CHUNK and data.size() > MAX_BULK_FRAME: return _failure("bulk frame exceeds limit")
 	if _header_u32(data, 8) != data.size() - HEADER_SIZE: return _failure("payload length mismatch")
@@ -171,15 +211,25 @@ static func decode(data: PackedByteArray) -> Result:
 	if not reader.error.is_empty(): return _failure(reader.error)
 	if reader.stream.get_available_bytes() != 0: return _failure("trailing payload bytes")
 	# The same strict schema validates decoded scalars, enums and relationships.
-	var validation: Writer = Writer.new()
-	_write_payload(kind, payload, validation)
-	if not validation.error.is_empty(): return _failure(validation.error)
+	# Sub-codecs already applied that complete validation while decoding. Do
+	# not encode their entire body a second time on every client's receive path.
+	if kind not in [Kind.MATCH_STATE,Kind.GAME_EVENTS]:
+		var validation: Writer = Writer.new()
+		_write_payload(kind, payload, validation)
+		if not validation.error.is_empty(): return _failure(validation.error)
 	if kind == Kind.MATCH_STATE and (_header_u32(data,12) != payload.epoch or _header_u32(data,16) != payload.tick or _header_u32(data,20) != payload.owner_state.spawn_generation):
 		return _failure("state header/body identity mismatch")
+	if kind == Kind.GAME_EVENTS and not _event_header_matches(payload,_header_u32(data,12),_header_u32(data,16),_header_u32(data,20)):
+		return _failure("event header/body identity mismatch")
 	var result: Result = Result.new()
 	result.ok = true
 	result.packet = make_packet(kind, payload, _header_u32(data, 12), _header_u32(data, 16), _header_u32(data, 20))
 	return result
+
+static func _event_header_matches(payload: Dictionary, epoch: int, tick: int, sequence: int) -> bool:
+	var maximum_tick := 0
+	for event: Dictionary in payload.events: maximum_tick = maxi(maximum_tick,event.tick)
+	return epoch == payload.epoch and sequence == payload.last_sequence and tick == maximum_tick
 
 static func _keys(value: Variant, names: Array, writer: Writer) -> bool:
 	if typeof(value) != TYPE_DICTIONARY or value.size() != names.size():
@@ -210,6 +260,13 @@ static func _write_payload(kind: int, p: Dictionary, w: Writer) -> void:
 			if not _keys(p, ["code", "message"], w): return
 			w.integer(p.code, 2, 1, 65535); w.text(p.message, 256)
 		Kind.INPUT_BATCH: _write_inputs(p, w)
+		Kind.PLAYER_REQUEST:
+			if not _keys(p,["action","value","request_sequence"],w): return
+			w.integer(p.action,1,0,1)
+			w.integer(p.value,4,0,0x01ffffff)
+			w.integer(p.request_sequence,4,1)
+			if not w.error.is_empty(): return
+			if (p.action == 0 and p.value > 2) or (p.action == 1 and p.value < 0x01000000): w.fail("invalid player request")
 		Kind.CHAT:
 			if not _keys(p, ["channel", "sender_id", "message_id", "text"], w): return
 			w.integer(p.channel, 1, 0, 1); w.integer(p.sender_id, 4); w.integer(p.message_id, 4); w.text(p.text, 512)
@@ -240,6 +297,10 @@ static func _write_payload(kind: int, p: Dictionary, w: Writer) -> void:
 		Kind.SNAPSHOT: _write_snapshot(p, w)
 		Kind.MATCH_STATE:
 			var encoded: Dictionary = SIMULATION_CODEC.encode(p)
+			if not encoded.ok: w.fail(encoded.error)
+			else: w.stream.put_data(encoded.bytes)
+		Kind.GAME_EVENTS:
+			var encoded: Dictionary = EVENTS_CODEC.encode(p)
 			if not encoded.ok: w.fail(encoded.error)
 			else: w.stream.put_data(encoded.bytes)
 
@@ -318,6 +379,7 @@ static func _write_snapshot(p: Dictionary, w: Writer) -> void:
 
 static func _read_payload(kind: int, r: Reader) -> Dictionary:
 	match kind:
+		Kind.PLAYER_REQUEST: return {"action":r.integer(1),"value":r.integer(4),"request_sequence":r.integer(4)}
 		Kind.HELLO: return {"role":r.integer(1), "name":r.text(64), "build_hash":r.raw(32), "rules_hash":r.raw(32), "resume_token":r.token(), "bulk_token":r.token()}
 		Kind.WELCOME: return {"actor_id":r.integer(4), "spawn_generation":r.integer(4), "server_hz":r.integer(2), "snapshot_hz":r.integer(2), "profile":r.integer(1), "resume_token":r.raw(32), "bulk_token":r.raw(32), "build_hash":r.raw(32), "rules_hash":r.raw(32)}
 		Kind.REJECT: return {"code":r.integer(2), "message":r.text(256)}
@@ -347,6 +409,10 @@ static func _read_payload(kind: int, r: Reader) -> Dictionary:
 		Kind.SNAPSHOT: return _read_snapshot(r)
 		Kind.MATCH_STATE:
 			var decoded: Dictionary = SIMULATION_CODEC.decode(r.raw(r.stream.get_available_bytes()))
+			if not decoded.ok: r.fail(decoded.error); return {}
+			return decoded.payload
+		Kind.GAME_EVENTS:
+			var decoded: Dictionary = EVENTS_CODEC.decode(r.raw(r.stream.get_available_bytes()))
 			if not decoded.ok: r.fail(decoded.error); return {}
 			return decoded.payload
 	return {}

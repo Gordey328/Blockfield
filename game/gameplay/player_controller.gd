@@ -10,6 +10,9 @@ signal dry_fired
 signal camera_mode_changed(mode: int)
 
 enum CameraMode { INTRO, FIRST_PERSON, THIRD_PERSON, DEATH, FREE, FOLLOW_FIRST_PERSON, FOLLOW_THIRD_PERSON }
+const NETWORK_SESSION = preload("res://network/network_session.gd")
+const NETWORK_CLIENT = preload("res://network/client_replica.gd")
+const SHARED_RULES = preload("res://simulation/player_rules.gd")
 
 var world: VoxelWorld
 var session: LocalSession
@@ -72,6 +75,11 @@ var _free_velocity: Vector3 = Vector3.ZERO
 var _camera_effects:=SourceCameraEffects.new()
 var camera_radial_blur:=0.0
 var _last_spade_fire_time:=-1.0e20
+var _network_owner: SharedPlayerState
+var _network_epoch := 0
+var _network_generation := -1
+var _network_yaw := 0.0
+var _network_pitch := 0.0
 
 func stop_audio() -> void:
 	# Stop playback explicitly before scene teardown; the audio server owns a
@@ -132,6 +140,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var hit := world.cast_voxel(get_aim_origin(), get_aim_direction(), 12.0)
 		if hit.hit:
 			block_color = VoxelWorld.block_color(world.get_block(hit.cell))
+			if session is NETWORK_SESSION: session.request_block_color(VoxelWorld.pack_color(block_color))
 			notice.emit("Picked block color")
 	if event.is_action_pressed("view_toggle"):
 		third_person = not third_person
@@ -139,6 +148,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not session.is_reloading:
 			_aim_toggled = not _aim_toggled
 			if _aim_toggled and can_use_tool(): _play_sound("Weapons/AimDownSightLocal",.08,OpenSpadesAudio.LOCAL_ORIGIN)
+	# Inputs below invoke offline authority. In multiplayer their button edges
+	# reach the shared rules through the fixed input command instead.
+	if session is NETWORK_SESSION: return
 	if event.is_action_pressed("primary") and session.current_tool == 3 and can_use_tool():
 		_begin_grenade_cook()
 	if event.is_action_released("primary") and _grenade_cooking:
@@ -155,6 +167,9 @@ func _physics_process(delta: float) -> void:
 	if world == null or session == null:
 		return
 	_connect_simulation()
+	if session is NETWORK_SESSION:
+		_network_physics(delta)
+		return
 	# Player::BoxClipMove uses world-axis corner samples, independent of yaw.
 	shape.rotation.y = -rotation.y
 	_tool_clock = maxf(0.0, _tool_clock - delta)
@@ -271,8 +286,143 @@ func _physics_process(delta: float) -> void:
 	if not Input.is_action_pressed("primary") or session.current_tool != 2: _dry_fire_held = false
 	_update_view(delta)
 
+func _network_replica() -> NETWORK_CLIENT:
+	return lab.get("network_client") as NETWORK_CLIENT if lab != null else null
+
+func _network_physics(delta: float) -> void:
+	var replica := _network_replica()
+	if replica == null or replica.status != "live":
+		_network_owner = null
+		_network_epoch = 0
+		_network_generation = -1
+		return
+	session.update(0)
+	var owner := replica.get_owner_state()
+	if owner == null: return
+	# Inactive actors render confirmed poses. A pending class can still be sent
+	# once, but its neutral prediction must not move a spectator/dead body.
+	if not owner.is_alive(): owner = replica.prediction.get_confirmed_state()
+	if owner == null: return
+	_network_adopt(owner,replica,delta)
+	var pending: Dictionary = session.drain_intent()
+	if pending.team >= 0: replica.request_team(pending.team)
+	if pending.color >= 0: replica.request_block_color(pending.color)
+	var buttons := 0
+	var move := Vector2.ZERO
+	if owner.is_alive() and controls_enabled:
+		move = Input.get_vector("left","right","forward","back").limit_length(1)
+		if Input.is_action_pressed("jump"): buttons |= SHARED_RULES.Buttons.JUMP
+		if Input.is_action_pressed("crouch"): buttons |= SHARED_RULES.Buttons.CROUCH
+		if Input.is_action_pressed("sprint"): buttons |= SHARED_RULES.Buttons.SPRINT
+		if Input.is_action_pressed("sneak"): buttons |= SHARED_RULES.Buttons.SNEAK
+		if Input.is_action_pressed("primary"): buttons |= SHARED_RULES.Buttons.PRIMARY
+		var secondary := Input.is_action_pressed("secondary")
+		if session.current_tool == SHARED_RULES.Tool.WEAPON and not hold_aim_down_sight: secondary = _aim_toggled
+		if secondary: buttons |= SHARED_RULES.Buttons.SECONDARY
+		if pending.reload: buttons |= SHARED_RULES.Buttons.RELOAD
+	elif not controls_enabled:
+		_aim_toggled = false
+	# Project physics is 60Hz. No second local movement/tool clock or authority
+	# update is run here, including when controls are captured by a menu.
+	if owner.is_alive() or pending.weapon != 255:
+		var yaw := wrapf(rotation.y,-PI,PI) if owner.is_alive() else owner.yaw
+		var pitch := clampf(head.rotation.x,-PI*.5,PI*.5) if owner.is_alive() else owner.pitch
+		var result := replica.submit_input(buttons,move,yaw,pitch,int(pending.tool) if owner.is_alive() else 255,int(pending.weapon))
+		if result.ok:
+			# Prediction already includes the command's mouse angles and source
+			# recoil. Use that command as the reference so mouse motion is not
+			# added twice when adopting the resulting owner state.
+			_network_yaw = yaw
+			_network_pitch = pitch
+			session.update(0)
+			var next := replica.get_owner_state() if owner.is_alive() else replica.prediction.get_confirmed_state()
+			if next != null: _network_adopt(next,replica,0)
+		elif replica.status == "live":
+			# A terrain/rebase barrier can temporarily reject a command without
+			# ending the connection. Preserve unsent selection edges for retry.
+			if pending.tool != 255: session.select_tool(pending.tool)
+			if pending.weapon != 255: session.select_weapon(pending.weapon)
+			if pending.reload: session.reload_weapon()
+	if not owner.is_alive() and owner.team < 2: _death_elapsed += delta
+	_sync_camera_mode()
+	if owner.team >= 2 and camera_mode == CameraMode.FREE and controls_enabled: _move_free_camera(delta)
+	world.set_view_position(camera.global_position)
+	_update_view(delta)
+
+func _network_adopt(owner: SharedPlayerState, replica: NETWORK_CLIENT, delta: float) -> void:
+	var reset := owner.match_epoch != _network_epoch or owner.spawn_generation != _network_generation
+	if reset:
+		_clear_input_state()
+		rotation.y = owner.yaw
+		head.rotation.x = owner.pitch
+		_network_epoch = owner.match_epoch
+		_network_generation = owner.spawn_generation
+	else:
+		# Apply only the difference from our previous simulation reference.
+		# Mouse motion accumulated since the last tick survives an unchanged
+		# snapshot, while recoil/reconciliation corrections still reach aim.
+		rotation.y = wrapf(rotation.y + angle_difference(_network_yaw,owner.yaw),-PI,PI)
+		head.rotation.x = clampf(head.rotation.x + owner.pitch-_network_pitch,-PI*.5,PI*.5)
+	_network_yaw = owner.yaw
+	_network_pitch = owner.pitch
+	_network_owner = owner
+	_motion = owner.motion.copy()
+	global_position = owner.feet()
+	_native_velocity = _motion.native_velocity
+	velocity = _native_velocity*32
+	crouching = _motion.crouch
+	wading = _motion.wading
+	sprinting = owner.sprinting
+	aiming = owner.aiming
+	_aim_down_state = owner.aim_down_state
+	_sprint_state = owner.sprint_state
+	_step_distance = owner.walk_distance
+	_walk_steps = owner.walk_steps
+	_grenade_cooking = owner.cooking
+	_dig_held = owner.digging
+	_dig_first = owner.first_dig
+	_tool_clock = maxf(0,(owner.dig_deadline_tick if owner.digging else owner.spade_deadline_tick)-owner.last_tick)/SHARED_RULES.HZ
+	_last_grenade_time = owner.grenade_deadline_tick/SHARED_RULES.HZ-.5
+	# Keep physics feet exact; the predictor's bounded position correction
+	# smooths only the eye presentation, never the authoritative query body.
+	var eye := owner.motion.eye_position
+	if owner.is_alive():
+		var presentation := replica.prediction.sample_local_presentation(delta)
+		if not presentation.is_empty(): eye = presentation.eye
+	head.position = eye-global_position
+	shape.rotation.y = -rotation.y
+	if shape.shape is BoxShape3D:
+		(shape.shape as BoxShape3D).size.y = 1.8 if crouching else 2.7
+		shape.position.y = (shape.shape as BoxShape3D).size.y*.5
+
+func apply_network_cosmetic(event: Dictionary) -> void:
+	if not session is NETWORK_SESSION: return
+	var replica := _network_replica()
+	if replica == null or replica.status != "live": return
+	var owner := replica.get_owner_state()
+	if owner == null or event.get("epoch",0) != owner.match_epoch or event.get("owner_id",0) != owner.player_id or event.get("spawn_generation",-1) != owner.spawn_generation: return
+	var kind: String = event.get("kind","")
+	if kind == "shot":
+		var direction: Vector3 = event.get("recoil_direction",owner.front())
+		if not direction.is_finite(): return
+		var effects := _effects()
+		if effects != null:
+			var muzzle := get_aim_origin()+direction*.5
+			if _weapon_view != null and camera_mode == CameraMode.FIRST_PERSON: muzzle = _weapon_view.get_muzzle_transform().origin
+			effects.muzzle_fire(muzzle,direction,owner.weapon)
+			if owner.weapon != 2 and eject_brass: effects.eject_shell(muzzle,direction,head.global_basis.x,head.global_basis.y,owner.weapon)
+		_kick = .12
+		# Session.ingest_cosmetic owns the single fire animation signal; shared
+		# prediction already changes owner yaw/pitch. No second recoil or rays.
+	elif kind in ["spade_bash","spade_dig"]:
+		_last_spade_fire_time = float(event.get("tick",owner.last_tick))/SHARED_RULES.HZ
+		if _weapon_view != null: _weapon_view.fire()
+	elif kind == "grenade_release":
+		if _weapon_view != null: _weapon_view.fire()
+
 func can_stand() -> bool:
 	_sync_motion_state()
+	if _motion == null: return false
 	return bool(SourcePlayerMotion.try_uncrouch(world,_motion).allowed)
 
 func is_grounded() -> bool:
@@ -280,6 +430,7 @@ func is_grounded() -> bool:
 
 func can_use_tool() -> bool:
 	if session==null or session.health<=0 or session.team>=2 or not controls_enabled:return false
+	if session is NETWORK_SESSION: return _network_owner != null and SHARED_RULES.can_use_tool(_network_owner)
 	if sprinting or _sprint_state>0.0:return false
 	if _weapon_view==null:return false
 	# Publish desired selection before reading the native lower/raise gate.
@@ -287,6 +438,7 @@ func can_use_tool() -> bool:
 	return not _weapon_view.is_changing_tool()
 
 func _sync_motion_state() -> void:
+	if session is NETWORK_SESSION: return
 	if _motion==null:_motion=SourcePlayerMotion.create_state(global_position,crouching,false)
 	_motion.feet_position=global_position
 	_motion.native_velocity=_native_velocity
@@ -295,6 +447,7 @@ func _sync_motion_state() -> void:
 	_motion.front=-head.global_basis.z
 
 func _clip_motion(delta: float) -> void:
+	if session is NETWORK_SESSION: return
 	_sync_motion_state()
 	var incoming_speed: float=-_native_velocity.y
 	_motion=SourcePlayerMotion.finish_landing(SourcePlayerMotion.clip_move(world,_motion,delta,session.session_time),incoming_speed)
@@ -351,6 +504,14 @@ func get_tool_action() -> Dictionary:
 	var progress:=0.0
 	var ready:=1.0
 	if session==null:return {"type":type,"progress":progress,"ready":ready}
+	if session is NETWORK_SESSION and _network_owner != null:
+		if session.current_tool == 0:
+			if _network_owner.input_buttons & SHARED_RULES.Buttons.PRIMARY != 0 and not _dig_held: type = 1;progress = 1-_tool_clock/.2
+			elif _dig_held: type = 2 if _dig_first else 3;progress = 1-_tool_clock
+		elif session.current_tool == 1: ready = 1 if session.block_cooldown <= 0 else 0
+		elif session.current_tool == 2: ready = (session.session_time-session.last_shot_time)/float(session.get_weapon_info().delay) if session.last_shot_time >= 0 else 2
+		elif session.current_tool == 3: ready = (session.session_time-_last_grenade_time)/.5
+		return {"type":type,"progress":clampf(progress,0,1),"ready":ready}
 	if session.current_tool==0:
 		if Input.is_action_pressed("primary"):type=1;progress=1.0-_tool_clock/.2
 		elif _dig_held:type=2 if _dig_first else 3;progress=1.0-_tool_clock
@@ -376,6 +537,7 @@ func get_camera_aim_down_state() -> float:
 
 func get_camera_tool() -> int:
 	if camera_mode==CameraMode.FOLLOW_FIRST_PERSON and _spectator_view!=null:return _spectator_view.get_displayed_tool()
+	if session is NETWORK_SESSION: return session.displayed_tool
 	if _weapon_view!=null and _weapon_view.has_method("get_displayed_tool"):return int(_weapon_view.get_displayed_tool())
 	return session.current_tool
 
@@ -431,6 +593,7 @@ func _connect_simulation() -> void:
 			_camera_yaw = rotation.y
 			_camera_pitch = -PI / 6.0)
 		session.grenade_thrown.connect(func(_data: Dictionary):
+			if session is NETWORK_SESSION and (_data.get("owner_id",0) != session.local_player_id() or bool(_data.get("predicted_already_played",false))): return
 			_grenade_cooking = false
 			_last_grenade_time=session.session_time
 			_weapon_view.fire())
@@ -490,6 +653,7 @@ func _restore_block_health() -> void:
 			_block_health.erase(cell)
 
 func _shoot() -> void:
+	if session is NETWORK_SESSION: return
 	if not session.fire():
 		# Weapon.cpp:144: play once on the transition into an empty trigger hold.
 		var slow_reload := bool(session.get_weapon_info().slow_reload)
@@ -581,6 +745,7 @@ func _horizontal_distance(first: Vector3, second: Vector3) -> float:
 	return Vector2(first.x - second.x, first.z - second.z).length()
 
 func _damage_block(cell: Vector3i, damage: float, allow_destroy: bool = true) -> bool:
+	if session is NETWORK_SESSION: return false
 	if cell.y <= 1 or world.get_block(cell) == 0: return false
 	var health: float = float(_block_health.get(cell, {"health":100.0}).health) - damage
 	if health <= 0.0 and allow_destroy:
@@ -592,6 +757,7 @@ func _damage_block(cell: Vector3i, damage: float, allow_destroy: bool = true) ->
 	return false
 
 func _spade(dig: bool) -> void:
+	if session is NETWORK_SESSION: return
 	if _tool_clock > 0.0: return
 	_last_spade_fire_time=session.session_time
 	_tool_clock = 1.0 if dig else 0.2
@@ -683,6 +849,7 @@ func get_build_preview() -> Dictionary:
 	return result
 
 func _build_single() -> void:
+	if session is NETWORK_SESSION: return
 	if _tool_clock > 0.0: return
 	var hit := world.cast_voxel(get_aim_origin(),get_aim_direction(),12.0)
 	if not hit.hit: return
@@ -694,6 +861,7 @@ func _build_single() -> void:
 	if _place(cell): _tool_clock=0.5
 
 func _place(cell: Vector3i) -> bool:
+	if session is NETWORK_SESSION: return false
 	if cell.y <= 1 or not world.is_in_bounds(cell) or world.get_block(cell)!=0 or not session.use_block(): return false
 	world.set_block(cell,VoxelWorld.pack_color(block_color))
 	if _weapon_view != null: _weapon_view.fire()
@@ -701,6 +869,7 @@ func _place(cell: Vector3i) -> bool:
 	return true
 
 func _build_line() -> void:
+	if session is NETWORK_SESSION: return
 	if _line_start.x < 0 or session.block_cooldown > 0.0: return
 	var attached := false
 	for direction in [Vector3i.UP, Vector3i.DOWN, Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK]:
@@ -730,6 +899,7 @@ func _build_line() -> void:
 	_play_sound("Weapons/Block/Build")
 
 func _begin_block_line() -> void:
+	if session is NETWORK_SESSION: return
 	var preview:=get_build_preview()
 	if not bool(preview.valid):
 		build_error.emit(str(preview.reason))
@@ -766,17 +936,23 @@ func _cube_line(start: Vector3i, end: Vector3i, limit: int) -> Array[Vector3i]:
 	return cells
 
 func _begin_grenade_cook() -> void:
+	if session is NETWORK_SESSION: return
 	_grenade_cooking=session.begin_grenade_cook()
 	if _grenade_cooking:_play_sound("Weapons/Grenade/Fire",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
 
 func _throw_grenade() -> void:
+	if session is NETWORK_SESSION: return
 	_grenade_cooking=false
 	session.release_grenade()
 
 func _update_view(delta: float) -> void:
-	_aim_down_state = clampf(_aim_down_state + delta * (8.0 if aiming else -3.0),0.0,1.0)
-	if not animations_enabled:_aim_down_state=1.0 if aiming else 0.0
-	_sprint_state=clampf(_sprint_state+delta*(4.0 if sprinting else -3.0),0,1)
+	if session is NETWORK_SESSION:
+		_aim_down_state = _network_owner.aim_down_state if _network_owner != null else session.aim_down_state
+		_sprint_state = _network_owner.sprint_state if _network_owner != null else session.sprint_state
+	else:
+		_aim_down_state = clampf(_aim_down_state + delta * (8.0 if aiming else -3.0),0.0,1.0)
+		if not animations_enabled:_aim_down_state=1.0 if aiming else 0.0
+		_sprint_state=clampf(_sprint_state+delta*(4.0 if sprinting else -3.0),0,1)
 	_sync_camera_mode()
 	_update_camera_transform()
 	weapon_root.visible = camera_mode == CameraMode.FIRST_PERSON and session.team<2 and session.health>0
@@ -786,6 +962,12 @@ func _update_view(delta: float) -> void:
 		_spectator_view.update_view(delta)
 	_update_camera_effects(delta)
 	if _weapon_view == null: return
+	if session is NETWORK_SESSION and _weapon_view.has_method("set_simulation_state"):
+		var state := _network_owner
+		if state != null:
+			_weapon_view.set_simulation_state({"desired_tool":state.tool,"displayed_tool":state.displayed_tool,"weapon":state.weapon,"displayed_weapon":state.displayed_weapon,"tool_raise":state.tool_raise,"sprint_state":state.sprint_state,"aim_down_state":state.aim_down_state})
+	elif not session is NETWORK_SESSION and _weapon_view.has_method("clear_simulation_state"):
+		_weapon_view.clear_simulation_state()
 	_weapon_view.set_selection(session.current_tool, session.current_weapon)
 	_weapon_view.set_team(session.team,session.get_team_info(session.team).color)
 	_weapon_view.set_block_color(block_color)
@@ -972,6 +1154,7 @@ func set_skin(id: String) -> void:
 	if session.is_reloading:_weapon_view.reload()
 
 func respawn_at(point: Vector3) -> void:
+	if session is NETWORK_SESSION: return
 	_clear_input_state()
 	global_position=point
 	crouching = false

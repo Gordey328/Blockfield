@@ -11,18 +11,18 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 FILES = ["hdr_exposure.gd", "hdr_scene_viewport.gd", "hdr_reduce.gdshader",
          "hdr_gain.gdshader", "hdr_present.gdshader", "hdr_bloom.gd",
-         "hdr_bloom.gdshader", "hdr_composite.gdshaderinc"]
+         "hdr_bloom.gdshader", "hdr_composite.gdshaderinc", "hdr_normalize.gdshader"]
 
 
-def prepare() -> Path:
-    project = ROOT / ".cache/hdr-web-probe"
+def prepare(probe_mode: str = 'exposure') -> Path:
+    project = ROOT / (".cache/hdr-web-probe" if probe_mode == 'exposure' else ".cache/hdr-web-color-probe")
     (project / "presentation").mkdir(parents=True, exist_ok=True)
     (project / "build").mkdir(exist_ok=True)
     (project / "build/.gdignore").write_text("")
     for name in FILES:
         (project / "presentation" / name).write_bytes(
             (ROOT / "game/presentation" / name).read_bytes())
-    probe = (ROOT / "tests/presentation/render_hdr_exposure.gd").read_text()
+    probe = (ROOT / "tests/presentation" / ('render_hdr_exposure.gd' if probe_mode == 'exposure' else 'probe_hdr_color_space.gd')).read_text()
     probe = probe.replace("extends SceneTree", "extends Node\n@onready var root: Viewport = get_tree().root")
     probe = probe.replace("func _initialize()", "func _ready()")
     probe = probe.replace("await process_frame", "await get_tree().process_frame")
@@ -62,9 +62,10 @@ renderer/rendering_method.mobile="gl_compatibility"
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--godot", required=True)
+    parser.add_argument("--probe", choices=['exposure','color-space'], default='exposure')
     args = parser.parse_args()
-    target = prepare()
-    subprocess.run([args.godot, "--headless", "--path", str(target), "--editor", "--import"], check=True)
+    target = prepare(args.probe)
+    subprocess.run([args.godot, "--headless", "--path", str(target), "--editor", "--import", "--quit"], check=True)
     subprocess.run([args.godot, "--headless", "--path", str(target), "--export-release", "Web",
                     str(target / "build/index.html")], check=True)
     print(target / "build/index.html")

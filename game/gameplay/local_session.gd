@@ -123,6 +123,17 @@ func get_weapon_info() -> Dictionary:
 	info["reserve"] = reserve
 	return info
 
+func local_player_id() -> int:
+	# Offline authority historically uses actor0. NetworkSession overrides this
+	# with its authenticated positive actor ID without rewriting remote IDs.
+	return 0
+
+func is_local_intel_carrier() -> bool:
+	if mode != "ctf": return false
+	for flag: Dictionary in ctf_flags:
+		if int(flag.get("carrier",-1)) == local_player_id(): return true
+	return false
+
 func get_team_info(index: int) -> Dictionary:
 	if index<0 or index>=2:return {"name":"Spectator","color":Color(.65,.65,.65)}
 	return {"name":team_names[index],"color":team_colors[index]}

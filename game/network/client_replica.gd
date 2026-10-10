@@ -31,6 +31,10 @@ var _remote: Dictionary[int,PREDICTION.RemotePoseBuffer] = {}
 var _events: Array[Dictionary] = []
 var _chat_intent := 0
 var _chat_sequence := 0
+var _request_sequence := 0
+var _event_cursor := 0
+var _predicted_effects: Dictionary[String,int] = {}
+var _predicted_order: Array[String] = []
 var _last_snapshot_tick := -1
 var _snapshot_time_ms := 0
 var _install_map: Callable
@@ -65,6 +69,10 @@ func _hello(map_role: bool = false) -> P.Packet:
 func close() -> void:
 	game.stop(true)
 	bulk.stop(true)
+	# Forced stop emits terminal events. They belong to the discarded stream,
+	# including when this same Replica is reused immediately by connect_to().
+	game.drain_events(TRANSPORT.MAX_EVENTS)
+	bulk.drain_events(TRANSPORT.MAX_EVENTS)
 	transfer.reset()
 	assembler.cancel()
 	for buffer: PREDICTION.RemotePoseBuffer in _remote.values(): buffer.clear()
@@ -78,6 +86,10 @@ func close() -> void:
 	_welcome = null
 	_chat_intent = 0
 	_chat_sequence = 0
+	_request_sequence = 0
+	_event_cursor = 0
+	_predicted_effects.clear()
+	_predicted_order.clear()
 	_last_snapshot_tick = -1
 	status = "closed"
 
@@ -127,14 +139,7 @@ func poll() -> void:
 func _game_packet(packet: P.Packet) -> void:
 	match packet.kind:
 		P.Kind.WELCOME:
-			if status != "joining" or _welcome != null or packet.epoch <= 0 or packet.payload.server_hz != 60 \
-					or packet.payload.build_hash != COMPATIBILITY.build_hash() or packet.payload.rules_hash != COMPATIBILITY.rules_hash():
-				_fail("incompatible WELCOME")
-				return
-			_welcome = packet
-			actor_id = packet.payload.actor_id
-			epoch = packet.epoch
-			_resume = packet.payload.resume_token.duplicate()
+			_accept_welcome(packet)
 		P.Kind.MAP_BEGIN:
 			if status != "joining" or _welcome == null or packet.epoch != epoch:
 				_fail("unexpected map baseline")
@@ -166,7 +171,77 @@ func _game_packet(packet: P.Packet) -> void:
 			_chat_sequence = packet.payload.message_id
 			_emit({"type":"chat","tick":packet.tick,"sender_id":packet.payload.sender_id,"text":packet.payload.text,"channel":packet.payload.channel,"message_id":packet.payload.message_id})
 		STATE_KIND: _apply_snapshot(packet)
+		P.Kind.GAME_EVENTS: _apply_events(packet)
 		_: _fail("invalid server packet direction")
+
+func _accept_welcome(packet: P.Packet) -> void:
+	if not P.encode(packet).ok or packet.epoch<=0 or packet.payload.server_hz!=60 \
+			or packet.payload.build_hash!=COMPATIBILITY.build_hash() or packet.payload.rules_hash!=COMPATIBILITY.rules_hash():
+		_fail("incompatible WELCOME")
+		return
+	var replacement:=_welcome!=null
+	if replacement:
+		if status not in ["joining","loading","synchronizing","live"] or packet.epoch<=epoch \
+				or packet.payload.actor_id!=actor_id or packet.payload.spawn_generation!=1:
+			_fail("invalid epoch replacement WELCOME")
+			return
+		# Keep the game transport/id and user endpoints. Every old map, input and
+		# presentation stream is discarded before exposing the new match epoch.
+		bulk.stop(true)
+		bulk.drain_events(TRANSPORT.MAX_EVENTS)
+		_bulk_id=0
+		transfer.reset(packet.epoch)
+		assembler.cancel()
+		for buffer: PREDICTION.RemotePoseBuffer in _remote.values():buffer.clear()
+		_remote.clear();_events.clear();_confirmed.clear()
+		prediction=PREDICTION.new()
+		data=null
+		_chat_intent=0;_chat_sequence=0;_request_sequence=0;_event_cursor=0
+		_predicted_effects.clear();_predicted_order.clear()
+		_last_snapshot_tick=-1;_snapshot_time_ms=0
+		last_error=""
+		status="joining"
+	elif status!="joining":
+		_fail("incompatible WELCOME")
+		return
+	_welcome=P.make_packet(packet.kind,packet.payload.duplicate(true),packet.epoch,packet.tick,packet.sequence)
+	actor_id=packet.payload.actor_id
+	epoch=packet.epoch
+	_resume=packet.payload.resume_token.duplicate()
+	if replacement:_emit({"type":"epoch_reset","epoch":epoch})
+
+static func _effect_identity(event: Dictionary, predicted: bool = false) -> String:
+	var kind: String = event.get("kind","") if predicted else event.type
+	if kind == "grenade_release": kind = "grenade_thrown"
+	return "%d:%d:%d:%d:%s" % [event.epoch,event.owner_id,event.spawn_generation,
+		event.get("input_sequence",0) if predicted else event.action_sequence,kind]
+
+func _apply_events(packet: P.Packet) -> void:
+	if status not in ["synchronizing","live"] or packet.epoch != epoch:
+		_fail("events before installed map")
+		return
+	var p: Dictionary = packet.payload
+	if p.last_sequence <= _event_cursor: return
+	if p.first_sequence <= _event_cursor:
+		_fail("overlapping confirmed event cursor")
+		return
+	for source: Dictionary in p.events:
+		if source.type == "events_resync_required":
+			_fail("confirmed effects require new baseline")
+			return
+		# Privacy is enforced again at the presentation boundary.
+		if P.EVENTS_CODEC.visibility(source.type) == "owner" and source.owner_id != actor_id:
+			_fail("foreign private event")
+			return
+		var event := source.duplicate(true)
+		var key := _effect_identity(event)
+		event.predicted_already_played = _predicted_effects.has(key)
+		if event.predicted_already_played:
+			_predicted_effects[key] -= 1
+			if _predicted_effects[key] <= 0: _predicted_effects.erase(key)
+		_emit(event)
+		if status == "failed": return
+	_event_cursor = p.last_sequence
 
 func _install_ready() -> void:
 	var ready := transfer.take_ready()
@@ -196,6 +271,8 @@ func _apply_snapshot(packet: P.Packet) -> void:
 		return
 	if packet.tick <= _last_snapshot_tick: return
 	var result: Dictionary
+	var old_owner := prediction.get_state()
+	if old_owner != null and old_owner.spawn_generation != p.owner_state.spawn_generation: _request_sequence = 0
 	if status == "synchronizing": result = prediction.reset(p.owner_state,p.tick,p.map_sequence)
 	else:
 		result = prediction.reconcile(p.owner_state,p.tick,p.map_sequence,data)
@@ -207,6 +284,7 @@ func _apply_snapshot(packet: P.Packet) -> void:
 		_fail(result.error)
 		return
 	_confirmed = p
+	_event_cursor = maxi(_event_cursor,p.event_sequence)
 	_last_snapshot_tick = packet.tick
 	_snapshot_time_ms = Time.get_ticks_msec()
 	status = "live"
@@ -246,7 +324,15 @@ func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: i
 	if not result.ok:
 		_fail(result.error)
 		return result
-	for effect: Dictionary in result.events: _emit(effect)
+	for effect: Dictionary in result.events:
+		var key := _effect_identity(effect,true)
+		_predicted_effects[key] = int(_predicted_effects.get(key,0))+1
+		_predicted_order.append(key)
+		# Cosmetic retention is bounded independently of authority/input history.
+		if _predicted_order.size() > 2048:
+			var expired: String = _predicted_order.pop_front()
+			_predicted_effects.erase(expired)
+		_emit(effect)
 	return {"ok":true,"error":"","sequence":command.sequence}
 
 func send_chat(text: String, team_only: bool = false) -> bool:
@@ -255,6 +341,20 @@ func send_chat(text: String, team_only: bool = false) -> bool:
 	var packet := P.make_packet(P.Kind.CHAT,{"channel":1 if team_only else 0,"sender_id":0,"message_id":_chat_intent+1,"text":text},epoch,maxi(0,owner.last_tick),owner.spawn_generation)
 	if not game.send(_game_id,packet).ok: return false
 	_chat_intent += 1
+	return true
+
+func request_team(team: int) -> bool:
+	return _send_request(0,team)
+
+func request_block_color(color: int) -> bool:
+	return _send_request(1,color)
+
+func _send_request(action: int, value: int) -> bool:
+	if status != "live": return false
+	var owner := prediction.get_state()
+	var packet := P.make_packet(P.Kind.PLAYER_REQUEST,{"action":action,"value":value,"request_sequence":_request_sequence+1},epoch,maxi(0,owner.last_tick),owner.spawn_generation)
+	if not P.encode(packet).ok or not game.send(_game_id,packet).ok: return false
+	_request_sequence += 1
 	return true
 
 func resume_token() -> PackedByteArray: return _resume.duplicate()

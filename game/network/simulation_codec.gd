@@ -28,6 +28,43 @@ const OWNER_UNIT := ["tool_raise","sprint_state","aim_down_state"]
 const OWNER_DEADLINES := ["next_shot_tick","reload_started_tick","reload_deadline_tick","grenade_deadline_tick","block_deadline_tick","spade_deadline_tick","dig_deadline_tick"]
 const MOTION_BOOL := ["crouch","sprint","grounded","wading","climbed","vertical_collision","landed","fall_hurt"]
 
+class SharedFrame extends RefCounted:
+	# Native publication scratch space, never constructed from network bytes.
+	# Common records are validated once; each owner's private record is still
+	# validated independently and must match the captured public pose.
+	var _context: Dictionary = {}
+	var _actors: Dictionary = {}
+	var _header := PackedByteArray()
+	var _tail := PackedByteArray()
+	func encode_owner(owner: STATE) -> Dictionary:
+		if _header.size() != 26 or owner == null or not _actors.has(owner.player_id): return SimulationCodec._failure("uncaptured snapshot owner")
+		var w := Writer.new()
+		SimulationCodec._write_owner(owner,_context,w)
+		if not w.error.is_empty(): return SimulationCodec._failure(w.error)
+		if SimulationCodec._public_actor(owner) != _actors[owner.player_id]: return SimulationCodec._failure("owner/public actor mismatch")
+		var bytes := _header + w.stream.data_array + _tail
+		if bytes.size() > MAX_BODY: return SimulationCodec._failure("simulation body exceeds limit")
+		return {"ok":true,"error":"","bytes":bytes,"epoch":_context.epoch,"tick":_context.tick,"generation":owner.spawn_generation}
+
+static func prepare_shared(snapshot: Dictionary) -> Dictionary:
+	var converted := from_snapshot(snapshot)
+	if not converted.ok: return converted
+	var p: Dictionary = converted.payload
+	var owner_writer := Writer.new()
+	_write_owner(p.owner_state,p,owner_writer)
+	if not owner_writer.error.is_empty(): return _failure(owner_writer.error)
+	var frame := SharedFrame.new()
+	frame._context = {"epoch":p.epoch,"tick":p.tick,"profile":p.profile,"dimensions":p.dimensions}
+	frame._context.make_read_only()
+	for actor: Dictionary in p.actors:
+		var captured := actor.duplicate(true)
+		captured.make_read_only()
+		frame._actors[actor.id] = captured
+	frame._actors.make_read_only()
+	frame._header = converted.bytes.slice(0,26)
+	frame._tail = converted.bytes.slice(26+owner_writer.stream.get_size())
+	return {"ok":true,"error":"","frame":frame}
+
 class UTF8 extends RefCounted:
 	static func valid(data: PackedByteArray) -> bool:
 		var offset := 0
@@ -205,7 +242,7 @@ static func from_snapshot(snapshot: Dictionary) -> Dictionary:
 		payload.grenades.append(_public_grenade(projectile,team))
 	var encoded := encode(payload)
 	if not encoded.ok: return encoded
-	return {"ok":true,"error":"","payload":payload}
+	return {"ok":true,"error":"","payload":payload,"bytes":encoded.bytes}
 
 static func encode(payload: Dictionary) -> Dictionary:
 	var w := Writer.new()
@@ -320,7 +357,7 @@ static func _write_owner(owner: STATE, p: Dictionary, w: Writer) -> void:
 	w.vector(owner.motion.front,Vector3.ONE*-1.000001,Vector3.ONE*1.000001)
 	for key: String in MOTION_BOOL: w.boolean(owner.motion.get(key))
 	w.number(owner.motion.last_climb_time,-100000,float(p.tick)/60+1)
-	w.number(owner.motion.fall_speed,0,128)
+	w.number(owner.motion.fall_speed,-128,128)
 	if owner.team == 2 and owner.health > 0: w.fail("spectator owner health")
 	if owner.cooking and (owner.cook_started_tick < 0 or owner.grenades == 0 or owner.tool != 3): w.fail("owner cook relationship")
 	if owner.reloading and (owner.tool != 2 or owner.reload_deadline_tick < owner.reload_started_tick): w.fail("owner reload relationship")

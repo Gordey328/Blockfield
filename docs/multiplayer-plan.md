@@ -1,6 +1,6 @@
 # Iteration 2 multiplayer implementation plan
 
-Design prepared on 2026-10-10 against Godot **4.7.2**, the current offline port and OpenSpades v0.1.3 `dcf449c845d509bbde9d79239b32d201c1389961`. This document proposes contracts and work slices; it does **not** establish that networking exists or change iteration-1 acceptance. All N01–N09 rows remain `NOT_STARTED` until implementation evidence is recorded.
+Original design prepared on2026-10-10 against Godot **4.7.2** and OpenSpades v0.1.3 `dcf449c845d509bbde9d79239b32d201c1389961`. Production networking has since been implemented: N01–N08 are `IMPLEMENTED`, N09 is `VERIFIED`. This page retains design goals and acceptance scenarios; current contracts are [network-protocol.md](network-protocol.md), [server-runtime.md](server-runtime.md), [client-replica.md](client-replica.md) and [network-session.md](network-session.md). Current evidence and ownership live in [status.md](status.md) and [parity.md](parity.md). Neither iteration has passed full acceptance.
 
 ## Target deployment and transport
 
@@ -148,4 +148,4 @@ The existing pinned local validation path remains usable while GitHub Actions is
 
 Use `.agents/skills/blockfield-multiplayer/SKILL.md` for future networking work; this plan holds the proposed design, `docs/parity.md` holds N-row evidence and `docs/status.md` holds active ownership/last verified checkpoint. Before implementation, convert accepted transport/rules/identity choices into a numbered ADR and write the actual protocol schema with byte layout/limits. Avoid copying this mutable design into several skills or into chat-only notes.
 
-First implementation handoff: coordinator owns entry scene/export presets and session adapter; one specialist owns pure rules/actor state, one voxel data/journal/join barrier, one protocol/client prediction tests. Agree on commands/snapshots and non-overlapping files first. No stage-2 source files, services, accounts or global settings were changed by this preparation.
+The initial implementation split was rules/actor state, voxel/map barriers and protocol/prediction, with integration owned by the coordinator. Those production handoffs are complete. Use the current ownership section in status.md before changing files; do not infer an active lease from this historical plan. The user chose Docker/configuration preparation while keeping host/domain selection open. Public TLS/WSS deployment remains a separate unverified acceptance boundary.

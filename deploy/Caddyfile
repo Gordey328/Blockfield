@@ -7,7 +7,13 @@
         path /map
         header Origin https://gordey328.github.io
     }
-    reverse_proxy @game blockfield:8765
-    reverse_proxy @map blockfield:8766
-    respond "Blockfield WebSocket endpoint" 404
+    handle @game {
+        reverse_proxy blockfield:8765
+    }
+    handle @map {
+        reverse_proxy blockfield:8766
+    }
+    handle {
+        respond "Blockfield WebSocket endpoint" 404
+    }
 }

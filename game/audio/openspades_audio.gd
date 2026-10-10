@@ -160,6 +160,7 @@ func _play(path: String,gain: float,point: Vector3,local: bool,reference_distanc
 	var voice: Node
 	if spatial:
 		var player:=AudioStreamPlayer3D.new()
+		player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
 		player.stream=stream
 		player.attenuation_model=AudioStreamPlayer3D.ATTENUATION_DISABLED
 		player.max_distance=0.0
@@ -175,6 +176,7 @@ func _play(path: String,gain: float,point: Vector3,local: bool,reference_distanc
 		voice=player
 	else:
 		var player:=AudioStreamPlayer.new()
+		player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
 		player.stream=stream
 		add_child(player)
 		voice=player

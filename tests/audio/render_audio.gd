@@ -113,12 +113,20 @@ func record(name: String, play: Callable, seconds: float, expect_sound: bool = t
 		voice.bus = BUS
 		voice.play()
 	var frames := PackedVector2Array()
+	var play_started := Time.get_ticks_usec()
+	var first_signal_us := -1
 	var end_time := Time.get_ticks_msec() + int(seconds * 1000)
 	while Time.get_ticks_msec() < end_time:
 		await create_timer(.02).timeout
 		var count := capture.get_frames_available()
 		if count > 0:
-			frames.append_array(capture.get_buffer(count))
+			var mixed := capture.get_buffer(count)
+			if first_signal_us < 0:
+				for sample: Vector2 in mixed:
+					if absf(sample.x) > .0000001 or absf(sample.y) > .0000001:
+						first_signal_us = Time.get_ticks_usec()-play_started
+						break
+			frames.append_array(mixed)
 	var remaining := capture.get_frames_available()
 	if remaining > 0:
 		frames.append_array(capture.get_buffer(remaining))
@@ -126,6 +134,7 @@ func record(name: String, play: Callable, seconds: float, expect_sound: bool = t
 	metrics.name = name
 	metrics.window_seconds = seconds
 	metrics.discarded_frames = capture.get_discarded_frames() - discarded_before
+	metrics.first_signal_observed_ms = float(first_signal_us)/1000.0 if first_signal_us >= 0 else -1.0
 	if expect_sound:
 		check(frames.size() > int(AudioServer.get_mix_rate() * seconds * .6), name + " captured live mixer frames")
 		check(bool(metrics.finite), name + " all mixed samples are finite")

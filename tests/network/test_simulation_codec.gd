@@ -166,7 +166,8 @@ func exact_fields_and_privacy() -> void:
 	source.motion.vertical_collision = true
 	source.motion.landed = true
 	source.motion.fall_hurt = true
-	source.motion.fall_speed = .23456789123
+	# The source landing sample retains signed vertical speed during a jump.
+	source.motion.fall_speed = -.29420524835587
 	var trusted := snapshot(source,[actor(6)],[projectile()])
 	var first := CODEC.from_snapshot(trusted)
 	check(first.ok,"all replay fields projected: " + first.error)

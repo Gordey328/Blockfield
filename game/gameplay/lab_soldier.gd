@@ -65,7 +65,8 @@ func _process(delta: float) -> void:
 	if session==null or character==null:return
 	var target: Dictionary=session.get_target(target_id)
 	if target.is_empty(): return
-	var dead: bool=float(target.get("health",100))<=0.0
+	var health_known: bool=bool(target.get("health_known",true))
+	var dead: bool=not bool(target.get("alive",true)) or (health_known and float(target.get("health",100))<=0.0)
 	_phase+=delta
 	var moving: bool=target.get("moving",false)
 	position=target.position
@@ -85,14 +86,14 @@ func _process(delta: float) -> void:
 		var progress:=float(action.get("progress",target.get("action_progress",0.0))) if action is Dictionary else float(target.get("action_progress",0.0))
 		var ready:=float(action.get("ready",target.get("ready_state",1.0))) if action is Dictionary else float(target.get("ready_state",1.0))
 		character.set_tool_action(clampi(action_type,0,3),clampf(progress,0,1),maxf(float(target.get("grenade_cook_time",0.0)),0),ready,float(target.get("raise_state",1.0)))
-	character.set_intel_carrier(str(target.get("state","standing"))=="intel",session.get_team_info(1-int(target.team)).color)
+	character.set_intel_carrier(not dead and bool(target.get("carries_intel",str(target.get("state","standing"))=="intel")),session.get_team_info(1-int(target.team)).color)
 	var motion:=((position-_previous_position)/maxf(delta,.00001)) if moving and not dead else Vector3.ZERO
 	_previous_position=position
 	if moving and not dead and not crouching and not bool(target.get("aiming",false)):_walk_distance+=Vector2(motion.x,motion.z).length()*delta*.15
 	if character.has_method("set_motion_state"):character.set_motion_state(motion.dot(-global_basis.z),motion.dot(global_basis.x),_walk_distance)
 	else:character.animate_motion((5.0 if sprinting else 3.0) if moving else 0.0,_phase)
 	_update_hit_zones(crouching,float(target.get("pitch",0.0)))
-	_label.text="TARGET %02d  /  %d HP"%[target_id,int(target.get("health",100))]
+	_label.text="TARGET %02d  /  %d HP"%[target_id,int(target.get("health",100))] if health_known else str(target.get("name","TARGET %02d"%target_id))
 	_label.modulate=Color("ed806d") if dead else Color("e8efe6")
 	for area in _zones: area.collision_layer=0 if dead else 2
 

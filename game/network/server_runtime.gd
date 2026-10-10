@@ -7,8 +7,19 @@ const REGISTRY = preload("res://network/session_registry.gd")
 const INPUTS = preload("res://network/input_queue.gd")
 const TRANSFER = preload("res://network/map_transfer.gd")
 const SIMULATION = preload("res://simulation/match_simulation.gd")
+const DATA = preload("res://world/voxel_data.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const CODEC = preload("res://network/simulation_codec.gd")
+const EVENTS = preload("res://network/events_codec.gd")
+const HIT_HISTORY = preload("res://network/hit_history.gd")
+var hit_history := HIT_HISTORY.new()
+var _shot_ticks: Dictionary[int,int] = {}
+var _spawn_teams: Dictionary[int,int] = {}
+var _retired_bulks: Dictionary[int,Dictionary] = {}
+var _retired_bulk_capabilities: Array[Dictionary] = []
+const MAX_RETIRED_CAPABILITIES := 64
+const MAX_EVENT_FRAMES := 16
+const MAX_EVENT_BYTES := 262144
 const MAX_JOINS := 2
 const JOIN_TIMEOUT_MS := 240000
 const HELLO_TIMEOUT_MS := 5000
@@ -26,24 +37,100 @@ var _snapshot_factory: Callable
 var _chat_sequence := 0
 var _chat_times: Dictionary[int,Array] = {}
 var _chat_intents: Dictionary[int,int] = {}
+var _request_intents: Dictionary[int,int] = {}
+var _request_times: Dictionary[int,Array] = {}
 var _totals := {"steps":0,"admissions":0,"resumes":0,"input_rejections":0,"closed":0,"map_resyncs":0,"snapshots":0,"chat":0}
 
 func configure(match_simulation: MatchSimulation, build_hash: PackedByteArray, rules_hash: PackedByteArray) -> bool:
 	if running or match_simulation == null or match_simulation.data == null: return false
 	if not registry.configure(match_simulation.epoch,build_hash,rules_hash,0 if match_simulation.profile == "0.75" else 1): return false
 	simulation = match_simulation
+	hit_history.cancel("runtime configured")
+	simulation.set_rewind_query_factory(_rewind_query)
+	_shot_ticks.clear()
+	_spawn_teams.clear()
+	_retired_bulks.clear()
+	_retired_bulk_capabilities.clear()
 	_inputs.clear()
 	_streams.clear()
 	_pending_game.clear()
 	_pending_bulk.clear()
 	_chat_times.clear()
 	_chat_intents.clear()
+	_request_intents.clear()
+	_request_times.clear()
 	_next_snapshot_id = 1
 	_chat_sequence = 0
 	return true
 
 func set_snapshot_factory(factory: Callable) -> void:
 	_snapshot_factory = factory
+
+func reset_match(map_data: VoxelData, match_profile: String = "", game_mode: String = "") -> Dictionary:
+	# Trusted native coordinator only; clients have no reset/map authority.
+	if not running or simulation == null or map_data == null or map_data.epoch <= simulation.epoch:
+		return {"ok":false,"error":"reset requires a newer map epoch"}
+	var replacement := SIMULATION.new()
+	var configured := replacement.configure(map_data,simulation.profile if match_profile.is_empty() else match_profile,simulation.mode if game_mode.is_empty() else game_mode)
+	if not configured.ok: return configured
+	var teams: Dictionary[int,int] = {}
+	var retired: Dictionary[int,int] = {}
+	var old_capabilities := registry.unused_bulk_capabilities()
+	for id: int in _streams:
+		var actor := simulation.get_actor(id)
+		var view := registry.session_view(id)
+		if actor == null or view.is_empty() or view.game == 0: continue
+		if view.bulk != 0: retired[view.bulk] = id
+		var restored := replacement.add_actor(actor.player_name,2,id*7919+17,Vector3.INF,id)
+		if not restored.ok: return {"ok":false,"error":"reset identity allocation failed"}
+		var next_actor := replacement.get_actor(id)
+		next_actor.weapon = actor.weapon
+		next_actor.displayed_weapon = actor.weapon
+		next_actor.pending_weapon = actor.pending_weapon
+		teams[id] = actor.team if view.role == 0 else 2
+	var changed: Dictionary = registry.advance_epoch(replacement.epoch,0 if replacement.profile == "0.75" else 1,Time.get_ticks_msec())
+	if not changed.ok: return changed
+	for capability: Dictionary in old_capabilities:
+		# Only a capability already delivered in WELCOME could be in flight.
+		if _streams.has(capability.owner) and _streams[capability.owner].welcome == null:
+			_retired_bulk_capabilities.append(capability)
+	while _retired_bulk_capabilities.size() > MAX_RETIRED_CAPABILITIES: _retired_bulk_capabilities.pop_front()
+	# Independent sockets cannot order a forced bulk close after WELCOME.
+	# Stop its sender/binding now; the client closes its old channel after it
+	# receives WELCOME. Unread peers still have a bounded retirement deadline.
+	for connection: int in changed.close_bulk:
+		_retired_bulks[connection] = {"owner":retired[connection],"expires":Time.get_ticks_msec()+JOIN_TIMEOUT_MS}
+	for stream: Dictionary in _streams.values(): _release_stream(stream)
+	_streams.clear()
+	_inputs.clear()
+	_chat_times.clear()
+	_chat_intents.clear()
+	_request_intents.clear()
+	_request_times.clear()
+	_chat_sequence = 0
+	_shot_ticks.clear()
+	_spawn_teams = teams
+	hit_history.cancel("new match epoch")
+	simulation.set_rewind_query_factory(Callable())
+	simulation = replacement
+	simulation.set_rewind_query_factory(_rewind_query)
+	# A closed baseline tick precedes every reset transfer and owner checkpoint.
+	if not step_once(): return {"ok":false,"error":"reset baseline step failed"}
+	for welcome: P.Packet in changed.welcomes:
+		var id: int = welcome.payload.actor_id
+		var actor := simulation.get_actor(id)
+		var queue := INPUTS.new()
+		queue.reset(simulation.epoch,actor.spawn_generation,simulation.tick,0)
+		_inputs[id] = queue
+		_request_intents[id] = 0
+		_streams[id] = _new_stream(null,welcome,"queued")
+	return {"ok":true,"error":"","epoch":simulation.epoch,"actors":teams.size()}
+
+func _new_stream(job: RefCounted, welcome: P.Packet, phase: String = "prepare") -> Dictionary:
+	return {"phase":phase,"started":Time.get_ticks_msec(),"job":job,"sender":null,"end_job":null,
+		"welcome":welcome,"pending":[],"changes":0,"bytes":0,"delta_sender":null,"delta_packet":null,
+		"map_sequence":simulation.data.map_sequence,"barrier_sequence":-1,"end_packet":null,"bulk_packet":null,"latest_snapshot":null,
+		"event_packets":[],"event_bytes":0}
 
 func start(game_port: int = 0, map_port: int = 0, bind_address: String = "127.0.0.1") -> Dictionary:
 	if running or simulation == null: return {"ok":false,"error":"runtime not configured or already active"}
@@ -67,6 +154,12 @@ func stop() -> void:
 	_streams.clear()
 	_pending_game.clear()
 	_pending_bulk.clear()
+	_shot_ticks.clear()
+	_spawn_teams.clear()
+	_retired_bulks.clear()
+	_retired_bulk_capabilities.clear()
+	hit_history.cancel("runtime stopped")
+	if simulation != null: simulation.set_rewind_query_factory(Callable())
 	running = false
 
 func poll() -> void:
@@ -76,6 +169,13 @@ func poll() -> void:
 	map_transport.poll()
 	_handle_events(game_transport.drain_events(),false,now)
 	_handle_events(map_transport.drain_events(),true,now)
+	for connection: int in _retired_bulks.keys():
+		if now >= _retired_bulks[connection].expires:
+			map_transport.close(connection,1000,"retired map channel timeout")
+			_retired_bulks.erase(connection)
+	for index in range(_retired_bulk_capabilities.size()-1,-1,-1):
+		if now >= _retired_bulk_capabilities[index].expires or registry.session_view(_retired_bulk_capabilities[index].owner).is_empty():
+			_retired_bulk_capabilities.remove_at(index)
 	for connection: int in _pending_game.keys():
 		if now-_pending_game[connection] >= HELLO_TIMEOUT_MS: _close_game(connection,"HELLO timeout",now)
 	for connection: int in _pending_bulk.keys():
@@ -87,6 +187,9 @@ func poll() -> void:
 		_inputs.erase(id)
 		_chat_times.erase(id)
 		_chat_intents.erase(id)
+		_request_intents.erase(id)
+		_request_times.erase(id)
+		_shot_ticks.erase(id)
 	for id: int in _streams.keys():
 		if _streams.has(id): _poll_stream(id,now)
 
@@ -103,6 +206,7 @@ func _handle_events(events: Array[Dictionary], bulk: bool, now: int) -> void:
 			"closed", "timeout", "protocol_error":
 				if bulk:
 					_pending_bulk.erase(connection)
+					_retired_bulks.erase(connection)
 					var id := registry.disconnect_bulk(connection)
 					if id != 0 and _streams.has(id) and _streams[id].phase != "live":
 						_close_game(registry.session_view(id).game,"map connection lost",now)
@@ -131,38 +235,45 @@ func _game_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) 
 			simulation.reconnect_actor(id)
 			_totals.resumes += 1
 		else: _totals.admissions += 1
+		_request_intents[id] = 0
 		var actor := simulation.get_actor(id)
 		registry.set_generation(id,actor.spawn_generation)
 		admitted.welcome.payload.spawn_generation = actor.spawn_generation
 		var queue := INPUTS.new()
 		queue.reset(simulation.epoch,actor.spawn_generation,simulation.tick,actor.consumed_input_sequence)
 		_inputs[id] = queue
+		_shot_ticks.erase(id)
 		simulation.clear_controls(id)
 		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id)
 		_next_snapshot_id += 1
 		if not prepared.ok:
 			_close_game(connection,"map preparation failed",now)
 			return
-		_streams[id] = {"phase":"prepare","started":now,"job":prepared.job,"sender":null,"end_job":null,
-			"welcome":admitted.welcome,"pending":[],"changes":0,"bytes":0,"delta_sender":null,"delta_packet":null,
-			"map_sequence":simulation.data.map_sequence,"barrier_sequence":-1,"end_packet":null,"bulk_packet":null,"latest_snapshot":null}
+		_streams[id] = _new_stream(prepared.job,admitted.welcome)
+		return
+	# Ordered old-epoch frames can still be in TCP when a trusted reset starts.
+	if packet.epoch < simulation.epoch:
+		if packet.kind in [P.Kind.INPUT_BATCH,P.Kind.PLAYER_REQUEST,P.Kind.MAP_READY,P.Kind.CHAT]: return
+		_close_game(connection,"invalid client packet direction",now)
 		return
 	if packet.kind == P.Kind.MAP_READY:
 		if not _streams.has(id) or _streams[id].phase != "waiting" or not registry.accept_ready(connection,packet):
 			_close_game(connection,"invalid map readiness",now)
 			return
 		var actor := simulation.get_actor(id)
-		if registry.session_view(id).role == 0 and actor.team == 2:
+		if registry.session_view(id).role == 0 and actor.team == 2 and _spawn_teams.get(id,-1) != 2:
 			var counts := [0,0]
 			for other: SharedPlayerState in simulation.actors.values():
 				if other.connected and other.team < 2: counts[other.team] += 1
-			var spawned := simulation.spawn_actor(id,0 if counts[0] <= counts[1] else 1)
+			var preferred: int = _spawn_teams.get(id,-1)
+			var spawned := simulation.spawn_actor(id,preferred if preferred in [0,1] else (0 if counts[0] <= counts[1] else 1))
 			if not spawned.ok:
 				_close_game(connection,"spawn unavailable",now)
 				return
 		registry.set_generation(id,actor.spawn_generation)
 		_inputs[id].reset(simulation.epoch,actor.spawn_generation,simulation.tick,actor.consumed_input_sequence)
 		_streams[id].phase = "live"
+		_spawn_teams.erase(id)
 		_streams[id].sender.cancel()
 		_streams[id].sender = null
 		return
@@ -177,6 +288,7 @@ func _game_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) 
 				_totals.input_rejections += 1
 				_close_game(connection,"invalid input stream",now)
 		P.Kind.CHAT: _chat(id,packet,now)
+		P.Kind.PLAYER_REQUEST: _player_request(id,packet,now)
 		_: _close_game(connection,"invalid client packet direction",now)
 
 func _bulk_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) -> void:
@@ -188,12 +300,26 @@ func _bulk_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) 
 		return
 	var admitted := registry.admit_bulk(connection,packet,now)
 	_pending_bulk.erase(connection)
-	if not admitted.ok: map_transport.close(connection,1008,"bulk HELLO rejected")
+	if not admitted.ok and not _retire_bulk_hello(connection,packet,now): map_transport.close(connection,1008,"bulk HELLO rejected")
+
+func _retire_bulk_hello(connection: int, packet: P.Packet, now: int) -> bool:
+	var digest := registry.validated_bulk_digest(packet)
+	if digest.size() != 32: return false
+	var crypto := Crypto.new()
+	for index in _retired_bulk_capabilities.size():
+		var capability: Dictionary = _retired_bulk_capabilities[index]
+		if now >= capability.expires or not crypto.constant_time_compare(digest,capability.digest): continue
+		var view := registry.session_view(capability.owner)
+		if view.is_empty() or view.game == 0: return false
+		_retired_bulk_capabilities.remove_at(index) # One-use idle retirement, no map access.
+		_retired_bulks[connection] = {"owner":capability.owner,"expires":now+JOIN_TIMEOUT_MS}
+		return true
+	return false
 
 func _loading_count() -> int:
 	var count := 0
 	for stream: Dictionary in _streams.values():
-		if stream.phase != "live": count += 1
+		if stream.phase not in ["live","queued"]: count += 1
 	return count
 
 func _release_stream(stream: Dictionary) -> void:
@@ -209,6 +335,12 @@ func _close_game(connection: int, reason: String, now: int) -> void:
 		if detached.ok and detached.close_bulk != 0: map_transport.close(detached.close_bulk,1000,"paired owner disconnected")
 		simulation.disconnect_actor(id)
 		_inputs.erase(id)
+		_shot_ticks.erase(id)
+		_spawn_teams.erase(id)
+		for bulk_id: int in _retired_bulks.keys():
+			if _retired_bulks[bulk_id].owner == id:
+				map_transport.close(bulk_id,1000,"retired owner disconnected")
+				_retired_bulks.erase(bulk_id)
 		if _streams.has(id):
 			_release_stream(_streams[id])
 			_streams.erase(id)
@@ -222,6 +354,16 @@ func _poll_stream(id: int, now: int) -> void:
 	if s.phase != "live" and now-s.started >= JOIN_TIMEOUT_MS:
 		_close_game(view.game,"map join timeout",now)
 		return
+	if s.phase == "queued":
+		if _loading_count() >= MAX_JOINS: return
+		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id)
+		_next_snapshot_id += 1
+		if not prepared.ok:
+			_close_game(view.game,"reset map preparation failed",now)
+			return
+		s.job = prepared.job
+		s.phase = "prepare"
+		s.map_sequence = simulation.data.map_sequence
 	if s.phase == "prepare":
 		var progress: Dictionary = s.job.advance(2)
 		if not progress.ok:
@@ -299,8 +441,16 @@ func _poll_stream(id: int, now: int) -> void:
 			registry.set_barrier(id,s.end_packet)
 			s.end_packet = null
 			s.phase = "waiting"
-	if s.phase == "live" and s.pending.is_empty() and s.delta_sender == null and s.latest_snapshot != null:
-		if game_transport.send(view.game,s.latest_snapshot).ok: s.latest_snapshot = null
+	if s.phase == "live" and s.pending.is_empty() and s.delta_sender == null:
+		for work in range(2):
+			if s.event_packets.is_empty(): break
+			var queued: Dictionary = s.event_packets[0]
+			if not game_transport.send_prepared(view.game,queued.frame).ok: break
+			s.event_packets.pop_front()
+			s.event_bytes -= queued.bytes
+		if s.event_packets.is_empty() and s.latest_snapshot != null:
+			var sent: Dictionary = game_transport.send_prepared(view.game,s.latest_snapshot) if s.latest_snapshot is P.FrozenFrame else game_transport.send(view.game,s.latest_snapshot)
+			if sent.ok: s.latest_snapshot = null
 
 func _transaction_bytes(transaction: Dictionary) -> int:
 	return transaction.changes.size()*15+ceili(float(transaction.changes.size())/P.MAX_CHANGES)*80
@@ -313,32 +463,51 @@ func step_once() -> bool:
 	for id: int in _inputs.keys():
 		var actor := simulation.get_actor(id)
 		if actor == null: continue
+		# Authored server policy: ready playing actors respawn after the 180-tick
+		# death delay. A loading/disconnected/spectator owner cannot spawn here.
+		if actor.connected and actor.team < 2 and actor.health <= 0 and actor.respawn_tick >= 0 \
+				and next_tick >= actor.respawn_tick and _streams.has(id) and _streams[id].phase == "live":
+			simulation.spawn_actor(id,actor.team)
 		if actor.spawn_generation != _inputs[id].generation:
 			registry.set_generation(id,actor.spawn_generation)
+			_request_intents[id] = 0
+			_shot_ticks.erase(id)
 			_inputs[id].reset(simulation.epoch,actor.spawn_generation,simulation.tick,actor.consumed_input_sequence)
 		var taken: Dictionary = _inputs[id].take(next_tick)
 		if not taken.ok:
 			_close_game(registry.session_view(id).game,"input clock needs resync",now)
 			continue
-		if taken.clear_controls: simulation.clear_controls(id)
-		if taken.command != null: commands[id] = taken.command
-	simulation.step_fixed(commands)
+		if taken.clear_controls:
+			simulation.clear_controls(id)
+			_shot_ticks.erase(id)
+		if taken.command != null:
+			commands[id] = taken.command
+			_shot_ticks[id] = mini(taken.input_tick,simulation.tick)
+	simulation.step_fixed(commands,_shot_ticks)
 	if simulation.tick != next_tick: return false
 	simulation.data.last_tick = simulation.tick
 	for id: int in _inputs:
 		var actor := simulation.get_actor(id)
 		if actor != null and actor.spawn_generation != _inputs[id].generation:
 			registry.set_generation(id,actor.spawn_generation)
+			_request_intents[id] = 0
+			_shot_ticks.erase(id)
 			_inputs[id].reset(simulation.epoch,actor.spawn_generation,simulation.tick,actor.consumed_input_sequence)
 	_totals.steps += 1
-	for transaction: Dictionary in simulation.drain_transactions():
+	var committed := simulation.drain_transactions()
+	var history_receipts: Array[Dictionary] = []
+	var history_reset := false
+	for transaction: Dictionary in committed:
 		if transaction.get("resync_required",false):
+			history_reset = true
 			for id: int in _streams.keys(): _close_game(registry.session_view(id).game,"map journal requires baseline",now)
 			_totals.map_resyncs += 1
 			if simulation.has_method("acknowledge_map_resync"): simulation.acknowledge_map_resync()
 			break
+		history_receipts.append(transaction)
 		for id: int in _streams.keys():
 			var s: Dictionary = _streams[id]
+			if s.phase == "queued": continue # Its immutable baseline has not started yet.
 			if transaction.map_sequence <= s.map_sequence: continue
 			var bytes := _transaction_bytes(transaction)
 			if s.pending.size() >= TRANSFER.MAX_TRANSACTIONS or s.changes+transaction.changes.size() > TRANSFER.MAX_BUFFERED_CHANGES or s.bytes+bytes > TRANSFER.MAX_BUFFERED_BYTES:
@@ -347,16 +516,66 @@ func step_once() -> bool:
 			s.pending.append(transaction)
 			s.changes += transaction.changes.size()
 			s.bytes += bytes
-	# Authoritative effects will be handled by the explicit event codec/replica.
-	simulation.drain_events()
+	_record_hit_frame(history_receipts,history_reset)
+	_route_events(simulation.drain_events(),now)
 	if simulation.tick%3 == 0:
-		for id: int in _streams:
+		var shared: CODEC.SharedFrame = null
+		if not _snapshot_factory.is_valid():
+			for id: int in _streams:
+				if _streams[id].phase != "live": continue
+				var prepared := CODEC.prepare_shared(simulation.snapshot_for(id))
+				if prepared.ok: shared = prepared.frame
+				break
+		for id: int in _streams.keys():
 			if _streams[id].phase != "live": continue
-			var packet: Variant = _snapshot_factory.call(simulation.snapshot_for(id)) if _snapshot_factory.is_valid() else _full_snapshot(id)
-			if packet is P.Packet:
+			var packet: Variant = null
+			if _snapshot_factory.is_valid(): packet = _snapshot_factory.call(simulation.snapshot_for(id))
+			else:
+				var prepared := P.prepare_state(shared,simulation.get_actor(id))
+				if prepared.ok: packet = prepared.frame
+				else: _close_game(registry.session_view(id).game,"state serialization failed",now)
+			if (packet is P.Packet or packet is P.FrozenFrame) and _streams.has(id):
 				_streams[id].latest_snapshot = packet # Only unsent state is replaceable.
 				_totals.snapshots += 1
 	return true
+
+func _rewind_query(request_tick: int, closed_tick: int) -> Dictionary:
+	return hit_history.query_at(request_tick,closed_tick)
+
+func _record_hit_frame(receipts: Array[Dictionary], reset_required: bool) -> void:
+	var actors: Array[SharedPlayerState] = []
+	actors.assign(simulation.actors.values())
+	if reset_required or hit_history.get_stats().status != "recording":
+		if not hit_history.reset(simulation.epoch,simulation.data).ok: return
+		hit_history.record_frame(simulation.tick,simulation.data,actors,[])
+	elif not hit_history.record_frame(simulation.tick,simulation.data,actors,receipts).ok:
+		# The old window is invalid. A fresh baseline authorizes only its own tick.
+		if hit_history.reset(simulation.epoch,simulation.data).ok: hit_history.record_frame(simulation.tick,simulation.data,actors,[])
+
+func _route_events(events: Array[Dictionary], now: int) -> void:
+	for event: Dictionary in events:
+		if event.get("resync_required",false):
+			for id: int in _streams.keys(): _close_game(registry.session_view(id).game,"event journal requires baseline",now)
+			return
+	if events.is_empty(): return
+	var common := EVENTS.prepare_shared(simulation.epoch,events)
+	if not common.ok:
+		for id: int in _streams.keys(): _close_game(registry.session_view(id).game,"event serialization failed",now)
+		return
+	for id: int in _streams.keys():
+		var s: Dictionary = _streams[id]
+		if s.phase != "live": continue
+		var prepared := P.prepare_events(common.events,id)
+		if not prepared.ok:
+			_close_game(registry.session_view(id).game,"event serialization failed",now)
+			continue
+		for frame: P.FrozenFrame in prepared.frames:
+			var bytes: int = frame.bytes().size()
+			if s.event_packets.size() >= MAX_EVENT_FRAMES or s.event_bytes+bytes > MAX_EVENT_BYTES:
+				_close_game(registry.session_view(id).game,"event queue requires baseline",now)
+				break
+			s.event_packets.append({"frame":frame,"bytes":bytes})
+			s.event_bytes += bytes
 
 func _full_snapshot(id: int) -> BlockfieldProtocol.Packet:
 	var converted := CODEC.from_snapshot(simulation.snapshot_for(id))
@@ -401,6 +620,27 @@ func _chat(id: int, packet: BlockfieldProtocol.Packet, now: int) -> void:
 		if not game_transport.send(registry.session_view(recipient).game,outgoing).ok:
 			_close_game(registry.session_view(recipient).game,"chat backpressure",now)
 	_totals.chat += 1
+
+func _player_request(id: int, packet: BlockfieldProtocol.Packet, now: int) -> void:
+	var actor := simulation.get_actor(id)
+	if packet.epoch == simulation.epoch and packet.sequence < actor.spawn_generation: return
+	if packet.epoch != simulation.epoch or packet.sequence != actor.spawn_generation or packet.tick > simulation.tick+INPUTS.MAX_FUTURE_TICKS \
+			or packet.tick < maxi(0,simulation.tick-INPUTS.MAX_LATE_TICKS) or packet.payload.request_sequence != int(_request_intents.get(id,0))+1:
+		_close_game(registry.session_view(id).game,"invalid player request ownership",now)
+		return
+	var times: Array = _request_times.get(id,[])
+	while not times.is_empty() and now-int(times[0]) >= 5000: times.pop_front()
+	if times.size() >= 16:
+		_close_game(registry.session_view(id).game,"player request rate exceeded",now)
+		return
+	times.append(now)
+	_request_times[id] = times
+	_request_intents[id] = packet.payload.request_sequence
+	if packet.payload.action == 0:
+		if registry.session_view(id).role == 1 and packet.payload.value < 2: return
+		simulation.set_team(id,packet.payload.value)
+		if actor.team < 2 and actor.health <= 0 and actor.respawn_tick < 0: simulation.spawn_actor(id,actor.team)
+	else: simulation.set_block_color(id,packet.payload.value)
 
 func get_stats() -> Dictionary:
 	return {"running":running,"tick":simulation.tick if simulation != null else -1,"registry":registry.get_stats(),"loading":_loading_count(),

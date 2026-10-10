@@ -76,11 +76,13 @@ func _run() -> void:
 	var mono:=audio.play_local("Weapons/DryFire",1,Vector3(.4,-.3,.5))
 	check(mono is AudioStreamPlayer3D,"local mono offset retains spatial pan")
 	if mono!=null:
+		check(mono.playback_type==AudioServer.PLAYBACK_TYPE_STREAM,"source spatial voice uses Godot stream mixer on Web")
 		check(mono.position.is_equal_approx(Vector3(.4,-.3,-.5)),"OpenAL listener-relative forward maps to -GodotZ")
 		check(mono.attenuation_model==AudioStreamPlayer3D.ATTENUATION_DISABLED,"local mono has no distance falloff")
 	var stereo:=audio.play_spatial("Weapons/Rifle/FireStereo",Vector3(0,0,-20),1,4)
 	check(stereo is AudioStreamPlayer,"stereo world layer preserves two channels and avoids panning")
 	if stereo!=null:check(is_equal_approx(db_to_linear(stereo.volume_db),.2),"stereo world layer distance gain")
+	if stereo!=null:check(stereo.playback_type==AudioServer.PLAYBACK_TYPE_STREAM,"source stereo voice uses same Web mixer")
 	var world_mono:=audio.play_spatial("Weapons/DryFire",Vector3(0,0,-20),1,4)
 	check(world_mono is AudioStreamPlayer3D,"world mono remains spatial")
 	if world_mono!=null:

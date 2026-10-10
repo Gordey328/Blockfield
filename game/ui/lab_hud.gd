@@ -63,6 +63,8 @@ var _palette: ColorPickerButton
 var _native_palette: LabPalette
 var _team_buttons: Array[Button] = []
 var _spawn_team: OptionButton
+var _network_menu: Control
+const NETWORK_MENU=preload("res://ui/network_menu.gd")
 var _team_metadata_cache: Array = []
 const LANGUAGE=preload("res://presentation/openspades_localization.gd")
 
@@ -135,7 +137,7 @@ func _create_hud() -> void:
 	_status_effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_status_effects.setup(session,player)
 	_hud.add_child(_status_effects)
-	var top:=_label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
+	var top:=_ui_label("BLOCKFIELD  /  МУЛЬТИПЛЕЕР","BLOCKFIELD  /  MULTIPLAYER",18) if _is_network() else _label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
 	top.position=Vector2(26,20)
 	_hud.add_child(top)
 	_mode=_label("",13,Color("abc0c6"))
@@ -265,6 +267,11 @@ func _create_menu() -> void:
 	for side in ["left","right"]:margin.add_theme_constant_override("margin_"+side,52)
 	for side in ["top","bottom"]:margin.add_theme_constant_override("margin_"+side,30)
 	_menu.add_child(margin)
+	if _is_network():
+		_network_menu=NETWORK_MENU.new()
+		margin.add_child(_network_menu)
+		_network_menu.setup(self,main,session,player)
+		return
 	var layout:=VBoxContainer.new()
 	layout.add_theme_constant_override("separation",14)
 	margin.add_child(layout)
@@ -286,6 +293,9 @@ func _create_menu() -> void:
 	_build_world(_tab(tabs,"Мир и режимы"))
 	_build_settings(_tab(tabs,"Настройки"))
 	_build_checks(_tab(tabs,"Проверка"))
+	var multiplayer:=_tab(tabs,"Мультиплеер","Multiplayer")
+	multiplayer.add_child(_ui_label("Играйте с другими игроками.","Play with other players.",20))
+	multiplayer.add_child(_ui_button("Мультиплеер →","Multiplayer →",func():main.open_network_game()))
 	var footer:=HBoxContainer.new()
 	footer.add_theme_constant_override("separation",16)
 	layout.add_child(footer)
@@ -298,13 +308,14 @@ func _create_menu() -> void:
 	fullscreen.set_meta("lab_window","fullscreen")
 	footer.add_child(fullscreen)
 
-func _tab(tabs: TabContainer, title: String) -> VBoxContainer:
+func _tab(tabs: TabContainer, title: String,english: String="") -> VBoxContainer:
 	var panel:=MarginContainer.new()
 	panel.name=title
 	panel.set_meta("lab_title",title)
+	if not english.is_empty():panel.set_meta("ui_title_ru",title);panel.set_meta("ui_title_en",english)
 	for side in ["left","right","top","bottom"]:panel.add_theme_constant_override("margin_"+side,20)
 	tabs.add_child(panel)
-	tabs.set_tab_title(tabs.get_tab_count()-1,LANGUAGE.lab(title))
+	tabs.set_tab_title(tabs.get_tab_count()-1,_ui(title,english) if not english.is_empty() else LANGUAGE.lab(title))
 	var scroll:=ScrollContainer.new()
 	scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
@@ -543,10 +554,7 @@ func _process(delta: float) -> void:
 		var following:=session.get_target(player.followed_target_id)
 		_state_hint.text+=str(following.get("name",""))+"\n"+_ui("Прыжок: сменить камеру · Перезарядка: перестать следить","Jump: change camera · Reload: unfollow")
 	elif session.team>=2:_state_hint.text=_ui("Наблюдатель · Атака / альтернативная атака: выбрать солдата\nПрыжок / присесть: вверх / вниз","Spectator · Attack / alternate attack: follow a player\nJump / crouch: move up / down")
-	_intel_icon.visible=false
-	if session.mode=="ctf":
-		for flag in session.ctf_flags:
-			if int(flag.carrier)==0:_intel_icon.visible=live;_intel_icon.modulate=Color(1,1,1,absf(sin(session.session_time*2)))
+	_update_intel_indicator(live)
 	var info:=session.get_weapon_info()
 	var stock:=session.reserve if session.current_tool==2 else (session.grenades if session.current_tool==3 else session.blocks)
 	var weapon_name:=OpenSpadesLocalization.text(str(info.name),"Client").to_upper()
@@ -593,6 +601,10 @@ func _process(delta: float) -> void:
 func _build_reason(reason: String) -> String:
 	var messages: Dictionary={"No block in view":"Нет блока под прицелом","Outside the map":"За границами карты","Out of reach":"Слишком далеко","Insufficient blocks":"Недостаточно блоков","Tool is cooling down":"Инструмент ещё не готов","The line has no support":"У линии нет опоры","Bedrock cannot be changed":"Нижний слой карты нельзя менять","Block intersects player":"Блок пересекает игрока","Block is occupied":"Место занято"}
 	return str(messages.get(reason,reason)) if _is_ru() else reason
+
+func _update_intel_indicator(live: bool) -> void:
+	_intel_icon.visible=live and session.mode=="ctf" and session.is_local_intel_carrier()
+	if _intel_icon.visible:_intel_icon.modulate=Color(1,1,1,absf(sin(session.session_time*2)))
 
 func _update_hottracked_name() -> void:
 	_name_under_crosshair.text=""
@@ -727,6 +739,9 @@ func open_chat(team_only: bool=false) -> void:
 func _close_chat() -> void:_sync_controls()
 
 func _send_chat(message: String, team_only: bool=false) -> void:
+	if _is_network():
+		_send_network_chat(message,team_only)
+		return
 	if main.get("console_service")!=null:
 		var result: Dictionary=main.console_service.execute(message)
 		if bool(result.get("handled",false)):
@@ -747,11 +762,48 @@ func _send_chat(message: String, team_only: bool=false) -> void:
 	_chat.receive(message,str(main.player_name),team_only,session.team)
 	chat_sound_requested.emit()
 
-func add_event(event: Dictionary) -> void:
-	if str(event.get("type",""))=="reset":
-		_events.clear()
+func _is_network() -> bool:
+	return main!=null and main.get("network_mode")==true
+
+func _send_network_chat(message: String,team_only: bool) -> void:
+	if message.begins_with("/"):
+		var parts:=message.substr(1).split(" ",false)
+		var command:=parts[0].to_lower() if not parts.is_empty() else ""
+		if command=="help":
+			_chat.receive("/help /team blue|green|spectator; /cvars [prefix], /get name, /set name value, /reset name|all",_ui("Консоль","Console"))
+			return
+		if command in ["restock","mode"] or (command=="reset" and parts.size()==1):
+			_chat.receive(_ui("Эта команда доступна на локальном полигоне.","This command is available in the offline lab."),_ui("Консоль","Console"))
+			return
+		var console: Variant=main.get("console_service")
+		if console!=null:
+			var result: Dictionary=console.execute(message)
+			if bool(result.get("handled",false)):
+				if not str(result.get("message","")).is_empty():_chat.receive(str(result.message),_ui("Консоль","Console"))
+				return
+		_chat.receive(_ui("Неизвестная команда.","Unknown command."),_ui("Консоль","Console"))
+		return
+	var client: Variant=main.get("network_client")
+	if client==null or not bool(client.send_chat(message,team_only)):_chat.receive(_ui("Сообщение не отправлено.","Message was not sent."),_ui("Сеть","Network"))
+
+func clear_match_feedback() -> void:
+	_events.clear()
+	_hit_time=0.0
+	_hit_friendly=false
+	_follow_aim_state=0.0
+	_follow_aim_target=-1
+	_target_shot_ages.clear()
+	if _status_effects!=null:
 		_status_effects.hurt_items.clear()
 		_status_effects.hurt_sprites.clear()
+		_status_effects._hurt_elapsed=10.0
+		_status_effects._last_territory=-1
+		_status_effects._last_territory_time=-10.0
+	if _feed!=null:_feed.clear()
+
+func add_event(event: Dictionary) -> void:
+	if str(event.get("type",""))=="reset":
+		clear_match_feedback()
 		_chat.receive(_ui("Полигон сброшен","Lab reset"),_ui("Полигон","Lab"))
 		return
 	var entry:=event.duplicate(true)
@@ -784,6 +836,9 @@ func _update_feed() -> void:
 
 func _kill_cause(event: Dictionary) -> String:
 	var part:=str(event.get("part",""))
+	if part=="team_change":return _ui("Смена команды","Team change")
+	if not bool(event.get("weapon_known",true)) and part not in ["head","melee","grenade","fall"]:
+		return _ui("Оружие","Weapon") if part=="weapon" else _ui("Убийство","Kill")
 	var cause: String={"head":"Headshot","melee":"Melee","grenade":"Grenade","fall":"Fall"}.get(part,["Rifle","SMG","Shotgun"][clampi(int(event.get("weapon",0)),0,2)])
 	return OpenSpadesLocalization.text(cause,"Client")
 
@@ -818,6 +873,7 @@ func _translate_nodes(node: Node) -> void:
 		for index in node.get_tab_count():
 			var panel: Control=node.get_tab_control(index)
 			if panel.has_meta("lab_title"):node.set_tab_title(index,LANGUAGE.lab(str(panel.get_meta("lab_title"))))
+			if panel.has_meta("ui_title_ru"):node.set_tab_title(index,_ui(str(panel.get_meta("ui_title_ru")),str(panel.get_meta("ui_title_en"))))
 	if node is OptionButton and node.has_meta("lab_items"):
 		var texts: Array=node.get_meta("lab_items")
 		for index in texts.size():node.set_item_text(index,LANGUAGE.lab(str(texts[index])))
@@ -1036,7 +1092,7 @@ func _update_reticle(delta: float) -> void:
 	var aim:=player.get_aim_down_state()
 	if followed:
 		var target:=session.get_target(player.followed_target_id)
-		valid=not target.is_empty() and bool(target.get("alive",true)) and float(target.get("health",100))>0.0 and int(target.get("team",2))<2
+		valid=not target.is_empty() and bool(target.get("alive",true)) and (not bool(target.get("health_known",true)) or float(target.get("health",100))>0.0) and int(target.get("team",2))<2
 		tool=int(target.get("tool",2))
 		if _follow_aim_target!=player.followed_target_id:
 			_follow_aim_target=player.followed_target_id

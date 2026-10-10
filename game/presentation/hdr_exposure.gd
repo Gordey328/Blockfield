@@ -7,12 +7,18 @@ const REDUCE = preload("res://presentation/hdr_reduce.gdshader")
 const GAIN = preload("res://presentation/hdr_gain.gdshader")
 const PRESENT = preload("res://presentation/hdr_present.gdshader")
 const BLOOM = preload("res://presentation/hdr_bloom.gd")
+const NORMALIZE = preload("res://presentation/hdr_normalize.gdshader")
 const DEFAULTS: Dictionary = {"min_ev":-1.5,"max_ev":0.5,"speed":1.0,"gamma":2.2,"bloom":true}
 var enabled: bool = false
 var automatic_update: bool = true
 var max_meter_size: Vector2i = Vector2i(128,128)
 var _options: Dictionary = DEFAULTS.duplicate()
 var _source: Texture2D
+var _raw_source: Texture2D
+var _compatibility_encoded: bool = false
+var _normalization: SubViewport
+var _normalization_material: ShaderMaterial
+var _normalization_bytes: int = 0
 var _levels: Array[SubViewport] = []
 var _logical_levels: Array[Vector2i] = []
 var _gains: Array[SubViewport] = []
@@ -45,13 +51,47 @@ func _process(dt: float) -> void:
 	if automatic_update and enabled:
 		advance(dt)
 
-func setup(source_texture: Texture2D) -> void:
-	_source = source_texture
+func setup(source_texture: Texture2D, compatibility_encoded: bool = false) -> void:
+	_raw_source = source_texture
+	_compatibility_encoded = compatibility_encoded
+	_prepare_linear_source()
 	_present.set_shader_parameter("scene_texture",_source)
 	_build_levels()
 
-func set_source_texture(source_texture: Texture2D) -> void:
-	setup(source_texture)
+func set_source_texture(source_texture: Texture2D, compatibility_encoded: bool = false) -> void:
+	setup(source_texture,compatibility_encoded)
+
+func _prepare_linear_source() -> void:
+	_normalization_bytes = 0
+	_source = _raw_source
+	if not _compatibility_encoded or _raw_source == null:
+		if _normalization != null:
+			remove_child(_normalization)
+			_normalization.queue_free()
+			_normalization = null
+			_normalization_material = null
+		return
+	if _normalization == null:
+		_normalization = SubViewport.new()
+		_normalization.disable_3d = true
+		_normalization.use_hdr_2d = true
+		_normalization.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		add_child(_normalization)
+		_normalization_material = ShaderMaterial.new()
+		_normalization_material.shader = NORMALIZE
+		var rect := ColorRect.new()
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rect.material = _normalization_material
+		_normalization.add_child(rect)
+	_normalization.size = Vector2i(maxi(2,_raw_source.get_width()),maxi(2,_raw_source.get_height()))
+	_normalization.get_child(0).size = Vector2(_normalization.size)
+	_normalization_material.set_shader_parameter("source_texture",_raw_source)
+	_normalization_bytes = _normalization.size.x*_normalization.size.y*8
+	_source = _normalization.get_texture()
+
+func get_linear_texture() -> Texture2D:
+	## Shared pre-filter radiance; already-linear inputs are returned unchanged.
+	return _source
 
 func set_options(values: Dictionary) -> Dictionary:
 	var proposed: Dictionary = _options.duplicate()
@@ -169,6 +209,10 @@ func _build_levels() -> void:
 func set_enabled(value: bool) -> void:
 	enabled = value
 	_present.set_shader_parameter("hdr_enabled",enabled)
+	# The visible disabled path remains an ordinary encoded scene copy.
+	_present.set_shader_parameter("scene_texture",_source if enabled else _raw_source)
+	if _normalization != null:
+		_normalization.render_target_update_mode = SubViewport.UPDATE_ALWAYS if enabled else SubViewport.UPDATE_DISABLED
 	for target: SubViewport in _levels:
 		target.render_target_update_mode = SubViewport.UPDATE_ALWAYS if enabled else SubViewport.UPDATE_DISABLED
 	for target: SubViewport in _gains:
@@ -210,7 +254,7 @@ func get_stats() -> Dictionary:
 	var sizes: Array[Vector2i] = []
 	for target: SubViewport in _levels:
 		sizes.append(target.size)
-	return {"enabled":enabled,"levels":sizes,"logical_levels":_logical_levels.duplicate(),"gain_targets":_gains.size(),"updates":_updates,"color_texture_bytes":_estimated_bytes,"meter_budget":max_meter_size,"hdr_required":true,"options":_options.duplicate(),"bloom":_bloom.get_stats() if _bloom != null else {}}
+	return {"enabled":enabled,"levels":sizes,"logical_levels":_logical_levels.duplicate(),"gain_targets":_gains.size(),"updates":_updates,"color_texture_bytes":_estimated_bytes+_normalization_bytes,"normalization_color_bytes":_normalization_bytes,"normalization_size":_normalization.size if _normalization != null else Vector2i.ZERO,"input_encoding":"compatibility_encoded" if _compatibility_encoded else "linear","meter_budget":max_meter_size,"hdr_required":true,"options":_options.duplicate(),"bloom":_bloom.get_stats() if _bloom != null else {}}
 
 static func preprocess_brightness(color: Color) -> float:
 	var brightness: float = maxf(maxf(color.r,color.g),color.b)
