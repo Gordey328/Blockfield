@@ -33,6 +33,12 @@ Graphics controls expose optional float HDR and its native minimum/maximum/adapt
 
 ## Default UI controls
 
+Phones use an automatically enabled left movement stick, separate right look region,
+fire/alternate/reload/jump/crouch/sprint buttons, tool selection, map, camera and menu.
+Settings → Mobile controls provides Auto/On/Off and saves the choice. Menu/HUD scaling
+supports landscape and portrait; input ownership/cleanup and regression evidence are
+recorded in [mobile controls](mobile-controls.md).
+
 `N` map; `M` four map scales; hold `Tab` scoreboard; `T` global local chat; `Y` team local chat; `H` expanded chat log; `Esc` cancel chat/close log/open lab; `F6` HUD; `F7` statistics; `0` screenshot; `9` scene screenshot; `8` save VXL; `L` flashlight. Arrow keys select native block palette colors while the block tool is active; `E` takes RGB from the actual voxel ray. All actions are remappable in Settings. While editing chat/menu, gameplay controls are disabled and held actions released on transitions, including closing chat.
 
 Uploaded `.vxl` / data resource-pack `.zip` buttons call main import APIs. `hud.reload_resources()` refreshes original map/bullet/intel/hurt/TC textures through `OpenSpadesExtensions.texture()` after override changes. It does not execute uploaded source scripts.

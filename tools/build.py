@@ -90,9 +90,10 @@ def main():
     suites += [('client-schedule','tests/network/test_client_schedule.gd')]
     suites += [('client-input-clock','tests/network/test_client_input_clock.gd')]
     suites += [('map-backpressure','tests/network/test_map_backpressure.gd')]
+    suites += [('mobile-controls','tests/ui/test_mobile_controls.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','offline-lifecycle','source-input') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','offline-lifecycle','source-input','mobile-controls') else [])+['--script',str(path)],timeout=300)
     latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
     run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
                 '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)

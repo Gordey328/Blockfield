@@ -12,6 +12,11 @@ Iteration 1 delivers the offline client and local authoritative rules, including
 
 The complete frozen registered suite and Web/Linux exports passed. [Pages](https://gordey328.github.io/Blockfield/) metadata identifies clean source57; public PCK SHA256 matches the tested export (`835be72829cde3e26dbf1bd15aa67840f1014b364f343234b49d62a11fea0cb8`). The [matching server/Docker prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) was downloaded/hash-verified. Actual local exported clients completed both73/73 map barriers, rendered both CTF teams, delivered chat and performed a quick same-actor resume. Public Pages also loaded genuine Title.vxl without a server and retained an edited player name after reload. These are specific integration/publication results; row statuses remain bound to their full requirements. Browser download/fullscreen/audio/optional-effects/performance, Linux/container/public-WSS and sustained32-client capacity acceptance remain open. See [current status](status.md) and [acceptance gaps](acceptance-gaps.md).
 
+Mobile input addition (2026-10-10) supports existing movement/tool/UI paths without
+promoting complete parity rows: native touch component808/0, actual Main/HUD267/0,
+and local exported landscape/portrait render/gesture checks. The approved extra
+input adapter and its hardware acceptance limits are recorded in [mobile controls](mobile-controls.md).
+
 ## Player and combat
 
 | ID | Feature and acceptance requirement | Original evidence | Iteration | Status |

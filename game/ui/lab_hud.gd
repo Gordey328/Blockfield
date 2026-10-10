@@ -66,6 +66,17 @@ var _native_palette: LabPalette
 var _team_buttons: Array[Button] = []
 var _spawn_team: OptionButton
 var _network_menu: Control
+const MOBILE_CONTROLS=preload("res://ui/mobile_controls.gd")
+var mobile_controls: Control
+var touch_controls_mode:=0 # Auto / on / off, persisted with UI preferences.
+var _touch_device:=false
+var _focused:=true
+var _mobile_mouse_bindings: Dictionary={}
+var _desktop_scale:=Vector2i(1280,720)
+var _desktop_aspect:=Window.CONTENT_SCALE_ASPECT_KEEP
+var _desktop_emulation:=true
+var _touch_mode_choice: OptionButton
+var _hud_brand: Label
 const NETWORK_MENU=preload("res://ui/network_menu.gd")
 var _team_metadata_cache: Array = []
 const LANGUAGE=preload("res://presentation/openspades_localization.gd")
@@ -75,6 +86,12 @@ func setup(app: Node3D, local_session: LocalSession, local_player: BlockfieldPla
 	session=local_session
 	player=local_player
 	world=map_world
+	_desktop_scale=get_window().content_scale_size
+	_desktop_aspect=get_window().content_scale_aspect
+	_desktop_emulation=Input.emulate_mouse_from_touch
+	_touch_device=DisplayServer.is_touchscreen_available() or OS.has_feature("android") or OS.has_feature("ios")
+	if OS.has_feature("web"):
+		_touch_device=_touch_device or bool(JavaScriptBridge.eval("window.matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) < 800)"))
 	_hottracked_player=OpenSpadesHottrackedPlayer.new()
 	_hottracked_player.name="HottrackedPlayer"
 	add_child(_hottracked_player)
@@ -88,11 +105,16 @@ func setup(app: Node3D, local_session: LocalSession, local_player: BlockfieldPla
 	_load_ui_settings()
 	_create_hud()
 	_create_menu()
+	_create_mobile_controls()
 	# Loading/import/fullscreen failures must remain readable in the menu.
 	_alert_panel.reparent(_root)
 	_root.move_child(_alert_panel,_root.get_child_count()-1)
 	_connect_menu_sounds(_menu)
 	_load_ui_settings()
+	_update_mobile_layout()
+	get_window().size_changed.connect(_update_mobile_layout)
+	session.player_respawned.connect(_release_mobile_input)
+	world.map_loaded.connect(func(_map_name: String):_release_mobile_input())
 	session.match_event.connect(add_event)
 	session.changed.connect(_update_team_choices)
 	_update_team_choices()
@@ -143,6 +165,7 @@ func _create_hud() -> void:
 	_status_effects.setup(session,player)
 	_hud.add_child(_status_effects)
 	var top:=_ui_label("BLOCKFIELD  /  МУЛЬТИПЛЕЕР","BLOCKFIELD  /  MULTIPLAYER",18) if _is_network() else _label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
+	_hud_brand=top
 	top.position=Vector2(26,20)
 	_hud.add_child(top)
 	_mode=_label("",13,Color("abc0c6"))
@@ -268,6 +291,7 @@ func _create_menu() -> void:
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_menu.add_child(background)
 	var margin:=MarginContainer.new()
+	margin.set_meta("mobile_outer_margin",true)
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left","right"]:margin.add_theme_constant_override("margin_"+side,52)
 	for side in ["top","bottom"]:margin.add_theme_constant_override("margin_"+side,30)
@@ -283,11 +307,15 @@ func _create_menu() -> void:
 	var header:=HBoxContainer.new()
 	layout.add_child(header)
 	var brand:=_label("BLOCKFIELD",40)
+	brand.set_meta("mobile_brand",true)
 	brand.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	header.add_child(brand)
-	header.add_child(_label("OPENSPADES → GODOT\nРАЗРАБОТКА · ИТЕРАЦИЯ 1",13,Color("87a6ae")))
+	var badge:=_label("OPENSPADES → GODOT\nРАЗРАБОТКА · ИТЕРАЦИЯ 1",13,Color("87a6ae"))
+	badge.set_meta("mobile_hide",true)
+	header.add_child(badge)
 	layout.add_child(_label("Испытательный полигон",22,Color("afc9c5")))
 	var intro:=_label("Все оригинальные виды оружия и две команды. Локальная сессия — сервер не нужен.",15,Color("99b0b8"))
+	intro.set_meta("mobile_hide",true)
 	layout.add_child(intro)
 	var tabs:=TabContainer.new()
 	tabs.size_flags_vertical=Control.SIZE_EXPAND_FILL
@@ -306,8 +334,10 @@ func _create_menu() -> void:
 	layout.add_child(footer)
 	var start:=_button("ВОЙТИ НА ПОЛИГОН  →",func():set_menu_visible(false),true)
 	start.custom_minimum_size.x=300
+	start.set_meta("mobile_start",true)
 	footer.add_child(start)
 	var help:=_label("ЛКМ  действие    ПКМ  прицел / копать / линия\nF  вид от третьего лица    N  карта    Tab  счёт",13,Color("98b2b8"))
+	help.set_meta("mobile_hide",true)
 	footer.add_child(help)
 	var fullscreen:=_ui_button("Полный экран","Fullscreen",func():main.toggle_fullscreen())
 	fullscreen.set_meta("lab_window","fullscreen")
@@ -315,6 +345,7 @@ func _create_menu() -> void:
 
 func _tab(tabs: TabContainer, title: String,english: String="") -> VBoxContainer:
 	var panel:=MarginContainer.new()
+	panel.set_meta("mobile_tab_margin",true)
 	panel.name=title
 	panel.set_meta("lab_title",title)
 	if not english.is_empty():panel.set_meta("ui_title_ru",title);panel.set_meta("ui_title_en",english)
@@ -332,7 +363,8 @@ func _tab(tabs: TabContainer, title: String,english: String="") -> VBoxContainer
 
 func _build_arsenal(column: VBoxContainer) -> void:
 	column.add_child(_label("ОРУЖИЕ",13,Color("8ea7af")))
-	var weapons:=HBoxContainer.new()
+	var weapons:=GridContainer.new()
+	weapons.columns=3
 	column.add_child(weapons)
 	for entry in [["Винтовка",0],["Пистолет-пулемёт",1],["Дробовик",2]]:
 		var index:int=entry[1]
@@ -340,7 +372,8 @@ func _build_arsenal(column: VBoxContainer) -> void:
 		button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		weapons.add_child(button)
 	column.add_child(_label("ИНСТРУМЕНТЫ",13,Color("8ea7af")))
-	var tools:=HBoxContainer.new()
+	var tools:=GridContainer.new()
+	tools.columns=4
 	column.add_child(tools)
 	for entry in [["Лопата · 1",0],["Блоки · 2",1],["Оружие · 3",2],["Граната · 4",3]]:
 		var index:int=entry[1]
@@ -372,7 +405,8 @@ func _build_arsenal(column: VBoxContainer) -> void:
 
 func _build_soldiers(column: VBoxContainer) -> void:
 	column.add_child(_label("В оригинале один солдат с командной окраской.\nПроверяйте оружие, позы, попадания и состояние после смерти.",16))
-	var row:=HBoxContainer.new()
+	var row:=GridContainer.new()
+	row.columns=3
 	column.add_child(row)
 	for entry in [["Синяя команда",0],["Зелёная команда",1],["Наблюдатель",2]]:
 		var index:int=entry[1]
@@ -457,6 +491,14 @@ func _build_world(column: VBoxContainer) -> void:
 	column.add_child(_label("Лопата: ЛКМ бьёт блок, ПКМ копает три блока.\nБлоки: ЛКМ поставить, ПКМ удерживать и отпустить для линии.\nГраната: удерживайте ЛКМ для приготовления, отпустите для броска.",15,Color("a6bdc2")))
 
 func _build_settings(column: VBoxContainer) -> void:
+	column.add_child(_ui_label("Мобильное управление","Mobile controls",15))
+	_touch_mode_choice=OptionButton.new()
+	_touch_mode_choice.set_meta("ui_items_ru",["Авто","Включено","Выключено"])
+	_touch_mode_choice.set_meta("ui_items_en",["Auto","On","Off"])
+	for title in (_touch_mode_choice.get_meta("ui_items_ru") if _is_ru() else _touch_mode_choice.get_meta("ui_items_en")):_touch_mode_choice.add_item(title)
+	_touch_mode_choice.select(touch_controls_mode)
+	_touch_mode_choice.item_selected.connect(set_mobile_controls_mode)
+	column.add_child(_touch_mode_choice)
 	column.add_child(_label("Имя игрока",15))
 	var name_field:=LineEdit.new()
 	name_field.text=main.player_name
@@ -548,6 +590,7 @@ func _process(delta: float) -> void:
 	_update_alert()
 	_update_reticle(delta)
 	_stats.text=LANGUAGE.lab("%d HP   /   %d блоков   /   %d гранат")%[session.health,session.blocks,session.grenades]
+	if uses_mobile_controls():_stats.text="%d HP · %d B · %d G"%[session.health,session.blocks,session.grenades]
 	var live:=session.health>0 and session.team<2
 	_stats.visible=live
 	_ammo.visible=live
@@ -583,8 +626,8 @@ func _process(delta: float) -> void:
 	if _live!=null:_live.text=_ui("Карта: %s  ·  Чанки: %s\nОружие: %s  ·  Профиль: %s","Map: %s  ·  Chunks: %s\nWeapon: %s  ·  Profile: %s")%[world.map_name,stats.get("chunks",0),info.name,session.profile_version]
 	_build_cursor.enabled=_hud.is_visible_in_tree() and player.controls_enabled and live
 	_native_palette.visible=live and session.current_tool==LocalSession.Tool.BLOCK
-	_ammo.offset_left=-472 if _native_palette.visible else -380
-	_ammo.offset_right=-120 if _native_palette.visible else -28
+	_ammo.offset_left=-220 if uses_mobile_controls() else (-472 if _native_palette.visible else -380)
+	_ammo.offset_right=-16 if uses_mobile_controls() else (-120 if _native_palette.visible else -28)
 	if _palette!=null and not _palette.color.is_equal_approx(player.block_color):_palette.color=player.block_color
 	var preview:=player.get_build_preview()
 	_build_status.text=""
@@ -655,6 +698,9 @@ func _update_hottracked_name() -> void:
 		_name_under_crosshair.position=player.camera.unproject_position(eye)-Vector2(200,28)
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed and not _touch_device and touch_controls_mode==0:
+		_touch_device=true
+		_refresh_mobile_mode.call_deferred()
 	if session==null:return
 	if not _binding_action.is_empty():
 		if _capture_binding(event):get_viewport().set_input_as_handled()
@@ -690,9 +736,171 @@ func _input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func _sync_controls() -> void:
-	player.controls_enabled=not is_menu_open() and not _chat.is_open and not _chat.expanded
+	player.controls_enabled=_focused and visible and not is_menu_open() and not _chat.is_open and not _chat.expanded
+	var active:=uses_mobile_controls() and player.controls_enabled
+	if mobile_controls!=null:mobile_controls.set_enabled(active)
+	_set_mobile_mouse_bindings(active)
+	Input.emulate_mouse_from_touch=false if active else _desktop_emulation
 	LabInputBindings.release_actions()
-	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED if player.controls_enabled else Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED if player.controls_enabled and not uses_mobile_controls() else Input.MOUSE_MODE_VISIBLE
+
+func uses_mobile_controls() -> bool:
+	return touch_controls_mode==1 or (touch_controls_mode==0 and _touch_device)
+
+func set_mobile_controls_mode(mode: int) -> void:
+	touch_controls_mode=clampi(mode,0,2)
+	if _touch_mode_choice!=null:_touch_mode_choice.select(touch_controls_mode)
+	_save_ui_settings()
+	_refresh_mobile_mode()
+
+func _refresh_mobile_mode() -> void:
+	_release_mobile_input()
+	_update_mobile_layout()
+	_sync_controls()
+
+func _create_mobile_controls() -> void:
+	mobile_controls=MOBILE_CONTROLS.new()
+	mobile_controls.name="MobileControls"
+	mobile_controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(mobile_controls)
+	mobile_controls.setup(player,self)
+	mobile_controls.action_changed.connect(_mobile_action_changed)
+	mobile_controls.movement_changed.connect(func(axis: Vector2):player.touch_movement=axis)
+	mobile_controls.look_moved.connect(player.apply_mouse_motion)
+	mobile_controls.menu_requested.connect(func():set_menu_visible(true))
+	mobile_controls.set_enabled(false)
+
+func _mobile_action_changed(action: String,pressed: bool) -> void:
+	if not InputMap.has_action(action):return
+	var event:=InputEventAction.new()
+	event.action=action
+	event.pressed=pressed
+	event.strength=1.0 if pressed else 0.0
+	Input.parse_input_event(event)
+
+func _release_mobile_input() -> void:
+	if mobile_controls!=null:mobile_controls.release_all()
+	if player!=null:player.touch_movement=Vector2.ZERO
+
+func _set_mobile_mouse_bindings(active: bool) -> void:
+	# Input's global action state updates before a Control can consume a click.
+	# Filter physical mouse buttons while touch mode is active so forced desktop
+	# previews and emulated clicks cannot also fire the weapon underneath the HUD.
+	if active:
+		if not _mobile_mouse_bindings.is_empty():return
+		for action in InputMap.get_actions():
+			for event in InputMap.action_get_events(action):
+				if event is InputEventMouseButton:
+					if not _mobile_mouse_bindings.has(action):_mobile_mouse_bindings[action]=[]
+					_mobile_mouse_bindings[action].append(event)
+					InputMap.action_erase_event(action,event)
+	else:
+		for action in _mobile_mouse_bindings:
+			if not InputMap.has_action(action):continue
+			for event in _mobile_mouse_bindings[action]:
+				if not InputMap.action_has_event(action,event):InputMap.action_add_event(action,event)
+		_mobile_mouse_bindings.clear()
+
+func _update_mobile_layout() -> void:
+	if _menu==null:return
+	_release_mobile_input()
+	var mobile:=uses_mobile_controls()
+	var portrait:=get_window().size.y>get_window().size.x
+	var base:=Vector2i(480,854) if portrait else Vector2i(854,480)
+	var desired:=base if mobile else _desktop_scale
+	if get_window().content_scale_size!=desired:get_window().content_scale_size=desired
+	get_window().content_scale_aspect=Window.CONTENT_SCALE_ASPECT_EXPAND if mobile else _desktop_aspect
+	_adapt_mobile_menu(_menu,mobile,portrait)
+	_hud_brand.visible=not mobile
+	_mode.visible=not mobile
+	_weapon_icon.visible=not mobile
+	_feed.offset_left=-minf(float(desired.x)-32,340) if mobile else -560
+	_feed.offset_right=-16 if mobile else -28
+	_feed.size.y=100 if mobile else 200
+	_stats.add_theme_font_size_override("font_size",14 if mobile else 21)
+	_set_hud_rect(_stats,Rect2(16,-46,220,24) if mobile else Rect2(28,-84,430,40))
+	_ammo.add_theme_font_size_override("font_size",14 if mobile else 32)
+	_set_hud_rect(_ammo,Rect2(-220,-50,204,32) if mobile else Rect2(-380,-90,352,60))
+	_weapon_status.add_theme_font_size_override("font_size",12 if mobile else 16)
+	_set_hud_rect(_weapon_status,Rect2(-220,-18,204,18) if mobile else Rect2(-420,-30,392,25))
+	_set_hud_rect(_native_palette,Rect2(-100,-270,90,90) if mobile else Rect2(-100,-146,90,90))
+	_set_hud_rect(_intel_icon,Rect2(-265,-48,32,32) if mobile else Rect2(-280,-65,48,48))
+	_performance.add_theme_font_size_override("font_size",11 if mobile else 13)
+	_set_hud_rect(_performance,Rect2(16,-18,440,18) if mobile else Rect2(28,-30,750,25))
+	var width:=minf(640.0,float(desired.x)-32.0) if mobile else 640.0
+	_set_hud_rect(_state_hint,Rect2(-width*.5,-130,width,90))
+	_state_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	_set_hud_rect(_build_status,Rect2(-width*.5,-78,width,24) if mobile else Rect2(-260,-125,520,30))
+	_set_hud_rect(_results,Rect2(-width*.5,145,width,50))
+	_results.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	_apply_map_settings()
+
+func _set_hud_rect(control: Control,rectangle: Rect2) -> void:
+	# Offsets are relative to anchors; assigning position after a resize instead
+	# places bottom/center HUD controls above the visible screen.
+	control.offset_left=rectangle.position.x
+	control.offset_top=rectangle.position.y
+	control.offset_right=rectangle.end.x
+	control.offset_bottom=rectangle.end.y
+
+func _adapt_mobile_menu(node: Node,mobile: bool,portrait: bool) -> void:
+	if node.has_meta("mobile_hide"):node.visible=not mobile
+	if node is MarginContainer:
+		if node.has_meta("mobile_outer_margin"):
+			for side in ["left","right"]:node.add_theme_constant_override("margin_"+side,16 if mobile else 52)
+			for side in ["top","bottom"]:node.add_theme_constant_override("margin_"+side,12 if mobile else 30)
+		elif node.has_meta("mobile_tab_margin"):
+			for side in ["left","right","top","bottom"]:node.add_theme_constant_override("margin_"+side,8 if mobile else 20)
+	if node is GridContainer:
+		if not node.has_meta("desktop_columns"):node.set_meta("desktop_columns",node.columns)
+		node.columns=mini(2,int(node.get_meta("desktop_columns"))) if mobile and portrait else int(node.get_meta("desktop_columns"))
+	if node is TabContainer:
+		for style_name in ["tab_selected","tab_unselected","tab_hovered","tab_disabled"]:
+			if not node.has_meta("desktop_style_"+style_name):node.set_meta("desktop_style_"+style_name,node.get_theme_stylebox(style_name))
+			var original: StyleBox=node.get_meta("desktop_style_"+style_name)
+			var style: StyleBox=original.duplicate() if mobile else original
+			if mobile:style.content_margin_top=20;style.content_margin_bottom=20
+			node.add_theme_stylebox_override(style_name,style)
+	if node is Label:
+		if not node.has_meta("desktop_font"):node.set_meta("desktop_font",node.get_theme_font_size("font_size"))
+		var font:int=node.get_meta("desktop_font")
+		node.add_theme_font_size_override("font_size",mini(font,28) if mobile else font)
+		if node.get_parent() is VBoxContainer:
+			if not node.has_meta("desktop_wrap"):node.set_meta("desktop_wrap",node.autowrap_mode)
+			node.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART if mobile else node.get_meta("desktop_wrap")
+	if node is Button:
+		if not node.has_meta("desktop_minimum"):
+			node.set_meta("desktop_minimum",node.custom_minimum_size)
+			node.set_meta("desktop_clip",node.clip_text)
+			node.set_meta("desktop_horizontal",node.size_flags_horizontal)
+		node.custom_minimum_size=Vector2(0,60) if mobile else node.get_meta("desktop_minimum")
+		if node.has_meta("mobile_start"):
+			if mobile:node.custom_minimum_size.x=210
+			node.text=_ui("Играть  →","Play  →") if mobile else LANGUAGE.lab(str(node.get_meta("lab_text")))
+		node.clip_text=mobile or bool(node.get_meta("desktop_clip"))
+		node.size_flags_horizontal=Control.SIZE_EXPAND_FILL if mobile else node.get_meta("desktop_horizontal")
+		for style_name in ["normal","hover","pressed"]:
+			if not node.has_meta("desktop_style_"+style_name):node.set_meta("desktop_style_"+style_name,node.get_theme_stylebox(style_name))
+			var original: StyleBox=node.get_meta("desktop_style_"+style_name)
+			var style: StyleBox=original.duplicate() if mobile else original
+			if mobile:style.content_margin_left=10;style.content_margin_right=10;style.content_margin_top=10;style.content_margin_bottom=10
+			node.add_theme_stylebox_override(style_name,style)
+	if node is OptionButton:
+		var popup: PopupMenu=node.get_popup()
+		if not node.has_meta("desktop_popup_spacing"):
+			node.set_meta("desktop_popup_spacing",popup.get_theme_constant("v_separation"))
+			popup.set_meta("desktop_font_size",popup.get_theme_font_size("font_size"))
+		popup.add_theme_constant_override("v_separation",36 if mobile else node.get_meta("desktop_popup_spacing"))
+		popup.add_theme_font_size_override("font_size",18 if mobile else popup.get_meta("desktop_font_size"))
+	for child in node.get_children():_adapt_mobile_menu(child,mobile,portrait)
+
+func _exit_tree() -> void:
+	_release_mobile_input()
+	_set_mobile_mouse_bindings(false)
+	Input.emulate_mouse_from_touch=_desktop_emulation
+	if is_instance_valid(get_window()):
+		get_window().content_scale_size=_desktop_scale
+		get_window().content_scale_aspect=_desktop_aspect
 
 func set_menu_visible(enabled: bool) -> void:
 	if _menu==null:return
@@ -732,6 +940,7 @@ func is_hud_hidden() -> bool:return _hud_hidden
 func set_capture_visible(enabled: bool) -> void:
 	visible=enabled
 	_build_cursor.visible=enabled
+	_sync_controls()
 
 func reload_resources() -> void:
 	if _native_palette!=null:_native_palette.reload_resources()
@@ -902,6 +1111,12 @@ func _ui(ru: String,en: String) -> String:return ru if _is_ru() else en
 func _notification(what: int) -> void:
 	if what==NOTIFICATION_TRANSLATION_CHANGED and is_instance_valid(_root):
 		_translate_nodes(_root)
+	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_WM_WINDOW_FOCUS_OUT]:
+		_focused=false
+		if mobile_controls!=null:_sync_controls()
+	elif what in [NOTIFICATION_APPLICATION_FOCUS_IN,NOTIFICATION_WM_WINDOW_FOCUS_IN]:
+		_focused=true
+		if mobile_controls!=null:_sync_controls()
 
 func _translate_nodes(node: Node) -> void:
 	if node.has_meta("ui_ru"):node.set("text",_ui(str(node.get_meta("ui_ru")),str(node.get_meta("ui_en"))))
@@ -922,6 +1137,7 @@ func _translate_nodes(node: Node) -> void:
 	if node==_root:
 		_refresh_binding_labels()
 		_update_team_choices()
+		if _menu!=null:_adapt_mobile_menu(_menu,uses_mobile_controls(),get_window().size.y>get_window().size.x)
 
 func _ui_label(ru: String,en: String,size: int=15) -> Label:
 	var label:=_label(_ui(ru,en),size)
@@ -988,26 +1204,30 @@ func _load_ui_settings() -> void:
 		_map_weapon_icons=bool(config.get_value("ui","map_weapon_icons",true))
 		_map_player_colors=bool(config.get_value("ui","map_player_colors",true))
 		_hud_hidden=bool(config.get_value("ui","hidden",false))
+		touch_controls_mode=clampi(int(config.get_value("ui","touch_controls",0)),0,2)
 	_apply_map_settings()
 	_refresh_ui_controls()
 
 func _apply_map_settings() -> void:
 	if _map==null:return
-	_map.size=Vector2(_minimap_size,_minimap_size)
-	_map.offset_left=-_minimap_size-28
-	_map.offset_right=-28
-	_map.offset_top=24
-	_map.offset_bottom=24+_minimap_size
+	var map_size:=mini(_minimap_size,112) if uses_mobile_controls() else _minimap_size
+	var inset:=16 if uses_mobile_controls() else 28
+	var top: int=(184 if get_window().size.y>get_window().size.x else 86) if uses_mobile_controls() else 24
+	_map.size=Vector2(map_size,map_size)
+	_map.offset_left=-map_size-inset
+	_map.offset_right=-inset
+	_map.offset_top=top
+	_map.offset_bottom=top+map_size
 	_map.show_weapon_icons=_map_weapon_icons
 	_large_map.show_weapon_icons=_map_weapon_icons
 	_map.per_player_colors=_map_player_colors
 	_large_map.per_player_colors=_map_player_colors
-	_feed.position.y=_minimap_size+50
+	_feed.position.y=top+map_size+26
 
 func _save_ui_settings() -> void:
 	var config:=ConfigFile.new()
 	config.load("user://settings.cfg")
-	var values: Dictionary={"minimap_size":_minimap_size,"statistics":_show_statistics,"hit_feedback":_show_hit_feedback,"alerts":_show_alerts,"player_names":_show_names,"map_weapon_icons":_map_weapon_icons,"map_player_colors":_map_player_colors,"hidden":_hud_hidden}
+	var values: Dictionary={"touch_controls":touch_controls_mode,"minimap_size":_minimap_size,"statistics":_show_statistics,"hit_feedback":_show_hit_feedback,"alerts":_show_alerts,"player_names":_show_names,"map_weapon_icons":_map_weapon_icons,"map_player_colors":_map_player_colors,"hidden":_hud_hidden}
 	for key in values:config.set_value("ui",key,values[key])
 	config.save("user://settings.cfg")
 

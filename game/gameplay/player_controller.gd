@@ -42,6 +42,11 @@ var controls_enabled: bool = false:
 		if not value:
 			_move_press_order.clear()
 			_secondary_held=false
+			touch_movement=Vector2.ZERO
+## Analog touch intent shares the offline/network movement path with physical keys.
+var touch_movement: Vector2 = Vector2.ZERO:
+	set(value):
+		touch_movement=value.limit_length(1.0) if value.is_finite() else Vector2.ZERO
 var block_color := Color8(111,111,111)
 var _kick := 0.0
 var _tool_clock := 0.0
@@ -109,6 +114,8 @@ var _drag_look_position:=Vector2.ZERO
 
 func _unhandled_input(event: InputEvent) -> void:
 	if session == null or not controls_enabled:
+		return
+	if event is InputEventMouse and lab!=null and lab.get("hud")!=null and lab.hud.has_method("uses_mobile_controls") and lab.hud.uses_mobile_controls():
 		return
 	_sync_camera_mode()
 	var drag_fallback:=lab!=null and bool(lab.get("browser_pointer_fallback"))
@@ -319,7 +326,7 @@ func get_source_movement_axis() -> Vector2:
 		if first and second:axis[index]=-1.0 if int(_move_press_order.get(negative,0))>int(_move_press_order.get(positive,0)) else 1.0
 		elif first:axis[index]=-1.0
 		elif second:axis[index]=1.0
-	return axis.limit_length(1.0)
+	return (axis+touch_movement).limit_length(1.0)
 
 func _network_replica() -> NETWORK_CLIENT:
 	return lab.get("network_client") as NETWORK_CLIENT if lab != null else null
@@ -669,6 +676,7 @@ func _clear_action_state() -> void:
 func _clear_input_state() -> void:
 	_move_press_order.clear()
 	_move_sequence=0
+	touch_movement=Vector2.ZERO
 	_secondary_held=false
 	_drag_look_active=false
 	_last_spade_fire_time=-1.0e20

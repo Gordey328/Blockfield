@@ -39,7 +39,7 @@ func _run() -> void:
 	world=app.get_node("VoxelWorld")
 	await frames(4)
 	check(hud.is_menu_open() and not player.controls_enabled,"startup menu owns input")
-	for scenario in ["test_bindings","test_input_chat","test_resources_and_events","test_hottracked_follow","test_map_objectives","test_team_metadata_and_target_spawn","test_native_palette","test_native_reticle_alerts","test_target_animation_controls","test_console_chat","test_settings"]:
+	for scenario in ["test_bindings","test_input_chat","test_resources_and_events","test_hottracked_follow","test_map_objectives","test_team_metadata_and_target_spawn","test_native_palette","test_native_reticle_alerts","test_target_animation_controls","test_console_chat","test_settings","test_mobile_bridge"]:
 		var completed: Variant=await call(scenario)
 		check(completed==true,"scenario reaches completion: "+scenario)
 	LabInputBindings.release_actions()
@@ -64,6 +64,75 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://ui-bindings-test.cfg"))
 	print("UI: %d assertions, %d failures"%[assertions,failures])
 	quit(0 if failures==0 else 1)
+
+func test_mobile_bridge() -> bool:
+	var desktop_scale:=root.content_scale_size
+	var emulation:=Input.emulate_mouse_from_touch
+	var mouse:=InputEventMouseButton.new()
+	mouse.button_index=MOUSE_BUTTON_LEFT
+	LabInputBindings.reset_defaults()
+	hud.set_menu_visible(true)
+	hud.set_mobile_controls_mode(1)
+	check(hud.uses_mobile_controls() and not hud.mobile_controls.visible,"forced mobile mode keeps overlay out of menu")
+	check(InputMap.action_has_event("primary",mouse),"menu retains mouse bindings for GUI")
+	var config:=ConfigFile.new();config.load("user://settings.cfg")
+	check(int(config.get_value("ui","touch_controls",-1))==1,"touch mode is persisted with other preferences")
+	hud.set_menu_visible(false)
+	await frames(3)
+	check(hud.mobile_controls.visible and player.controls_enabled,"playing enables overlay and real controller")
+	check(not Input.emulate_mouse_from_touch and Input.mouse_mode==Input.MOUSE_MODE_VISIBLE,"touch gameplay needs no mouse capture/emulation")
+	check(not InputMap.action_has_event("primary",mouse),"physical mouse primary filtered while overlay active")
+	var regions: Dictionary=hud.mobile_controls.get_hit_regions()
+	var jump: Rect2=regions.jump
+	mouse.position=hud.mobile_controls.get_global_transform_with_canvas()*jump.get_center()
+	mouse.window_id=root.get_window_id()
+	mouse.pressed=true
+	mouse.button_mask=MOUSE_BUTTON_MASK_LEFT
+	# Dummy has a 64px physical window; these positions are already logical.
+	root.push_input(mouse,true);Input.flush_buffered_events()
+	await frames(1)
+	check(Input.is_action_pressed("jump") and not Input.is_action_pressed("primary"),"real mouse click on Jump cannot fire underneath touch overlay")
+	mouse=mouse.duplicate();mouse.pressed=false;mouse.button_mask=0
+	root.push_input(mouse,true);Input.flush_buffered_events()
+	await frames(1)
+	check(not Input.is_action_pressed("jump"),"mouse button release clears touch Jump bridge")
+	var move: Rect2=regions.move
+	hud.mobile_controls.handle_touch(0,move.get_center()+Vector2(0,-62),true)
+	check(player.touch_movement.is_equal_approx(Vector2.UP),"real HUD signal updates source analog movement")
+	var look: Rect2=regions.look
+	var yaw:=player.rotation.y
+	hud.mobile_controls.handle_touch(1,look.get_center(),true)
+	hud.mobile_controls.handle_drag(1,look.get_center()+Vector2(25,0),Vector2(25,0))
+	check(not is_equal_approx(yaw,player.rotation.y),"real HUD look signal reaches player camera")
+	hud.mobile_controls.handle_touch(2,regions.primary.get_center(),true)
+	Input.flush_buffered_events();await frames(1)
+	check(Input.is_action_pressed("primary"),"real HUD action bridge holds primary")
+	hud.set_menu_visible(true)
+	Input.flush_buffered_events();await frames(1)
+	check(player.touch_movement==Vector2.ZERO and not Input.is_action_pressed("primary"),"opening menu clears touch motion and action ownership")
+	check(InputMap.action_has_event("primary",mouse) and Input.emulate_mouse_from_touch==emulation,"menu restores physical mouse mappings and GUI emulation")
+	hud.set_menu_visible(false)
+	await frames(1)
+	check(not Input.is_action_pressed("primary") and player.touch_movement==Vector2.ZERO,"return from menu does not revive held touch input")
+	hud.mobile_controls.handle_touch(0,move.get_center()+Vector2(0,-62),true)
+	hud.open_chat()
+	await frames(1)
+	check(not hud.mobile_controls.visible and player.touch_movement==Vector2.ZERO,"chat owns input and clears touch movement")
+	hud._chat.cancel_input();hud._sync_controls()
+	hud.mobile_controls.handle_touch(0,move.get_center()+Vector2(0,-62),true)
+	hud._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	check(not player.controls_enabled and player.touch_movement==Vector2.ZERO,"focus loss clears real player touch input")
+	hud._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+	await frames(1)
+	check(player.controls_enabled and player.touch_movement==Vector2.ZERO,"focus return starts with neutral touch movement")
+	hud.mobile_controls.handle_touch(0,move.get_center()+Vector2(0,-62),true)
+	hud.set_mobile_controls_mode(2)
+	await frames(2)
+	check(not hud.mobile_controls.visible and player.touch_movement==Vector2.ZERO,"switching mode off clears ownership")
+	check(root.content_scale_size==desktop_scale and InputMap.action_has_event("primary",mouse),"desktop scale and mouse binding restored")
+	hud.set_menu_visible(true)
+	hud.set_mobile_controls_mode(0)
+	return true
 
 func test_bindings() -> bool:
 	var config:=ConfigFile.new()

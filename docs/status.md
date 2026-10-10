@@ -75,6 +75,16 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
+- Mobile-control update is in integration: specialist ownership has returned to root.
+  New `game/ui/mobile_controls.gd` and `tests/ui/test_mobile_controls.gd` exercise real
+  touch ownership and source/network handoff; native component suite808/0 on Godot4.7.2.
+  Root owns HUD/controller/settings/scale integration and publication. Landscape844×390
+  and portrait390×844 exported-browser views were inspected; initial anchored HUD and
+  portrait minimap overlaps are corrected. Actual Main/HUD regression267/0 passed,
+  including preference/mode lifecycle, action bridges, chat/focus cleanup and desktop
+  input restoration. Frozen publication remains pending. Physical phone hardware
+  has not been tested. See [mobile contract](mobile-controls.md).
+
 - Neither iteration is fully accepted; use the ledger's evidence-bound statuses.
 - Continue integrated original-map/optional-effects and browser gesture/export acceptance.
 - Saved browser downloads, subjective listening, sustained original-map performance and

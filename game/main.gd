@@ -634,6 +634,7 @@ func _fullscreen_result(arguments: Array) -> void:
 	if not arguments.is_empty() and not str(arguments[0]).is_empty():hud.show_alert("Fullscreen: "+str(arguments[0]),"error")
 
 func _pointer_capture_result(arguments: Array) -> void:
+	if hud.uses_mobile_controls():return
 	if arguments.is_empty():return
 	browser_pointer_fallback=not bool(arguments[0])
 	if browser_pointer_fallback:
