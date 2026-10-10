@@ -824,7 +824,6 @@ func _update_mobile_layout() -> void:
 	_set_hud_rect(_ammo,Rect2(-220,-50,204,32) if mobile else Rect2(-380,-90,352,60))
 	_weapon_status.add_theme_font_size_override("font_size",12 if mobile else 16)
 	_set_hud_rect(_weapon_status,Rect2(-220,-18,204,18) if mobile else Rect2(-420,-30,392,25))
-	_set_hud_rect(_native_palette,Rect2(-100,-320,90,90) if mobile else Rect2(-100,-146,90,90))
 	_set_hud_rect(_intel_icon,Rect2(-265,-48,32,32) if mobile else Rect2(-280,-65,48,48))
 	_performance.add_theme_font_size_override("font_size",11 if mobile else 13)
 	_set_hud_rect(_performance,Rect2(16,-18,440,18) if mobile else Rect2(28,-30,750,25))
@@ -1219,6 +1218,10 @@ func _apply_map_settings() -> void:
 	_map.offset_right=-inset
 	_map.offset_top=top
 	_map.offset_bottom=top+map_size
+	# Align the read-only color palette beside the map, clear of both button rows.
+	_native_palette.anchor_top=0.0 if uses_mobile_controls() else 1.0
+	_native_palette.anchor_bottom=_native_palette.anchor_top
+	_set_hud_rect(_native_palette,Rect2(-map_size-inset-98,top,90,90) if uses_mobile_controls() else Rect2(-100,-146,90,90))
 	_map.show_weapon_icons=_map_weapon_icons
 	_large_map.show_weapon_icons=_map_weapon_icons
 	_map.per_player_colors=_map_player_colors
