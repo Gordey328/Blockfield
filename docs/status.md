@@ -26,35 +26,42 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published production source: `57ad43b2b740c13323d96433ec863e6790846ad2`, committed/pushed.
+- Published client source: `96c36cdc740d19a9ab9c32928482dff06b76cade`, committed/pushed.
 - Subsequent documentation records do not change the published binaries. All specialist leases
   are closed; root owns integration/release.
 
 ## Frozen validation
 
-- The complete registered frozen `build.py` suite passed, followed by Web and Linux exports
-  and matching Windows-engine exported-PCK smoke, with clean final diagnostics/metadata.
-- First import exited1 without `ERROR` or an identified cause; its artifact remains saved.
-  An unchanged diagnostic retry and then full import/all tests passed. Cause remains unknown.
-- Frozen shaped latency **459/0**: safe stale retirement, exact replay/resources/map convergence,
-  separate heartbeat timeout/resume and cleanup. See [latency contract](network-latency.md).
-- Frozen scheduler **47/0**:130 callbacks,345 inputs, lead2..8, pending8, wall6.670s.
-  See [scheduler contract](client-schedule.md); these measurements do not establish capacity.
-- Logs: `.cache/release-57ad43b2b740/.cache/logs`; latency JSON in that archive's `.cache/benchmarks`.
+- Mobile update uses a recorded frozen validation chain:62 successful unchanged prefix
+  suites on876 plus affected UI/every remaining registered check on310. Later exact HUD
+  placement-only diffs repeated import/UI/runtime/export; mobile808/0 also repeated on0c51.
+  Final96 Main/HUD270/0, parser/import/runtime/Web export are clean. This does not mean
+  every suite was rerun on96. Manifests/logs: `.cache/release-{876a9828067e,31028524ad3b,0c51c5bae956,96c36cdc740d}`.
+- Original scene-epoch fixture failed89/7, reproduced unchanged94/12; repaired real-clock
+  pacing/readiness passed170/0 with all37 actual commands ACKed and neutral controls.
+  Production clocks, input limits, protocol and simulation were unchanged. Failed attempts
+  remain saved. See [history](history/2026-10-10.md) and [mobile evidence](mobile-controls.md).
+- Frozen310 shaped latency483/0; scheduler47/0:128 callbacks,339 inputs, lead1..8,
+  pending8, wall6.735s. These results do not establish32-client capacity.
+- The earlier57 complete suite/Web/Linux/PCK smoke remains the server artifact evidence
+  under `.cache/release-57ad43b2b740`; Docker/Linux execution is still unverified.
 
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) reports built/noerror.
-  Bundle `0fe5f806a253e8ffa02d35541f8fc0a552ef32d3`; public metadata confirms clean57 source.
+  Bundle `e5c246c8f1135b54b69fa64bea19aae8403d7de0`; public metadata confirms clean96 source.
 - Public `index.pck` equals the local export, SHA256:
-  `835be72829cde3e26dbf1bd15aa67840f1014b364f343234b49d62a11fea0cb8`.
+  `fc22a7eb53ff460c5d9849d8b2cabec4b38483d2ae7cd6b387fa463a91fdf3fc` (16,159,872bytes).
+  Public HTML also hash-matches; report `.cache/previews/public-mobile-96c36cdc740d.json`.
 - [Server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740)
   ZIP publicly downloaded/hash-verified:29,332,846bytes; SHA256:
   `054a6c9dc437cbe7d17541fc4f9428ada190cb410dab356ac833c4e0180d0974`.
 - Export/PCK smoke did not execute Linux. Docker/container/Linux execution and deployed
   TLS/WSS remain unverified. See [server deployment](server-deployment.md).
+- Existing57 server remains compatible: production network/simulation files and network-4
+  IDs are byte-identical. This update exports/publishes only the client.
 
-## Actual frozen Web evidence
+## Earlier frozen57 Web evidence
 
 - Exact57 local HTTP export: both receivers ACKed73/73 chunks, rendered blue/green CTF
   with10/50 inventory, and the second displayed the first client's chat. Native input
@@ -75,15 +82,21 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
-- Mobile-control update is in integration: specialist ownership has returned to root.
+- Mobile-control implementation is complete; specialist ownership/engine leases returned to root.
   New `game/ui/mobile_controls.gd` and `tests/ui/test_mobile_controls.gd` exercise real
   touch ownership and source/network handoff; native component suite808/0 on Godot4.7.2.
   Root owns HUD/controller/settings/scale integration and publication. Landscape844×390
   and portrait390×844 exported-browser views were inspected; initial anchored HUD and
-  portrait minimap overlaps are corrected. Actual Main/HUD regression267/0 passed,
+  portrait minimap/palette overlaps are corrected. Final Main/HUD regression270/0 passed,
   including preference/mode lifecycle, action bridges, chat/focus cleanup and desktop
-  input restoration. Frozen publication remains pending. Physical phone hardware
+  input restoration. Frozen96 is published/hash-verified. Physical phone hardware
   has not been tested. See [mobile contract](mobile-controls.md).
+  Actual public844×390/390×844 preview exercised stick/look/fire/Jump/reload/block
+  selection, readable footer and palette/map separation. Mode On survived reload;
+  Auto restored desktop presentation. Screenshot/report under
+  `.cache/previews/public-mobile-96c36cdc740d.*`, portrait JPEG alongside it.
+  Temporary test servers/tabs stopped; viewport override reset. Root owns the
+  clean source and finished publication; no specialist or engine lease remains.
 
 - Neither iteration is fully accepted; use the ledger's evidence-bound statuses.
 - Continue integrated original-map/optional-effects and browser gesture/export acceptance.

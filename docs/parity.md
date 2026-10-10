@@ -8,13 +8,14 @@ Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION
 
 Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. Iteration 2 delivers multiplayer. Rows marked `1+2` require offline behavior in iteration 1 and synchronized behavior in iteration 2.
 
-## Published checkpoint57ad43b2b740
+## Published mobile checkpoint96c36cdc740d
 
-The complete frozen registered suite and Web/Linux exports passed. [Pages](https://gordey328.github.io/Blockfield/) metadata identifies clean source57; public PCK SHA256 matches the tested export (`835be72829cde3e26dbf1bd15aa67840f1014b364f343234b49d62a11fea0cb8`). The [matching server/Docker prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) was downloaded/hash-verified. Actual local exported clients completed both73/73 map barriers, rendered both CTF teams, delivered chat and performed a quick same-actor resume. Public Pages also loaded genuine Title.vxl without a server and retained an edited player name after reload. These are specific integration/publication results; row statuses remain bound to their full requirements. Browser download/fullscreen/audio/optional-effects/performance, Linux/container/public-WSS and sustained32-client capacity acceptance remain open. See [current status](status.md) and [acceptance gaps](acceptance-gaps.md).
+[Pages](https://gordey328.github.io/Blockfield/) metadata identifies clean source96, bundle `e5c246c8f1135b54b69fa64bea19aae8403d7de0`; public PCK SHA256 matches the tested export (`fc22a7eb53ff460c5d9849d8b2cabec4b38483d2ae7cd6b387fa463a91fdf3fc`). Registered checks were completed through the documented frozen validation chain and narrow HUD follow-ups; final96 import/UI270/0/runtime/Web export are clean. The [compatible server/Docker prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) remains unchanged/hash-verified. Earlier57 browser evidence includes both73/73 map barriers, both CTF teams, chat, quick same-actor resume and genuine Title.vxl offline load; those observations belong to that recorded revision. Row statuses remain bound to their full requirements. Browser download/fullscreen/audio/optional-effects/performance, Linux/container/public-WSS and sustained32-client capacity acceptance remain open. See [current status](status.md) and [acceptance gaps](acceptance-gaps.md).
 
 Mobile input addition (2026-10-10) supports existing movement/tool/UI paths without
-promoting complete parity rows: native touch component808/0, actual Main/HUD267/0,
-and local exported landscape/portrait render/gesture checks. The approved extra
+promoting complete parity rows: native touch component808/0, actual Main/HUD270/0,
+and final public landscape/portrait, stick/look/fire/reload/Jump/block checks.
+On mode survived reload; Auto restored desktop presentation. The approved extra
 input adapter and its hardware acceptance limits are recorded in [mobile controls](mobile-controls.md).
 
 ## Player and combat

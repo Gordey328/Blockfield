@@ -9,7 +9,9 @@ enables a desktop mouse preview; Off restores the desktop scale and mouse input.
 The mobile canvas expands from 854×480 landscape or 480×854 portrait to fill the
 actual viewport. Menus use larger buttons/dropdown rows, wrapping text and two
 columns in portrait; HP/ammo remain in the footer and the minimap clears both
-toolbar rows. [ADR0007](decisions/0007-mobile-controls.md) records the decision.
+toolbar rows. The read-only original block palette sits beside the minimap,
+above the action buttons; select block colors through the Arsenal color picker.
+[ADR0007](decisions/0007-mobile-controls.md) records the decision.
 
 ## Contract
 
@@ -45,14 +47,51 @@ Godot 4.7.2 `--check-only` passed. The command above passed **808 assertions, 0 
 
 Two fixture issues were corrected before that pass: synchronous reads preceded buffered `InputEventAction` delivery, and the headless physical window was 64×64 despite a 1280×720 logical viewport. The fixture now flushes/yields input as a frame does, and uses `Viewport.push_input(event, true)` to dispatch logical pointer coordinates through the real production `_input` adapter. Initial failing logs are retained under `.cache/logs/mobile-controls-*`; they do not establish a production failure. No production files were edited by the fixture author.
 
-The separate actual Main/HUD suite in `tests/ui/test_ui.gd` passed267/0: real
+The separate actual Main/HUD suite in `tests/ui/test_ui.gd` passed270/0 on frozen
+`96c36cdc740d19a9ab9c32928482dff06b76cade`: real
 overlay mouse dispatch, Jump without accidental primary input, action/stick/look
-bridges, saved mode, menu/chat/focus cleanup and desktop scale/mapping restoration.
+bridges, saved mode, menu/chat/focus cleanup, desktop scale/mapping restoration,
+single-row ammo and palette separation from the controls/minimap.
 That fixture preserves preferences byte-for-byte on normal completion.
 
-Local exported Web views at844×390 and390×844 displayed the overlay/menu and
-retained forced-On mode after reload. The left stick moved the rendered player,
-the right drag rotated the view, and footer/portrait minimap placement was checked.
-Final frozen/public artifact evidence will be appended after publication.
+The registered checks were completed as a frozen validation chain, preserving
+the initial scene-epoch fixture failure separately. Successful unchanged
+prefix62 from876 was combined with affected UI and every remaining registered
+check on310, including scene-epoch170/0, mobile808/0, shaped latency483/0,
+runtime/server-launcher smoke and Web export. Exact presentation-only follow-ups
+verified the diff, repeated import/UI/runtime/export, and repeated mobile808/0
+on0c51; final96 changed only palette placement and one UI assertion. All final
+diagnostics were clean. Validation manifests and logs are under
+`.cache/release-{876a9828067e,31028524ad3b,0c51c5bae956,96c36cdc740d}`.
+Unchanged generated asset imports were reused and revalidated by the engine in
+the final placement follow-up. This is a chain of evidence, not a claim that
+all suites were rerun on96. Full reproduction in a fresh checkout:
+
+```text
+python tools/release_checkpoint.py --revision 96c36cdc740d19a9ab9c32928482dff06b76cade
+```
+
+Local final exported Web views at844×390 and390×844 displayed the overlay/menu;
+forced-On mode survived reload. The shared mobile input moved the rendered
+player, rotated the view and switched to blocks. Both final orientations showed
+palette/minimap/toolbar/action separation and the single-row footer.
 These browser gestures use the desktop mouse fallback. Physical phone touch,
 OS keyboard/safe-area behavior and hardware performance remain unverified.
+
+## Public artifact
+
+[Pages](https://gordey328.github.io/Blockfield/) publishes clean96 source, bundle
+`e5c246c8f1135b54b69fa64bea19aae8403d7de0`; GitHub reports built/no error.
+Public HTML/PCK downloaded independently match the local final export. PCK
+SHA256: `fc22a7eb53ff460c5d9849d8b2cabec4b38483d2ae7cd6b387fa463a91fdf3fc`.
+The existing57 server is compatible by unchanged network/simulation files and
+network-4 IDs; no new server package was produced for this input-only update.
+
+Actual Pages desktop-mouse preview: On persisted after reload; stick moved the
+rendered player and right drag turned the camera. Fire changed10/50→9/50;
+Jump kept9/50; reload displayed a separate readable progress row and completed
+at10/49. Portrait block selection displayed the palette beside the minimap
+above all six action buttons. Returning to Auto restored desktop layout.
+Temporary test tabs/HTTP servers were closed and the viewport override reset.
+Screenshots/report: `.cache/previews/public-mobile-96c36cdc740d.{jpg,json}` and
+`.cache/previews/public-mobile-portrait-96c36cdc740d.jpg`.
