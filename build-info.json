@@ -1,1 +1,8 @@
-{"engine": "4.7.2", "source_commit": "5d367dfafab5524c1f4c572218fb6a0605ec9c42", "iteration": 1, "status": "development"}
+{
+  "engine": "4.7.2",
+  "iteration": 1,
+  "status": "development",
+  "upstream": "dcf449c845d509bbde9d79239b32d201c1389961",
+  "source_commit": "9f876bb2a27bad24f64899cff7bf61c52fe739c0",
+  "source_dirty": false
+}
