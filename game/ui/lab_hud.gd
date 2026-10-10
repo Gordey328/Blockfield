@@ -608,6 +608,7 @@ func _process(delta: float) -> void:
 	var weapon_name:=OpenSpadesLocalization.text(str(info.name),"Client").to_upper()
 	var tools:=["ЛОПАТА","БЛОКИ",weapon_name,"ГРАНАТА"] if _is_ru() else ["SPADE","BLOCKS",weapon_name,"GRENADE"]
 	_ammo.text="%s\n%d / %d"%[tools[session.current_tool],session.magazine,session.reserve] if session.current_tool==2 else "%s\n%d"%[tools[session.current_tool],stock]
+	if uses_mobile_controls():_ammo.text=_ammo.text.replace("\n"," · ")
 	var warning:=int(info.max_stock)/3 if session.current_tool==2 else 0
 	_ammo.modulate=Color(1,.3,.3) if stock==0 else (Color(1,1,.3) if stock<=warning else Color.WHITE)
 	_weapon_status.text=""

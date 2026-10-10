@@ -80,6 +80,7 @@ func test_mobile_bridge() -> bool:
 	hud.set_menu_visible(false)
 	await frames(3)
 	check(hud.mobile_controls.visible and player.controls_enabled,"playing enables overlay and real controller")
+	check(not hud._ammo.text.contains("\n"),"mobile inventory uses one footer row, leaving reload status readable")
 	check(not Input.emulate_mouse_from_touch and Input.mouse_mode==Input.MOUSE_MODE_VISIBLE,"touch gameplay needs no mouse capture/emulation")
 	check(not InputMap.action_has_event("primary",mouse),"physical mouse primary filtered while overlay active")
 	var regions: Dictionary=hud.mobile_controls.get_hit_regions()
