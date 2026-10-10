@@ -2,6 +2,8 @@
 
 The public client remains at https://gordey328.github.io/Blockfield/. A native host/domain has not been selected. No account, VPS, certificate, payment setting or public authoritative service has been created.
 
+The matching [frozen57 development package](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) contains the Linux export and deployment files. Extract the ZIP, copy `deploy/.env.example` to `deploy/.env`, set the domain/options and run the Compose command below; no source build is needed for that package. The public ZIP SHA256 was independently verified as `054a6c9dc437cbe7d17541fc4f9428ada190cb410dab356ac833c4e0180d0974` (29,332,846bytes). This is a prepared deployment artifact; Linux/container/public-WSS execution remains unverified.
+
 Local native authority (Windows engine; no visual scene):
 
 ```powershell

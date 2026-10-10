@@ -8,6 +8,10 @@ Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION
 
 Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. Iteration 2 delivers multiplayer. Rows marked `1+2` require offline behavior in iteration 1 and synchronized behavior in iteration 2.
 
+## Published checkpoint57ad43b2b740
+
+The complete frozen registered suite and Web/Linux exports passed. [Pages](https://gordey328.github.io/Blockfield/) metadata identifies clean source57; public PCK SHA256 matches the tested export (`835be72829cde3e26dbf1bd15aa67840f1014b364f343234b49d62a11fea0cb8`). The [matching server/Docker prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) was downloaded/hash-verified. Actual local exported clients completed both73/73 map barriers, rendered both CTF teams, delivered chat and performed a quick same-actor resume. Public Pages also loaded genuine Title.vxl without a server and retained an edited player name after reload. These are specific integration/publication results; row statuses remain bound to their full requirements. Browser download/fullscreen/audio/optional-effects/performance, Linux/container/public-WSS and sustained32-client capacity acceptance remain open. See [current status](status.md) and [acceptance gaps](acceptance-gaps.md).
+
 ## Player and combat
 
 | ID | Feature and acceptance requirement | Original evidence | Iteration | Status |

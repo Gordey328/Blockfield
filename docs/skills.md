@@ -3,12 +3,14 @@
 Project skills live in `.agents/skills/` so they travel with the repository. Each entry point stays short. References hold detailed formats/contracts only when needed.
 
 ## Project-owned
-- blockfield-port-parity: source audit, migration status and evidence.
-- blockfield-voxel-world: chunk/VXL invariants and world verification.
-- blockfield-web-release: reproducible Godot export and GitHub Pages checks.
-- blockfield-multiplayer: shared authority, WSS protocol, prediction, map joins and multiplayer verification. Read docs/multiplayer-plan.md for the proposed design; the skill passed the system creator's quick_validate.py using existing isolated PyYAML dependencies.
+
+- [blockfield-port-parity](../.agents/skills/blockfield-port-parity/SKILL.md): source audit, migration status and evidence.
+- [blockfield-voxel-world](../.agents/skills/blockfield-voxel-world/SKILL.md): chunk/VXL invariants and world verification.
+- [blockfield-web-release](../.agents/skills/blockfield-web-release/SKILL.md): reproducible Godot export and GitHub Pages checks.
+- [blockfield-multiplayer](../.agents/skills/blockfield-multiplayer/SKILL.md): shared authority, WSS protocol, prediction, map joins and multiplayer verification. [Multiplayer plan](multiplayer-plan.md) holds the original design and links current production contracts; the skill passed the system creator's quick_validate.py using existing isolated PyYAML dependencies.
 
 ## Engine knowledge
+
 Candidate source: https://github.com/jame581/GodotPrompter at commit 1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218 (queried 2026-10-10).
 Install selected skills with the standard skill installer into `.agents/skills/`; do not install its entire plugin, hooks or duplicate agent configuration. Record installed directories and source hashes below. Confirm examples against the pinned executable; third-party instructions may contain incorrect version-specific advice.
 
@@ -25,4 +27,19 @@ Third-party advice is subordinate to this project's contract and actual engine
 behavior (for example Godot's `--quit-after` counts frames, not milliseconds).
 
 ## Context recovery
-At each milestone update status and affected parity rows. At a handoff record commands/results and unresolved behavior; cite source files. A future agent starts with AGENTS + status + scope, then opens only relevant documents/skills. Chat history is supplemental, not the sole record of requirements.
+
+Recover in this order: [AGENTS.md](../AGENTS.md) → [current status](status.md) →
+[accepted iterations](iterations.md) → affected [parity rows](parity.md) and
+[acceptance gaps](acceptance-gaps.md) → relevant [architecture](architecture.md),
+subsystem contract and [ADR](decisions/) → the necessary `SKILL.md`.
+Open [dated history](history/2026-10-10.md) only when earlier evidence/failures
+are relevant. Archived assignments and next-action statements never reopen a lease.
+
+Keep status short: present source/export/published artifact identities, active ownership,
+pending acceptance and next actions. Move detailed prior milestones into dated history
+without losing facts; keep subsystem measurements with the subsystem contract.
+At a handoff record files, reproducible commands, exact results, cleanup and unresolved
+behavior. Update affected ledger rows only to the evidence actually obtained.
+The full-suite/export/deployment/browser gates are distinct; native/probe success is
+not browser or full-iteration acceptance. Facts belong in docs, procedures in skills,
+and architectural choices in numbered ADRs. Chat supplies supplementary context.

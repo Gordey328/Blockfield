@@ -1,219 +1,97 @@
 # Project status
 
-Updated: 2026-10-10 (Europe/Moscow).
+Updated: 2026-10-10 (Europe/Moscow). This page is the authoritative current entry point.
+Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Active checkpoint
+## Recover context
 
-This section is authoritative. The evidence and previous assignments below are historical.
+1. Read [AGENTS.md](../AGENTS.md), this page and [accepted iterations](iterations.md).
+2. Open affected rows of the [68-row parity ledger](parity.md) and [acceptance gaps](acceptance-gaps.md).
+3. Read the relevant [architecture](architecture.md), subsystem contract and [decision](decisions/).
+4. Select only the relevant workflow from [skills](skills.md); agree file ownership before editing.
+5. Consult [history](history/2026-10-10.md) for old measurements/failures, not current assignments.
 
-- Git `main` is `0ec2f33dcaac`. Its frozen archive passed the complete registered suite, runtime/server launcher, Web and Linux exports, and the matching-engine exported-PCK Title-map launcher with clean diagnostics and `source_dirty=false`. The PCK smoke did not execute Linux. Source was pushed; those artifacts were not published to Pages or as a server release.
-- Pages remains the development build from source `c4f808990b84d068242dde47b8fe4f2951e322fe`, bundle `d3ee96ad9451cd79f94123595bb22bee6b7f3bba`. Pages reports built/no error; deployed `build-info.json` confirms that source SHA and `source_dirty=false`.
-- Later production changes are **uncommitted**. Root owns all production/integration/build/release work and the current engine lease. Earlier specialist assignments and leases are closed; there is no active specialist production lease.
-- Latest focused checks: actual controller **510/0**, RTT-accounted scheduler **47/0**, Main network **27/0**, Main epoch **83/0**, prediction **729/0**, clock **69/0**, input queue **183/0**, Runtime **223/0**, map backpressure **39/0**, transport **612/0**. The scheduler produced130 callbacks,339 sent commands and21 explicit authority-clock waits over6.618s, wire lead1..7 and peak pending8. Same-life prediction resets preserve transmitted sequence IDs; RTT reserve is bounded3..7 and authority future ceiling remains8.
-- Owner-bound cumulative bulk ACKs use window8 and the `network-4` handshake. Authority-4 validates ordered stale INPUT_BATCH records up to120 ticks old for ACK retirement only; execution and rewind remain bounded15 closed ticks. A retired prefix advances owner ACK and clears controls without performing stale actions or refilling resources. Future/replay/generation/schema/capacity rejection remains strict.
-- Current **dirty diagnostic** Web PCK `4581f1740b767e459158b29a2c15b42ed12a5f413374eeaac7bea8346600241b` completed two receivers'73/73 baseline chunks, rendered both CTF clients, delivered chat to the other browser, switched tools, passed blue→spectator→shotgun→blue respawn and explicit disconnect/resume with the same actor and6/48 inventory. Native totals before browser cleanup: admissions2, resumes1, one expected disconnect, stale_inputs4, input_rejections0/map_resyncs0/timeouts0/backpressure0. Screenshot `.cache/previews/browser-network-retirement.jpg`, safe log sibling `.log`. Two clients showed10–11FPS here. Their only console errors were IAB pointer-lock WrongDocumentError; no integrated engine audio/detached-node errors were observed. This is partial local Web evidence, not a frozen/public-WSS/full-port acceptance.
-- Earlier wall and RTT diagnostics failed on stale-at-arrival16 / old lower-bound expiry; `.cache/previews/browser-clock-wall-stall-failure.log` and `browser-clock-rtt-stall-failure.log` are retained. Those clients and servers were stopped. Revised shaped-retirement fixture **460/0**, clean exit/diagnostics:350ms recovers same connection in444ms, stale_inputs2, input_rejections0, ACK/replay/resources/pose converge, shortened heartbeat times out and one same-ID resume succeeds. Artifact `.cache/benchmarks/network-latency-retirement.json`. Initial262/2 failure was a Windows control-file deletion race before retirement; preserved separately and repaired in the task-local publisher, not production.
-- **No export or publication has accepted the latest changes.** Next acceptance requires a fresh frozen commit/full suite/export and actual Web offline/network scenarios, including the observed wall-stall path. Saved browser downloads, subjective listening, sustained original-map performance and 32-client 60Hz capacity remain open. Neither iteration is complete.
-- The user selected Docker/configuration preparation. Public hosting/domain remain unselected; container/Linux execution and deployed TLS/WSS are unverified.
+Chat supplements these documents; it is not the sole record of authorization or completion.
 
 ## Objective and authorization
 
-Full OpenSpades v0.1.3 offline client port with a local testing lab, published Godot browser build; multiplayer is iteration2. The user authorized the specialist team, repository creation and GitHub Pages publication. Do not request repeated publication approval. Do not present a development checkpoint as a finished full port.
+Full OpenSpades v0.1.3 port to Godot: iteration1 offline client/test lab without a server;
+iteration2 authoritative multiplayer. A development export is not full-port acceptance.
+The user authorized the specialist team, repository creation and GitHub Pages publication.
+Do not ask for repeated publication approval. Server hosting/domain remain unselected;
+the user's chosen deployment scope is Docker/configuration preparation.
 
-## Runtime, source and repository
+## Pinned environment and identity
 
-- Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, standard GDScript, Compatibility, matching single-threaded Web templates.
-- Upstream `dcf449c845d509bbde9d79239b32d201c1389961`, reference-only `.cache/openspades`.
-- Repository https://github.com/Gordey328/Blockfield (`main` source, `gh-pages` generated export).
-- Live development build https://gordey328.github.io/Blockfield/ — the published identity is recorded in the active checkpoint above.
+- Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
+- Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
+- [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
+- Published production source: `57ad43b2b740c13323d96433ec863e6790846ad2`, committed/pushed.
+- Subsequent documentation records do not change the published binaries. All specialist leases
+  are closed; root owns integration/release.
 
-## Implemented foundation and historical offline evidence
+## Frozen validation
 
-- Durable68-row source parity ledger, ten versioned skills, architectural decisions and subsystem contracts. See iterations.md, parity.md, architecture.md, skills.md.
-- 513 original converted outputs with hash/provenance:34 models,146 sounds,296 images plus maps/fonts/locales. Articulated soldiers, all first/third-person tools and carried intel.
-- Packed chunk world, genuine512×512×64 VXL import/export, source bedrock/build/damage/recovery/collapse behavior, original weapon0.75/0.76 profiles and authored offline CTF/TC/respawn authority.
-- Menu/lab, HUD/map/scoreboard/chat/hurt feedback, rebindings/preferences,17 locales, uploads, data-only ZIP resource overrides and trusted compiled skin factories.
-- An early combined checkpoint before later slices: parser/runtime/release export pass; world30, session77, integration94, grenade17, VXL19, falling21, lighting26, topdown13, presentation504, localization76, effects3217, post79, extensions67, UI88; all zero failures.
+- The complete registered frozen `build.py` suite passed, followed by Web and Linux exports
+  and matching Windows-engine exported-PCK smoke, with clean final diagnostics/metadata.
+- First import exited1 without `ERROR` or an identified cause; its artifact remains saved.
+  An unchanged diagnostic retry and then full import/all tests passed. Cause remains unknown.
+- Frozen shaped latency **459/0**: safe stale retirement, exact replay/resources/map convergence,
+  separate heartbeat timeout/resume and cleanup. See [latency contract](network-latency.md).
+- Frozen scheduler **47/0**:130 callbacks,345 inputs, lead2..8, pending8, wall6.670s.
+  See [scheduler contract](client-schedule.md); these measurements do not establish capacity.
+- Logs: `.cache/release-57ad43b2b740/.cache/logs`; latency JSON in that archive's `.cache/benchmarks`.
 
-## Historical offline integration evidence
+## Published artifacts
 
-These results establish individual contracts; they do not accept the latest workspace or the full port.
+- [Pages development build](https://gordey328.github.io/Blockfield/) reports built/noerror.
+  Bundle `0fe5f806a253e8ffa02d35541f8fc0a552ef32d3`; public metadata confirms clean57 source.
+- Public `index.pck` equals the local export, SHA256:
+  `835be72829cde3e26dbf1bd15aa67840f1014b364f343234b49d62a11fea0cb8`.
+- [Server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740)
+  ZIP publicly downloaded/hash-verified:29,332,846bytes; SHA256:
+  `054a6c9dc437cbe7d17541fc4f9428ada190cb410dab356ac833c4e0180d0974`.
+- Export/PCK smoke did not execute Linux. Docker/container/Linux execution and deployed
+  TLS/WSS remain unverified. See [server deployment](server-deployment.md).
 
-- Source corner-sampled player movement/climb/uncrouch and physical/render wading, with128 standalone goldens. Actual-scene source suite151/0 and integrated lab119/0 pass, including equipment gates, water friction, nonlethal head feedback, HDR and anchored browser drag-look fallback. Integration uses fixed60Hz to prevent multiple catch-up physics steps invalidating frame-count timing fixtures.
-- Exact hit volumes/recoil/cadence/cube-line/depleted-tool selection, custom team metadata and native64-color palette. Later review corrected tool-use lower/raise/sprint gates, held jump, sprint velocity threshold, drag-line validation/secondary priority/support cancellation and native grenade origin. Selection regressions at that stage were session109/0; the frozen recheck passed.
-- Character actions30/0, corpse9046/0 plusGPU7/0; native weapon views69/0, GPU10/0; spectator view47/0, GPU11/0. Native camera equations45/0 and GPU7/0 are connected to local/follow first person. HUD227/0 and actual native-feedback GPU27/0 cover reticle, hit/alert feedback and target action previews.
-- Original AO atlas, bounded spectral waves/refraction, optional palette-bounce irradiance and optional geometry reflections. Water18/0+GPU9/0, irradiance18/0+GPU6/0, reflections19/0+GPU12/0; lighting30/0, world-resource8/0. Main connects settings including independent water fog, default-off GI/reflection and layer19 exclusions.
-- Earlier audio baseline: original gun/ambience/explosion/impact layers, mono/stereo and inverse-distance routing, native gains/offsets;128 parameter/routing checks including explicit Web Stream playback. Actual post-mixer PCM126/0 on WASAPI48kHz and Dummy44.1kHz includes19 WAVs per run. Exported AudioWorklet48kHz106/0 proves real post-mixer gun/UI/stereo/pan/distance signals with no capture overflow and a clean fresh-tab error log. First captured signal observed8.8–59.9ms, not hardware latency. Diagnostic bus was muted; subjective browser listening remains separate. Later post-DSP numbers appear below. See audio.md and audio-web-proof.md.
-- Typed console75/0 exposes52 supported variables, completion and commands. Source camera radial/hurt blur is separate; post86/0 and actual GPU15 effect checks pass. Fullscreen, session/chat JSON export and stable PNG/VXL download panel are implemented; download-file acceptance remains pending.
-- Float HDR is connected to main/HUD/console. A real-scene color failure exposed double gamma correction at Godot's Compatibility viewport boundary; inverse-OETF normalization now precedes metering/bloom/presentation exactly once. Headless47/0, native exposure32/0, color79/0 and Main63/0; actual exported WebGL exposure32/0 and color79/0, float_color_buffer=true. See hdr-investigation.md. Added normalization costs 7.03MiB at1280×720; sustained browser performance is unverified.
-- Frozen source c4f808990b84d068242dde47b8fe4f2951e322fe passed the complete build.py suite, parser/import, runtime/server launcher smoke and release Web export. Archive logs are in .cache/release-c4f808990b84/.cache/logs; build/web/build-info.json reports that SHA and source_dirty=false. Browser/release acceptance is separate from these checks.
+## Actual frozen Web evidence
 
-## Historical browser evidence and limits
+- Exact57 local HTTP export: both receivers ACKed73/73 chunks, rendered blue/green CTF
+  with10/50 inventory, and the second displayed the first client's chat. Native input
+  rejections/map resyncs/timeouts/backpressure stayed0. Explicit disconnect after more than
+  the30s grace correctly rejected resume; a new admission and quick same-actor resume passed.
+- Final pre-cleanup totals: admissions3, chat1, closed3, resumes1, stale_inputs0. Screenshot,
+  safe trace and summary: `.cache/previews/browser-frozen-57-network.{jpg,log,json}`;
+  the expired-resume attempt is separately preserved. Test clients/server were stopped.
+- Local offline Shotgun6/48, block tool/palette, drag-look and PNG preview/link were observed.
+  PNG automated download timed out; fullscreen DOM did not enter. IAB pointer-lock reported
+  Chromium UnknownError with visible drag fallback. One client showed24–27FPS; a hidden
+  second showed1FPS, so this proves connection scenarios, not rendering performance.
+- Earlier dirty Web diagnostics and native shaped-retirement proof remain separate history.
+- Public Pages57 loaded genuine Title.vxl in offline SANDBOX with rendered terrain/minimap,
+  weapon and targets. Edited player name and later Russian selection survived page reload;
+  the temporary test name was restored. This does not verify all preferences, optional effects
+  or saved downloads.
 
-The exact live a3cea47 checkpoint was opened from Pages, English Shotgun selected and the lab entered (6/48 HUD). Public index.pck SHA256 `2d1448bbedb684b69da1cc24009a3f86492bd850bd99242c3343b8c9c100375a` matches the checked local export. Actual browser image: `.cache/previews/browser-a3cea47.jpg`. This confirms deployment/content identity and that interaction, not all outstanding acceptance.
+## Acceptance and next work
 
-On the live7824c31 checkpoint: English/Russian preference reload, shotgun entry, large map, original Title.vxl loading and a genuine uploaded flatVXL were exercised. InvalidZIP manifest was visibly rejected; a valid original-texture resource pack was accepted. Earlier rifle ADS/headshot100 proof exists. Updated movement/render/audio/UI must be checked on the next exact export.
+- Neither iteration is fully accepted; use the ledger's evidence-bound statuses.
+- Continue integrated original-map/optional-effects and browser gesture/export acceptance.
+- Saved browser downloads, subjective listening, sustained original-map performance and
+  32-client60Hz capacity remain open. Separate native/probe evidence from browser acceptance.
+- Keep offline lab usable without a server; retain owner privacy, fixed authority, bounded
+  input/history/map queues and same-time terrain/player rewind. [Multiplayer contracts](multiplayer-plan.md).
+- GitHub Actions account billing blocks runs before steps (run38031633237); local frozen
+  validation/publication works. No billing settings changed. [Publication decision](decisions/0003-pages-publication.md).
 
-The embedded browser rejected pointer lock both locally and on Pages with Chromium UnknownError. The a3cea47 export's held-button drag-look fallback was exercised with the spade: horizontal dragging turned the scene without a vertical jump. A separate visible input probe confirmed absolute press/motion coordinates; rifle dragging also fires and accumulates native recoil, so it is unsuitable for isolating mouse-look. Diagnostic probes are not part of the published build.
-
-On the preceding development export, PNG scene export displayed a valid image preview and stable blob download link; IAB download waiting and downloadMedia both timed out, so no saved file was confirmed. Fullscreen visually expanded and restored the canvas; the DOM snapshot's fullscreenElement was unreliable. Audible browser audio/autoplay and sustained original-map frame/memory performance remain unverified. Full client acceptance is unfinished; see acceptance-gaps.md and subsystem docs for implementation differences.
-
-## Historical multiplayer and performance evidence
-
-All specialist handoffs in this section are completed. Their test counts and measurements describe those checkpoints, not current leases or release acceptance.
-
-- Shared production/integration connected the following contracts. Typed MATCH_STATE14, GAME_EVENTS15 and PLAYER_REQUEST16 are connected through native Runtime, ClientReplica, NetworkSession, Controller, Main and HUD. MATCH_PREPARING17 precedes expensive reset preparation; private health/inventory/feedback remain owner-only, predicted effects deduplicate and no RNG is on wire. That follow-up used network-3/authority-3, envelope version1, after corrected source terrain-ray rules; the later network handshake is recorded above.
-- Completed contracts: event codec280/0, actual delivery108/0, history350/0, Match rewind441/0, network session501/0, actual controller508/0, identity34/0, weapon simulation74/0, actual adversarial sockets392/0. Main network scene27/0 covers genuine two-client map barriers, World adoption, input/shot/HUD/chat, private remote health and same-Replica resume. Actual Main epoch83/0 and CompatibilityGPU89/0 cover CTF→TC map/identity/UI/caches, remote crouch/ADS/privateHP, confirmed grenade position/quaternion and freeing old nodes. Original settings and favorites restored byte-for-byte. Source signed landing velocity codec2316/0.
-- Match explicit-ID/reset108/0; Registry/Replica epoch419/0; actual Runtime epoch722/0. Round reset preserves connected canonical IDs/roles/teams, rotates capabilities, clears authority/history/input/event state and loads fresh map barriers with at most2 simultaneous transfers. Known retired bulk sockets remain idle until new WELCOME delivery/client close; bounded one-use old in-flight HELLO prevents a cross-socket reset race without granting map access. Dedicated round coordinator13/0 restores pristine terrain after a winner with configurable10s restart; authored playing-actor respawn180ticks is covered by adversarial sockets.
-- Favorites handoff: ServerBook163/0, actual NetworkMenu70/0, native CompatibilityGPU93/0. Empty direct-endpoint catalog, explicit add/update/delete, separate servers.cfg and no credentials; selecting fills form without connecting. Both configuration files restored byte-for-byte.
-- Measured capacity baseline556/0 is functional evidence, not a60Hz pass:32-actor mean tick65.49ms, all-owner snapshots2738ms and source burst fanout5637ms on a contended i5-10400H/7.61GiB workstation. Shared public snapshot/event publication now passes differential4065/0 with exact original wire bytes and owner privacy. The paired optimized measurements below supersede this earlier contended baseline;32-client60Hz acceptance remains open.
-- History cache handed back to root:350/0 history,441/0 rewind, three focused194/0 benchmarks. One bounded immutable index per closed context; independent leases and lifecycle guards remain. Warm32-query batch546→3.06ms; cold32-shot step752→282ms observational mean. Heavy32k-change apply/record remain synchronous;60Hz is still not accepted.
-- Hit-volume handoff completed:65,925 exact original/prepared differential rays,69,284/0 with optional benchmark, legacy zero-ray fallback/ties/narrow math unchanged. One32-pose/eight-pellet salvo with preparation included measured3.294→1.406ms median. Root Match prepares each validated historical target once per shot, reuses across pellets and caches nothing across ticks;441/0 rewind plus import pass after integration. See hit-volumes.md.
-- Paired capacity handoff completed:557/0 in both modes,15 production hashes/source cadence/byte totals identical. At32 owners, snapshots323.118→13.598ms,134-event burst917.909→23.705ms. Tick mean11.888/13.220ms, p9539.322/43.692ms and max253/271ms; not a sustained60Hz pass. Heavy32768-cell apply266–277ms/record199–210ms/cold32shots262–323ms remain synchronous. Real sockets completed16-client60-step batch; attempted32 stopped at global60s with28 joined and no32batch. All connections/processes cleaned; no32-client capacity acceptance. See server-capacity.md.
-- World preparation handoff is coherent:53/0 new checks and107/0 existing regressions, original Title adoption468µs with progressive topdown/floor caches. Root Main now opts into deferred network visuals; LabMap retains pending state across throttled uploads. See world-preparation.md.
-- Preparation network handoff returned to root: Protocol1639/0, Registry/Replica437/0, Runtime epoch722/0, Replica138/0, Runtime103/0 and long-reset3344/0. Real FIFO fresh/resume probes and custom/nonfinite water atomic rejection are included. Root UI gates preparing and actual Main83/0 passed before later audio/ray integration. Source-ray handoff377/0 adds both native ray families and deferred VXL forwarding; production returned to root. The subsequent environment/source-clamp/DSP handoff included helper70/0, existing128/0 and Dummy environmentalPCM81/0; the read-only omission audit and all associated specialist leases are completed.
-- Root follow-up checks: actual offline lifecycle19/0 covers moving death camera/corpses, visible16/invisible6 body budgets and full CTF/TC win/reset through ordinary Main frames. Actual UI233/0 covers source legacy eyedropper beyond the build cursor, fog miss color, enemy-name filtering, independent persisted gain/EFX settings and progressive map completion; console76/0 and preparation menu72/0 are clean. Dummy texture readback is not a GPU result; browser minimap rendering remains separate. Later source/history and frozen validation results are recorded below.
-- Local shaped TCP handoff502/0, exit0 in8.094s:75ms stalled forwarding recovers;350ms ongoing input backlog intentionally exceeds the15-tick admission window and disconnects, then the same Replica resumes. A separate shortened-heartbeat case times out and resumes again. Ordered map/chat, private events, bounded queues and exact process/socket cleanup are covered. This is native loopback evidence, not WAN/browser/capacity acceptance; see network-latency.md. The external Python runner is registered in the frozen build suite.
-- Final omission audit is integrated: native opposing-key priority, hold/toggle ADS edge audio, weapon-only reload in controller and LocalSession API, depleted-tool hotkey alerts, original map sounds, centered dry UI and slash-prefilled chat. Focused actual-Main source-input31/0, LocalSession157/0, Source151/0, History352/0 and Rewind441/0 have clean diagnostics. Camera-specific Euclidean OBB tests11/0 retain accumulated source hit flags and prior-actor nearest distance. The first-person/follow eye/team/terrain/crouch path and source five-OBB wireframe are connected independently of the name setting; actual UI247/0, standalone6216/0 and native CompatibilityGPU6221/0 pass. See ui.md/hottracked-player.md. That handoff returned specialist production ownership and its engine/device lease to root.
-- Final audio handoff: source environment helper70/0, original post-DSP PCM134/0 and environment PCM81/0 on Dummy44.1k/WASAPI48k. Actual exported AudioWorklet48k probes passed113/0 original sounds and64/0 environmental DSP, empty fresh-tab warnings/errors, no overflow. Complete local DOM JSON reports and exact diagnostic PCK hashes are recorded in audio-web-proof.md; muted capture does not prove subjective listening or full Main integration.
-
-## Dedicated server preparation
-
-User selected Docker/configuration preparation; hosting/domain remain open. Separate entry dispatch uses explicit --server/dedicated_server, leaving ordinary headless offline tests intact. Native server launcher starts cleanly without renderer/HUD/model nodes. `tools/build_server.py` installed the pinned Linux release template and passed server import, native60-frame launcher smoke and Linux dedicated release export. The early `build/server/` output contained dirty-workspace development metadata; later frozen exports are recorded below. None is a published server release. Docker is unavailable here: container/Linux execution/TLS/WSS deployment unverified. See server-deployment.md and decisions/0005-authoritative-multiplayer.md.
-
-Registry/session ownership is resumable guest identity, not account login. Complete SimulationCodec2316/0 is now wired as MATCH_STATE14 and default native Runtime snapshots; two actual ClientReplicas138/0 verify full-state prediction/remote pose/chat/reconnect/spectator. Game-event feed and rendered network scene now have the native evidence above. N09's legacy compatibility decision is VERIFIED via ADR0005; other N rows still require the documented browser/deployment acceptance. Preparation/standalone foundation checks must not be described as iteration2 completion.
-
-## Known external limitation
-
-GitHub Actions is blocked before job steps by account billing (run38031633237). Local pinned validation and Pages branch publication work; no payment settings were changed. See decisions/0003-pages-publication.md.
-
-## Historical frozen attempts and clock corrections
-
-Failed archives and diagnostics are retained; old next-action and lease assignments are not active.
-
-- Checkpoint139d50fe51702c2a1a165b5c15464f113cd8786a is committed locally, not published. Its frozen full suite passed through the final actual-Main epoch83/0 assertions but correctly failed on pending Ogg playback teardown resources; no export was accepted from that attempt. A200ms real-clock driver drain in the fixture fixes clean teardown. The same fixture with the subsequent PREPARING/progressive-world integration passes83/0,642 polls with clean stderr. That attempt did not accept an export of the subsequent changes.
-- Frozen9d186266fb8b passed the complete gameplay/network suite and Web export, including latency501/0 (438 step checks plus63 fixed checks), but the exported Linux PCK launcher rejected an empty global-class registry. This attempt is not released. Explicit authoritative script selections fix the filtered registry; a focused development re-export/Title.vxl PCK launcher passes cleanly. Final read-only source audit also corrected ADS audio readiness for shot cooldown/empty magazine and confirmed-network dry-fire gain1. Actual source-input34/0 covers these paths with clean diagnostics. That archive was not released; subsequent frozen attempts and browser results appear below.
-
-Frozen514ef2e3f5d3 import/world/session passed, but actual lab assertions119/0
-were followed by retained Ogg decoder resources at process exit. A verbose
-reproduction identified only in-flight Vorbis playback; a200ms real-clock drain
-after scene deletion fixes clean119/0 teardown. The same drain is now used by
-the other older Main UI/source/network fixtures. Existing offline-lifecycle,
-source-input and epoch fixtures already drain the driver. That failed archive
-was preserved and not published; later frozen results follow.
-
-Frozen `c55ad92a473c398d185fed6a11552afef83a8675` passed the complete registered
-suite, release Web export, Linux dedicated export and exported-PCK Title launcher
-with clean exit/diagnostics. Logs: `.cache/release-c55ad92a473c/.cache/logs`.
-The shaped latency run passed504 checks (variable441 step checks plus63 fixed
-checks). This supersedes the failed514 fixture-teardown attempt above. These
-artifacts have not yet been published.
-
-The c55 actual browser exercised rifle, SMG and shotgun, both team colors,
-third-person body, block palette, grenade/spade, large minimap, toggle ADS through
-the local console and scene-PNG preview. Local startup/lab needed no server.
-Observed lab20–29FPS on this workstation/IAB; the displayed0.9MiB static-memory
-counter is not total WASM/process/GPU memory. No saved browser download or
-subjective listening was confirmed. At that checkpoint IAB pointer lock raised
-WrongDocumentError; ordinary drag-look was functional.
-
-One c55 exported browser also genuinely joined the native CTF server, adopted its
-map and rendered playable owner inventory. A later command rejection closed it:
-server input_rejections1, transport backpressure/timeouts0. The old client
-incorrectly labeled all send failures backpressure. Root now preserves fixed
-transport reasons/code, polls before player physics input, and keeps transmitted
-input ticks independent of locally retimed prediction replay. This triggered the
-24Hz-client/60Hz-authority scheduler work documented below; it was not a browser
-network acceptance pass. Limits remain late15/future8/pending32.
-
-A later ignored native TraceTransport captured the exact c55 rejection:
-server tick14681, input ticks14690/14691 (lead9/10), pending3, close1008
-invalid input stream. Prior commands reached lead8. No capability/payload was
-logged; `.cache/previews/browser-c55-future-rejection.log` preserves aggregate
-stats and the16 integer clock samples. This confirms the future-window failure,
-not a transport-pressure guess. The corrected clock's initial independent native
-scheduler's final now-deadline run passes47/0 with130 callbacks targeting24Hz
-and360 inputs, source rifle30tick cadence and three same-ID resume cases. The
-corrected quiet40ms-each-direction shaped run passes49/0 over20s,426 callbacks/
-1200 inputs, actual wire lead-3..3 while the replay-derived candidate reached14;
-peak pending19. The fixture implements a
-single current frame, bounded8-step catch-up and dropping excess elapsed steps.
-Failed host-pause artifacts remain separate and inconclusive. See
-client-schedule.md. That specialist handoff and engine lease completed; its
-native result did not verify actual Web clients.
-
-Scene replacement exposed a later button-signal audio callback against detached
-nodes. Root audio now rejects detached service/camera playback before reading
-transforms or starting a voice. Actual source-input35/0, audio routing128/0,
-original post-DSP PCM134/0, Main network27/0 and Main epoch83/0 are clean after
-the focused corrections. Those focused corrections preceded further frozen validation.
-That specialist handoff and engine lease completed. The previous ignored
-native diagnostic server was stopped through its exact owned Windows Job Object.
-
-Frozen00d241c7da06 passed all registered gameplay/network/audio/scheduler
-assertions but correctly stopped before export because the latency helper logged
-a JSON parse error while reading an atomically replaced Windows control file.
-The runner reported499/0, but its engine diagnostics were not clean. Preserve
-`.cache/release-00d241c7da06`; it is not published. Both test readers now keep a
-single FileAccess handle and quietly retry transient missing/empty/invalid
-control content through their existing bounded waits. No production or admission
-limit changed. Focused shaped latency501/0 exits cleanly in8.094s with no engine
-errors (`latency-control-read-fixed.json`/`.log`); later frozen validation appears below.
-
-Frozen0ec2f33dcaac passed the complete registered suite, runtime/server
-launcher, Web export, Linux export and matching-engine exported-PCK Title-map
-launcher (clean diagnostics; source_dirty=false). That pack smoke does not run
-Linux. The source was pushed, but no new Pages/server release was published.
-Two actual0ec Web clients failed: one generic map-chunk rejection, the other
-input-clock expiry. Native trace records wire lead degrading-3 to-15 within22
-commands; input_rejections0, heartbeat timeout/backpressure0. Preserve
-`.cache/previews/browser-0ec-two-client-failure.log`. This is a separate defect
-from c55's future9/10 failure; passing quiet native tests did not accept Web.
-
-The subsequent wall-clock scheduling/pre-render dispatch work initially passed
-clock13/0 and transport602/0; later clock44/0 and transport612/0 superseded them.
-MapTransfer rejection reasons, owner-bound cumulative bulk ACK8, ACK coalescing
-and network-4 handshake were integrated. Those specialist handoffs/engine
-leases completed; old diagnostic-server/browser engines were stopped.
-The authoritative workspace, browser failure and ownership are recorded above.
-
-Bulk-window specialist returned all production/test/docs ownership and engine
-lease. Final native map-backpressure39/0 includes two production replicas,
-17chunks,600ms pause, final ACK/READY cross-channel order and wrong-owner denial;
-protocol1759/0, transfer958/0, Runtime103/0, transport612/0 were clean. Clock44/0 included request timing and authority-pause recovery; Replica135/0 clean.
-
-Root's wall-clock native scheduler stream stayed live360commands, wire lead0..5,
-pending8, no input rejection/timeout; its terminal pressure scenario failed
-because ordinary input now dispatches immediately. Preserved failed report/log
-`client-schedule-wall-pressure-fixture-failure.*`; the corrected scenario fills
-the actual transport queue without dispatching before the next input send.
-The later corrected scheduler47/0 result is recorded in the active checkpoint;
-this earlier fixture failure remains preserved.
-
-Controller diagnostics exposed a genuine same-generation sequence rewind:
-team→spectator snapshot ACK19 reset predicted last_submitted19 while authority
-already held command20; the later neutral class intent reused20 and was rejected
-as input gap/replay. Preserve `.cache/logs/input-clock-controller-diagnostic.log`.
-The completed same-life ACK-floor correction passed prediction729/0: repeated
-ACK19 snapshots retain the barrier, ACK20 permits next sequence21, and old-mode
-commands are never replayed. The controller fixture also waits for fresh
-authority after installing a map instead of sampling its manually paused server.
-Focused controller507/0 now passes. The specialist prediction lease is closed.
-
-## Commands and recovery
+## Commands and durable records
 
 Python: `C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`.
 Godot: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe`.
-
-```text
-python tools/bootstrap.py
-python tools/build.py --export
-python tools/release_checkpoint.py --revision HEAD --server
-python tools/serve.py
-python tools/publish_pages.py
-```
-
-`release_checkpoint.py` validates/exports a frozen Git archive and preserves the ignored separate gh-pages checkout when copying output. Reusing the same SHA directory fails intentionally; do not recursively delete unverified paths.
-Logs/previews/runtime/reference archives stay ignored under `.cache/`. Credentials are handled in-memory by Git Credential Manager and github_api.py and must never appear in output or source.
-
-Resume through AGENTS.md → this file → iterations.md → affected parity rows/contracts. Skills are reusable procedures; completion facts belong here and in the ledger, decisions in numbered ADRs. Chat is supplemental context.
+Usual flow: `python tools/bootstrap.py` → `python tools/release_checkpoint.py --revision HEAD --server`;
+`python tools/serve.py` for local review, `python tools/publish_pages.py` for publication.
+`python tools/build.py --export` is the direct workspace validation/export command.
+Release checkpoints validate frozen Git archives; an existing same-SHA archive is preserved.
+Logs/previews/runtime/reference archives remain ignored under `.cache/`; never print credentials.
+Update this page and affected ledger rows at milestones; append detailed history and subsystem
+evidence with exact artifact identity. Record decisions in numbered ADRs, procedures in skills.
