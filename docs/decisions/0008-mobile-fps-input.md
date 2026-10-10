@@ -28,7 +28,7 @@ The existing weapon zoom and camera-mode permission/pitch limits still apply.
 
 Persist touch look gain (25–300%), ADS gain (25–200%), inversion, floating/fixed
 stick, fire-and-look and control size (80–140%). Provide a mobile-only reset.
-Buttons retain a 48 CSS-pixel floor in Web, measured against the canvas bounds;
+Buttons retain a 56 CSS-pixel floor in Web, measured against the canvas bounds;
 their captions/hints retain a 12 CSS-pixel floor, calculated at layout time.
 Headless/native checks use a logical-pixel floor without claiming CSS equivalence.
 Desktop mouse preview is disabled when genuine touch is detected.

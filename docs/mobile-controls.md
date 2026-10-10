@@ -55,7 +55,7 @@ Touch up/cancel releases that finger. `release_all`, disable, viewport resize, a
 
 ## Layout and bridge
 
-Controls respect the size preference and a 48 CSS-pixel Web button floor, derived
+Controls respect the size preference and a 56 CSS-pixel Web button floor, derived
 from actual canvas bounds and local canvas size. Native/headless fallback is a
 logical-pixel floor, not a claim about physical display units. The toolbar and
 action grid wrap on narrow canvases; map/palette placement follows actual toolbar

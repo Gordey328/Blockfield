@@ -262,7 +262,7 @@ func floating_and_scaled_layout() -> void:
 			for name: String in BUTTONS + ["move", "look"]:
 				var rect: Rect2 = regions[name]
 				check(rect.position.is_finite() and rect.size.x > 0 and rect.size.y > 0 and Rect2(Vector2.ZERO, size).encloses(rect), "scaled %s stays usable/in bounds" % name)
-				if name in BUTTONS: check(rect.size.x >= 48.0 and rect.size.y >= 48.0, "scaled target keeps native logical 48px floor: %s" % name)
+				if name in BUTTONS: check(rect.size.x >= 56.0 and rect.size.y >= 56.0, "scaled target keeps native logical 56px floor: %s" % name)
 			for i: int in range(BUTTONS.size()):
 				var rect: Rect2 = regions[BUTTONS[i]]
 				for j: int in range(i + 1, BUTTONS.size()):
