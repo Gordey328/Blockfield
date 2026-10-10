@@ -95,3 +95,129 @@ above all six action buttons. Returning to Auto restored desktop layout.
 Temporary test tabs/HTTP servers were closed and the viewport override reset.
 Screenshots/report: `.cache/previews/public-mobile-96c36cdc740d.{jpg,json}` and
 `.cache/previews/public-mobile-portrait-96c36cdc740d.jpg`.
+
+## Research 2026-10-10
+
+The user reports jitter when moving the joystick and looking with another finger.
+This turn is research/documentation only: implementation, new tests, skill installation
+and a new release wait for the user's next instruction. Root owns the investigation;
+no specialist or engine lease was opened. The agent has not reproduced physical-phone
+multitouch. Device/browser and offline/network comparison were requested but are pending.
+
+### Findings and confidence
+
+Current `MobileControls._input` converts `InputEventScreenDrag.relative` into local
+canvas coordinates and passes it through `handle_drag`. `_drag_pointer` correctly
+accepts camera motion only from the claimed LOOK owner. Each claim currently stores
+kind/action/holding, without a previous position. HUD forwards `look_moved` to
+`PlayerController.apply_mouse_motion`, including the existing mouse sensitivity,
+exponent and weapon zoom/ADS policy. The controller suppresses its desktop mouse
+path while mobile controls are active.
+
+[Godot issue94346](https://github.com/godotengine/godot/issues/94346) reports a closely
+matching Web failure: another touch corrupts a tracked finger's relative motion while
+its absolute position stays correct. The linked [PR94899](https://github.com/godotengine/godot/pull/94899)
+proposes indexing previous positions by touch ID; both pages showed Open when inspected.
+The issue's minimal FPS reproduction includes a position-difference workaround. Its
+single shared previous-position example is insufficient for our multi-owner contract.
+
+This is not only an older-version report: the pinned [Godot Web C++ source at ed1daf0bf](https://raw.githubusercontent.com/godotengine/godot/ed1daf0bf/platform/web/display_server_web.cpp)
+sets the event index from `identifier[i]`, but computes its relative motion from
+`touches[i]` (lines688-718). The matching [JavaScript adapter](https://raw.githubusercontent.com/godotengine/godot/ed1daf0bf/platform/web/js/libs/library_godot_input.js)
+passes `changedTouches` (lines550-565), whose list slots need not represent the same
+finger between events. This proves a vulnerable data path in the referenced source;
+the actual phone's event trace is still required to establish the user's complete cause.
+
+[Issue116465](https://github.com/godotengine/godot/issues/116465) additionally reports
+Android Chrome mouse-motion events despite disabled touch-to-mouse emulation, plus
+inflated screen-relative touch motion in Godot4.6. Our overlay already rejects marked
+emulated mouse events and requires a mouse claim for mouse dragging, so this report
+does not establish duplicate camera processing in Blockfield. Keep that as a secondary
+trace check; a real touch and a desktop preview must not rotate through two input paths.
+
+### Practices and code references
+
+- Preserve one movement owner, one look owner and independent action owners for the
+  whole down-to-up/cancel lifetime; crossing rectangles must not change a finger's role.
+  [ScreenTouch](https://docs.godotengine.org/en/stable/classes/class_inputeventscreentouch.html)
+  documents finger index/cancellation. Existing Blockfield ownership/lifecycle behavior
+  already implements most of this contract.
+- A proposed Web workaround stores previous absolute position per claimed finger,
+  initializes it on down, subtracts only that finger's previous position on drag and
+  clears it on release/cancel/resize/focus/menu. Use one coordinate space for both
+  positions; an unclaimed/reused ID must never inherit another finger's baseline.
+- [ScreenDrag documentation](https://docs.godotengine.org/en/stable/classes/class_inputeventscreendrag.html)
+  recommends `screen_relative` for aiming because `relative` is content-scaled.
+  Merely replacing one field with the other does not fix the pinned Web path: it copies
+  the same computed displacement into both. Evaluate normalization by screen extent
+  after rebuilding the displacement from owned positions.
+- [Apple game-control guidance](https://developer.apple.com/design/human-interface-guidelines/game-controls)
+  recommends left-side movement, right-side direct camera dragging, generous input areas,
+  reachable buttons, safe areas, visible press states and frequent targets at least44pt.
+  Its floating-stick recommendation is useful as an option; retain the current fixed
+  layout for comparison. Native points, CSS pixels and our logical canvas pixels are
+  different units: inspect rendered hit targets on the real device.
+- [Virtual-Joystick-Godot source](https://github.com/MarcoFazioRandom/Virtual-Joystick-Godot/blob/Main/addons/virtual_joystick/virtual_joystick.gd)
+  demonstrates remembered touch index, absolute-position stick updates, radial deadzone
+  remapping and fixed/dynamic/following modes (MIT). Its global action press/release and
+  desktop-emulation policy are examples to review, not drop-in replacements for our bridge.
+- The official [VirtualJoystick node](https://docs.godotengine.org/en/stable/classes/class_virtualjoystick.html)
+  also offers these modes. Its documentation warns that node and InputMap deadzones can
+  stack. Changing joystick implementation alone would not repair camera displacement.
+- Unity's [OnScreenStick isolated actions](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.14/api/UnityEngine.InputSystem.OnScreen.OnScreenStick.html#UnityEngine_InputSystem_OnScreen_OnScreenStick_useIsolatedInputActions)
+  prevent cancellation caused by automatic device switching. The transferable principle
+  is stable, separate input ownership; this is not a Godot setting or a fix for issue94346.
+- [MDN touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)
+  explains browser gesture cancellation and game-surface `touch-action: none`.
+  The frozen96 exported HTML already contains that rule, so missing CSS is not the
+  primary candidate. Avoid introducing another DOM touch listener without evidence.
+
+### Proposed starting settings (not accepted device-tuned values)
+
+| Area | Proposed baseline |
+|---|---|
+| Stick | Retain radius62 and radial deadzone0.12 initially; expose roughly0.10-0.15 for comparison, with only one deadzone stage. |
+| Stick placement | Fixed/dynamic choice, adjustable size and thumb position; following mode optional. |
+| Look | Linear response, separate mobile sensitivity; a candidate calibration is a swipe across30% of screen width giving about90 degrees of yaw. Normalize delta and extent in the same coordinate space. |
+| ADS | Keep existing weapon-zoom reduction initially, extra mobile ADS multiplier1.0; tune separately without accidentally applying the same reduction twice. |
+| Smoothing | Off for diagnosis. Only evaluate optional light target-angle smoothing after eliminating malformed/duplicate displacement and measuring latency. |
+| Actions | Configurable hold/toggle ADS and accessible fire placement; verify move/look/fire together before adding compound fire-and-look gestures. |
+| Input batching | Compare default accumulated input with disabled accumulation only if traces show a remaining latency problem. [Godot Input](https://docs.godotengine.org/en/stable/classes/class_input.html#class-input-property-use-accumulated-input) documents the CPU/reactivity tradeoff. |
+
+### Skills
+
+Discovery used the system skill-installer workflow; its anonymous curated-catalog
+request returned HTTP403. Selected candidates were inspected directly at the already
+pinned GodotPrompter revision, rather than assuming catalog availability.
+
+- [input-handling](https://github.com/jame581/GodotPrompter/blob/1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218/skills/input-handling/SKILL.md):
+  input propagation, touch index and input actions. Its [basic touch reference](https://github.com/jame581/GodotPrompter/blob/1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218/skills/input-handling/references/touch.md)
+  uses `relative` and is not a complete mobile FPS controller or a workaround for this bug.
+- [responsive-ui](https://github.com/jame581/GodotPrompter/blob/1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218/skills/responsive-ui/SKILL.md):
+  stretch/aspect/DPI/layout checks. Verify native safe-area recipes separately for Web.
+- Existing `gdscript-patterns`, `godot-testing`, `blockfield-port-parity` and
+  `blockfield-web-release` cover implementation, regression, evidence and eventual release.
+  Keep the current test runner; discovery is not a reason to replace it with GUT/gdUnit.
+- Native `mobile-development`/`godot-platform-mobile` and
+  [godot-adapt-desktop-to-mobile](https://github.com/thedivergentai/GD-Agentic-Skills/blob/main/skills/godot-adapt-desktop-to-mobile/SKILL.md)
+  contain broader mobile advice. App-store/signing, native renderer recommendations and
+  pinch/two-finger rotation gesture helpers are not the browser FPS input contract.
+  A future focused `blockfield-mobile-input` skill could record routing/units/acceptance
+  procedures; diagnoses and current settings belong here, not in skill instructions.
+
+### Next implementation and acceptance, after the user's instruction
+
+1. Capture timestamp/type/index/device/position/engine-relative/owner and controller
+   yaw/pitch, plus frame timing. Compare each relative value with the same ID's absolute
+   position difference. Establish whether jitter exists offline and in network play.
+2. Add a regression where LOOK position is unchanged but its supplied relative value
+   is corrupted while MOVE changes. Verify controller yaw/pitch receives no look motion.
+   Also cover simultaneous moving fingers, reversed down order, lift/re-add/ID reuse,
+   third-finger fire, rectangle crossings and cancel/focus/orientation cleanup.
+3. Implement the minimal owned-position correction and trace-confirmed mouse gating;
+   then tune mobile look independently. Motion displacement is not multiplied by frame
+   delta a second time. Distinguish view-angle jumps from walk/recoil effects/frame stalls.
+4. Run parser/import, existing affected UI/gameplay checks and export. Verify physical
+   Android Chrome and iPhone Safari multitouch, both orientations and sustained play;
+   desktop mouse preview alone cannot accept the fix. Publish only after authorized work
+   reaches the existing release gates. No new build was produced in this research turn.

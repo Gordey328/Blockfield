@@ -82,21 +82,33 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
-- Mobile-control implementation is complete; specialist ownership/engine leases returned to root.
+- The published mobile-control implementation remains at96; specialist ownership/engine leases returned to root.
   New `game/ui/mobile_controls.gd` and `tests/ui/test_mobile_controls.gd` exercise real
   touch ownership and source/network handoff; native component suite808/0 on Godot4.7.2.
   Root owns HUD/controller/settings/scale integration and publication. Landscape844×390
   and portrait390×844 exported-browser views were inspected; initial anchored HUD and
   portrait minimap/palette overlaps are corrected. Final Main/HUD regression270/0 passed,
   including preference/mode lifecycle, action bridges, chat/focus cleanup and desktop
-  input restoration. Frozen96 is published/hash-verified. Physical phone hardware
-  has not been tested. See [mobile contract](mobile-controls.md).
+  input restoration. Frozen96 is published/hash-verified. Recorded browser previews
+  did not exercise physical-phone multitouch. See [mobile contract](mobile-controls.md).
   Actual public844×390/390×844 preview exercised stick/look/fire/Jump/reload/block
   selection, readable footer and palette/map separation. Mode On survived reload;
   Auto restored desktop presentation. Screenshot/report under
   `.cache/previews/public-mobile-96c36cdc740d.*`, portrait JPEG alongside it.
   Temporary test servers/tabs stopped; viewport override reset. Root owns the
   clean source and finished publication; no specialist or engine lease remains.
+
+- Mobile input research (2026-10-10): the user reports camera jitter during simultaneous
+  joystick and look touches. Root inspected current routing, official Godot Web sources
+  at ed1daf0bf and public input issues/practices; see [research and proposed checks](mobile-controls.md#research-2026-10-10).
+  Finger roles are already isolated, but look consumes engine relative motion; the pinned
+  Web source computes that motion using a changed-touch list slot rather than touch ID.
+  This is a strong cause candidate, not a reproduced device diagnosis. Device/browser
+  details remain pending. The user explicitly requested research first and implementation
+  only after a later instruction. No game/test/export/skill changes or new runtime checks
+  were made for this research; the published build is unchanged.
+  Changed documents: `docs/status.md`, `docs/mobile-controls.md`; documentation-only
+  `git diff --check` passed (exit0). Next action is device trace/regression after authorization.
 
 - Neither iteration is fully accepted; use the ledger's evidence-bound statuses.
 - Continue integrated original-map/optional-effects and browser gesture/export acceptance.
