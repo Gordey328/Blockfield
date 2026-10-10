@@ -406,7 +406,12 @@ func destroy_app() -> void:
 		app.queue_free()
 		app = null
 		await frames(8)
-		await create_timer(0.2).timeout
+		# Fixed FPS advances virtual timers faster than Vorbis/mixer cleanup.
+		# Drain real time like the actual lab/UI fixtures before restoring/exiting.
+		var audio_deadline := Time.get_ticks_msec() + 200
+		while Time.get_ticks_msec() < audio_deadline:
+			OS.delay_msec(1)
+			await process_frame
 
 func run() -> void:
 	save_originals()
