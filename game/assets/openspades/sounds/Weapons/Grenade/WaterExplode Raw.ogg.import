@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://c75p0b8fyfy4o"
+path="res://.godot/imported/WaterExplode Raw.ogg-8e4b995f406f83b5e0d771ed43c27d2a.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/openspades/sounds/Weapons/Grenade/WaterExplode Raw.ogg"
+dest_files=["res://.godot/imported/WaterExplode Raw.ogg-8e4b995f406f83b5e0d771ed43c27d2a.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
