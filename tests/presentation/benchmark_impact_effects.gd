@@ -2,6 +2,8 @@ extends SceneTree
 ## Opt-in CPU experiment: production per-instance setters versus one documented
 ## row-major 16-float buffer. Not part of normal correctness/performance gates.
 ## Run native/headless; omit --headless for actual Compatibility readback.
+## The prior 400/512 colliding-sprite experiment is retained in Git/history and
+## the archived 26ea9883 baseline. Current comparison uses 40 data-only fragments.
 const EFFECTS = preload("res://presentation/openspades_effects.gd")
 const WORLD = preload("res://world/voxel_world.gd")
 var assertions: int = 0
@@ -24,18 +26,17 @@ class BulkEffects extends TimedEffects:
 	var packed_buffer: PackedFloat32Array = PackedFloat32Array()
 	var bulk_uploads: int = 0
 	func _sync_fragment_batch() -> void:
-		if packed_buffer.size() != maxi(0, max_particles) * 16:
-			packed_buffer.resize(maxi(0, max_particles) * 16)
+		if packed_buffer.size() != PARTICLE_HARD_CAP * 16:
+			packed_buffer.resize(PARTICLE_HARD_CAP * 16)
 		super._sync_fragment_batch()
 		if _fragment_count > 0:
 			var started: int = Time.get_ticks_usec()
 			_fragment_multimesh.buffer = packed_buffer
 			batch_usec += Time.get_ticks_usec() - started
 			bulk_uploads += 1
-	func _write_fragment(index: int, entry: Dictionary, billboard: Basis, to_local: Transform3D) -> void:
-		var node: Sprite3D = entry.node
-		var facing: Basis = billboard * Basis(Vector3.BACK, node.rotation.z) * Basis.from_scale(node.global_basis.get_scale())
-		var local_pose: Transform3D = to_local * Transform3D(facing, node.global_position)
+	func _write_fragment(index: int, entry: OpenSpadesEffects.ParticleState, billboard: Basis, to_local: Transform3D) -> void:
+		var facing: Basis = billboard * Basis(Vector3.BACK, entry.spin) * Basis.from_scale(Vector3.ONE * entry.radius * 2.0)
+		var local_pose: Transform3D = to_local * Transform3D(facing, entry.position)
 		var offset: int = index * 16
 		# RenderingServer.multimesh_set_buffer: row-major Transform3D12+RGBA4.
 		packed_buffer[offset] = local_pose.basis.x.x
@@ -50,7 +51,7 @@ class BulkEffects extends TimedEffects:
 		packed_buffer[offset + 9] = local_pose.basis.y.z
 		packed_buffer[offset + 10] = local_pose.basis.z.z
 		packed_buffer[offset + 11] = local_pose.origin.z
-		var color: Color = node.modulate
+		var color: Color = entry.display_color
 		packed_buffer[offset + 12] = color.r
 		packed_buffer[offset + 13] = color.g
 		packed_buffer[offset + 14] = color.b
@@ -88,11 +89,11 @@ func setup_effects(effects: TimedEffects, world: VoxelWorld, camera: Camera3D, o
 	effects.rng.seed = 7341
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1389961
-	for index: int in range(400):
+	for index: int in range(40):
 		var position := origin + Vector3(rng.randf_range(-2, 2), rng.randf(), rng.randf_range(-2, 2))
 		var velocity := Vector3(rng.randf_range(-3, 3), rng.randf_range(0, 6), rng.randf_range(-3, 3))
 		effects._spawn(position, velocity, Color(0.7, 0.4, 0.2), 0.2, 2.0,
-			{"gravity": 0.9, "collision": EFFECTS.BOUNCE})
+			{"gravity": 0.9})
 	effects.update_effects(0.0)
 
 func run() -> void:
@@ -103,7 +104,7 @@ func run() -> void:
 	root.add_child(world)
 	world.set_process(false)
 	print("IMPACT_EFFECTS_PROGRESS: load original Title")
-	check(world.load_vxl("res://assets/openspades/maps/Title.vxl", true) == OK, "benchmark uses original Title terrain queries")
+	check(world.load_vxl("res://assets/openspades/maps/Title.vxl", true) == OK, "benchmark retains the original Title spawn context")
 	var camera := Camera3D.new()
 	root.add_child(camera)
 	var origin: Vector3 = world.get_spawn_position() + Vector3.UP * 3.0
@@ -113,8 +114,8 @@ func run() -> void:
 	print("IMPACT_EFFECTS_PROGRESS: warm normal and bulk effects")
 	setup_effects(normal, world, camera, origin)
 	setup_effects(bulk, world, camera, origin)
-	check(normal._particles.size() == 400 and bulk._particles.size() == 400, "both variants begin with identical 400 fragments and source budgets")
-	check(bulk.packed_buffer.size() == 512 * 16, "experimental buffer retains production fixed capacity and documented stride")
+	check(normal.particle_count() == 40 and bulk.particle_count() == 40, "Both variants begin with forty identical collision-free fragments")
+	check(bulk.packed_buffer.size() == 50 * 16, "Experimental buffer retains the fixed fifty-slot capacity and documented stride")
 	var phases: Dictionary = {}
 	for phase: String in ["dense", "tail"]:
 		print("IMPACT_EFFECTS_PROGRESS: sample " + phase)
@@ -133,7 +134,7 @@ func run() -> void:
 				times[label].append(float(Time.get_ticks_usec() - started))
 				times[label + "_particles"].append(float(effects.particle_usec - old_particles))
 				times[label + "_batch"].append(float(effects.batch_usec - old_batch))
-			check(normal._particles.size() == bulk._particles.size() and normal._fragment_count == bulk._fragment_count, "bulk publication does not change source lifetimes/counts")
+			check(normal.particle_count() == bulk.particle_count() and normal._fragment_count == bulk._fragment_count, "Bulk publication preserves analytical lifetimes and active counts")
 			if phase == "dense" and frame == 0:
 				verify_pose(normal, bulk)
 		var measured: Dictionary = {}
@@ -147,7 +148,7 @@ func run() -> void:
 		"assertions": assertions, "failures": failures, "origin": origin, "phases": phases,
 		"normal_stats": normal.stats(), "bulk_stats": bulk.stats(), "bulk_uploads": bulk.bulk_uploads,
 		"bulk_retained_bytes": bulk.packed_buffer.size() * 4,
-		"method": "Native opt-in 400 Title fragments, exact deterministic source 1/60 integration, alternating variant order; dense 90 frames and tail 90 frames; CPU only, no FPS claim"}
+		"method": "Native opt-in 40 collision-free data-only Title fragments, analytical real-time integration at 1/60s; alternating variant order, dense 90 frames and tail 90 frames, fixed 50-slot buffer; CPU only, no FPS claim. Earlier 400/512 colliding experiment retained in Git/archive."}
 	if not report_path.is_empty():
 		var file := FileAccess.open(report_path, FileAccess.WRITE)
 		check(file != null, "requested benchmark report opens")
@@ -167,14 +168,13 @@ func run() -> void:
 	quit(0 if failures == 0 else 1)
 
 func verify_pose(normal: TimedEffects, bulk: BulkEffects) -> void:
-	var entry: Dictionary = bulk._particles[0]
-	var node: Sprite3D = entry.node
+	var entry: Dictionary = bulk.particle_snapshot(0)
 	var billboard: Basis = bulk.camera.global_basis.orthonormalized()
 	var to_local: Transform3D = bulk._fragment_batch.global_transform.affine_inverse()
-	var expected: Transform3D = to_local * Transform3D(billboard * Basis(Vector3.BACK, node.rotation.z) * Basis.from_scale(node.global_basis.get_scale()), node.global_position)
+	var expected: Transform3D = to_local * Transform3D(billboard * Basis(Vector3.BACK, entry.spin) * Basis.from_scale(Vector3.ONE * entry.radius * 2.0), entry.position)
 	check(Vector3(bulk.packed_buffer[0], bulk.packed_buffer[4], bulk.packed_buffer[8]).is_equal_approx(expected.basis.x)
 		and Vector3(bulk.packed_buffer[3], bulk.packed_buffer[7], bulk.packed_buffer[11]).is_equal_approx(expected.origin), "CPU buffer stores documented row-major basis and origin")
-	check(is_equal_approx(bulk.packed_buffer[15], node.modulate.a), "CPU buffer retains intrinsic color and source fade alpha")
+	check(is_equal_approx(bulk.packed_buffer[15], entry.display_color.a), "CPU buffer retains intrinsic color and elapsed fade alpha")
 	if DisplayServer.get_name() == "headless":
 		print("IMPACT_EFFECTS_GPU_SKIPPED: Compatibility MultiMesh transform/color readback")
 		return

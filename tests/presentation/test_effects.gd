@@ -4,7 +4,9 @@ const Effects = preload("res://presentation/openspades_effects.gd")
 
 class FloorWorld extends Node3D:
 	var water_level := -100.0
+	var queries: int = 0
 	func get_block(cell: Vector3i) -> int:
+		queries += 1
 		return 0x01777777 if cell.y == 0 else 0
 
 var checks := 0
@@ -61,10 +63,10 @@ func _run() -> void:
 	_check(effects.stats().lights == 0, "Transient flash expires")
 	effects.clear()
 	effects.grenade_explosion(origin)
-	_check(effects.stats().particles == 58, "Above-water grenade uses original 4+8+42+4 particle groups")
+	_check(effects.stats().particles == 50, "Above-water grenade fits the accepted fifty-particle presentation budget")
 	effects.clear()
 	effects.grenade_explosion(origin, true)
-	_check(effects.stats().particles == 73, "Underwater grenade uses original 7+16+8+42 particle groups")
+	_check(effects.stats().particles == 50, "Underwater grenade fits the accepted fifty-particle presentation budget")
 	effects.clear()
 	effects.audio_enabled = true
 	effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, 0)
@@ -73,9 +75,10 @@ func _run() -> void:
 	_check(effects.stats().casings == 2, "Rifle/SMG original shells eject; source shotgun firing does not")
 	for step in range(160):
 		effects.update_effects(0.1)
-	_check(contacts == 2, "Each original casing emits one first ground-contact event")
-	_check(effects.stats().casings == 0, "Original shell ground lifetime expires")
-	_check(effects.stats().audio <= 2, "Casing contact audio has bounded one-shot lifetime")
+	_check(contacts == 0, "Collision-free casings emit no ground-contact events")
+	_check(effects.stats().casings == 0, "Decorative casings expire after their bounded flight")
+	_check(effects.stats().audio == 0, "Collision-free casings create no contact sounds")
+	_check(world.queries == 0, "Particle and casing emission/flight query no terrain")
 	effects.stop_audio()
 	_check(effects.stats().audio == 0, "Audio teardown releases owned playback and stream references")
 	effects.audio_enabled = false
@@ -89,18 +92,23 @@ func _run() -> void:
 	_check(effects.stats().tracers == 0, "Moving tracer segments terminate at the hit position")
 	_test_pooling(effects, origin)
 	_test_batching(effects, origin)
+	_test_particle_budget(effects, origin)
+	_test_casing_budget(effects, origin, world)
 	effects.max_particles = 80
 	for step in range(10):
 		effects.grenade_explosion(origin)
-	_check(effects.stats().particles == 80, "Repeated explosions respect the browser particle budget")
+	_check(effects.max_particles == 50 and effects.stats().particles == 50, "Configuration cannot raise the hard fifty-particle limit")
 	_check(effects.stats().lights <= effects.max_lights, "Repeated explosions respect the flash-light budget")
 	for step in range(130):
 		effects.update_effects(0.1)
 		_check(effects.get_camera_rotation().is_finite(), "Source camera vibration remains finite")
 		for child in effects.get_children():
 			if child is Node3D and not child.is_queued_for_deletion():
-				_check(child.global_transform.is_finite(), "Particle transforms remain finite during gravity/collision/animation")
-	_check(effects.stats().particles == 0, "All original particle lifetimes expire")
+				_check(child.global_transform.is_finite(), "Effect transforms remain finite during gravity and animation")
+		for index: int in range(effects.particle_count()):
+			var particle: Dictionary = effects.particle_snapshot(index)
+			_check(particle.position.is_finite() and particle.velocity.is_finite(), "Collision-free particle data stays finite through expiry")
+	_check(effects.stats().particles == 0, "Every admitted particle lifetime expires")
 	_check(effects.get_camera_rotation() == Vector3.ZERO, "Camera vibration decays to zero")
 	effects.clear()
 	_test_reload(effects, origin)
@@ -156,8 +164,8 @@ func _test_pooling(effects: OpenSpadesEffects, origin: Vector3) -> void:
 	var created: int = effects.stats().created_nodes
 	var textures := effects._textures.size()
 	_check(effects._smoke_frames[1].size() == 180 and effects._smoke_frames[2].size() == 48, "Both complete smoke animations are cached before firing")
-	# More than six SMG magazines, with nearby impact particles, shell collisions,
-	# flashes and world tracers. Advance at60Hz so lifetimes/collisions are exercised.
+	# More than six SMG magazines with nearby impact particles, decorative shells,
+	# flashes and world tracers. Advance at60Hz to exercise animation and expiry.
 	for shot in range(180):
 		effects.muzzle_fire(origin, Vector3.FORWARD, 1)
 		effects.block_hit(origin, Vector3.UP, Color(0.2, 0.4, 0.6))
@@ -177,25 +185,30 @@ func _test_pooling(effects: OpenSpadesEffects, origin: Vector3) -> void:
 	_check(inactive_hidden, "Inactive pooled nodes are hidden, reset and have no process callbacks")
 	for weapon in range(2):
 		effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, weapon)
-		var first: Node3D = effects._casings[0].node
+		var first: Node3D = effects.casing_snapshot(0).node
 		var model: Node = first.get_child(0)
-		effects._casings[0].played = true
-		effects._casings[0].ground_time = 1.5
+		effects.update_effects(0.3)
 		first.scale = Vector3.ONE * 3.0
 		effects.clear()
 		effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, weapon)
-		var entry: Dictionary = effects._casings[0]
+		var entry: Dictionary = effects.casing_snapshot(0)
 		_check(entry.node == first and first.get_child(0) == model, "Weapon%s reuses its original GLB casing instance" % weapon)
-		_check(not entry.played and entry.ground_time == -1.0 and entry.age == 0.0 and first.scale.is_equal_approx(Vector3.ONE), "Reused casing resets collision/contact/lifetime/transform state")
+		_check(entry.age == 0.0 and entry.life == 2.0 and entry.opacity == 1.0 and entry.velocity.is_finite() and first.scale.is_equal_approx(Vector3.ONE), "Reused casing resets flight lifetime, fade and transform state")
+		var expected_velocity := Vector3(10, 2, -5) if weapon == 0 else Vector3(10, 2, 2)
+		_check(entry.velocity.is_equal_approx(expected_velocity), "Weapon%s preserves original casing ejection direction and speed" % weapon)
 		effects.clear()
 	effects._spawn(origin, Vector3.ONE, Color.RED, 2.0, 5.0, {"smoke": 1, "collision": Effects.IGNORE})
-	var sprite: Sprite3D = effects._particles[0].node
+	var sprite: Sprite3D = effects.particle_snapshot(0).node
 	effects.update_effects(0.05)
 	effects.clear()
+	effects._spawn(origin, Vector3.ZERO, Color.WHITE, 0.1, 2.0, {"smoke": 2})
+	var particle: Dictionary = effects.particle_snapshot(0)
+	_check(particle.node == sprite and sprite.texture == effects._smoke_texture(2, 0) and sprite.modulate == Color.WHITE, "Reused smoke sprite resets texture and color")
+	_check(particle.age == 0.0 and particle.smoke == 2 and particle.velocity == Vector3.ZERO and particle.frame == 0, "Reused smoke state resets age, animation and velocity")
+	effects.clear()
 	effects._spawn(origin, Vector3.ZERO, Color.WHITE, 0.1, 2.0)
-	var particle: Dictionary = effects._particles[0]
-	_check(particle.node == sprite and sprite.texture == effects._texture("Gfx/White.png") and sprite.modulate == Color.WHITE, "Reused sprite resets previous smoke texture and color")
-	_check(particle.age == 0.0 and particle.smoke == 0 and particle.velocity == Vector3.ZERO and particle.collision == Effects.DELETE, "Reused sprite resets lifetime, velocity and collision policy")
+	particle = effects.particle_snapshot(0)
+	_check(particle.batched and not particle.has("node") and particle.visible, "A white fragment uses an active data slot without a hidden Sprite3D")
 	effects.clear()
 	# Burst without advancing time exercises every active admission cap.
 	for shot in range(700):
@@ -215,11 +228,134 @@ func _test_hitch_lifetimes(effects: OpenSpadesEffects, origin: Vector3) -> void:
 	effects._spawn(origin, Vector3.ZERO, Color.WHITE, 0.1, 2.0, {"collision": Effects.IGNORE, "fade_out": 2.0})
 	effects.update_effects(1.0)
 	_check(effects.stats().particles == 1 and effects.stats().lights == 0 and effects.stats().tracers == 0, "One-second hitch expires muzzle smoke, flash and world tracer in real time")
-	_check(is_equal_approx(effects._particles[0].age, 1.0) and is_equal_approx(effects._casings[0].age, 1.0), "Particle and casing ages use real elapsed time during a hitch")
-	_check(is_equal_approx(effects._particles[0].node.modulate.a, 0.5), "Particle fade uses real elapsed time during a hitch")
+	_check(is_equal_approx(effects.particle_snapshot(0).age, 1.0) and is_equal_approx(effects.casing_snapshot(0).age, 1.0), "Particle and casing ages use real elapsed time during a hitch")
+	_check(is_equal_approx(effects.particle_snapshot(0).display_color.a, 0.5), "Particle fade uses real elapsed time during a hitch")
 	effects.update_effects(1.0)
 	_check(effects.stats().particles == 0, "Two-second fragment lifetime expires after two one-second slow frames")
 	effects.clear()
+
+func _test_particle_budget(effects: OpenSpadesEffects, origin: Vector3) -> void:
+	effects.clear()
+	var before: Dictionary = effects.stats()
+	_check(effects.max_particles == 50 and before.particle_hard_cap == 50 and before.particle_slot_capacity == 50, "Default and storage capacities enforce the hard fifty-particle budget")
+	_check(before.particle_state_allocations == 50, "All fifty particle records are allocated during loading")
+	# Fill the pool with old distant ambient smoke, then emit close combat feedback.
+	for index: int in range(50):
+		effects._spawn(origin + Vector3.RIGHT * 80.0, Vector3.ZERO, Color.WHITE, 0.2, 8.0, {"smoke": 1})
+	effects.update_effects(0.1)
+	effects.block_hit(origin, Vector3.UP, Color.BLUE)
+	var close: int = 0
+	for index: int in range(effects.particle_count()):
+		var particle: Dictionary = effects.particle_snapshot(index)
+		if particle.position.distance_to(origin) < 1.0:
+			close += 1
+	_check(effects.particle_count() == 50 and close == 25, "Fresh close impact fragments and dust replace distant old smoke without growing the pool")
+	_check(effects.stats().particle_recycled > before.particle_recycled, "Overload recycles existing active slots")
+	effects.clear()
+	# Same-priority overload replaces the oldest slot; lower-priority smoke is dropped.
+	effects._spawn(origin, Vector3.ZERO, Color.GREEN, 0.2, 8.0)
+	for index: int in range(49):
+		effects._spawn(origin, Vector3.ZERO, Color.RED, 0.2, 8.0)
+	var dropped: int = effects.stats().particle_dropped
+	effects._spawn(origin + Vector3.RIGHT * 80.0, Vector3.ZERO, Color.WHITE, 0.2, 8.0, {"smoke": 1})
+	_check(effects.stats().particle_dropped == dropped + 1 and effects.particle_count() == 50, "Distant ambient smoke cannot evict close combat particles")
+	effects._spawn(origin, Vector3.ZERO, Color.BLUE, 0.2, 8.0)
+	var green: int = 0
+	var blue: int = 0
+	for index: int in range(effects.particle_count()):
+		var particle: Dictionary = effects.particle_snapshot(index)
+		green += int(particle.color == Color.GREEN)
+		blue += int(particle.color == Color.BLUE)
+	_check(green == 0 and blue == 1 and effects.particle_count() == 50, "A fresh equal-priority particle replaces the oldest combat particle")
+	_check(effects.stats().created_nodes == before.created_nodes and effects.stats().particle_state_allocations == before.particle_state_allocations, "Overload performs no particle state or node allocation")
+	effects.clear()
+	effects.max_particles = -5
+	effects.blood(origin)
+	effects.grenade_explosion(origin)
+	_check(effects.max_particles == 0 and effects.particle_count() == 0, "Negative particle configuration clamps to zero and disables emission")
+	effects.max_particles = 12
+	for index: int in range(40):
+		effects._spawn(origin, Vector3.ZERO, Color.RED, 0.2, 2.0)
+	_check(effects.particle_count() == 12 and effects.stats().particle_capacity == 12, "A lower configured budget admits only that many particles")
+	effects.max_particles = 5
+	_check(effects.particle_count() <= 5, "Lowering an active budget immediately restores its cap")
+	effects.clear()
+	effects.max_particles = 5000
+	effects.prewarm()
+	_check(effects.max_particles == 50 and effects.stats().particle_state_allocations == before.particle_state_allocations and effects.stats().created_nodes == before.created_nodes, "Raising the budget reuses the original fixed storage and prewarmed sprites")
+	for cycle: int in range(4):
+		effects.blood(origin)
+		effects.water_hit(origin)
+		effects.grenade_explosion(origin, cycle % 2 == 0)
+		effects.clear()
+		_check(effects.particle_count() == 0 and effects.stats().pooled_particles == 50 and effects._fragment_multimesh.visible_instance_count == 0, "Clear cycle returns every active slot and hides the fragment batch")
+	_check(effects.stats().created_nodes == before.created_nodes and effects.stats().particle_state_allocations == before.particle_state_allocations, "Repeated mixed-effect clear cycles allocate neither records nor nodes")
+
+func _test_casing_budget(effects: OpenSpadesEffects, origin: Vector3, world: FloorWorld) -> void:
+	effects.clear()
+	var before: Dictionary = effects.stats()
+	_check(effects.max_casings == 16 and before.casing_hard_cap == 16 and before.casing_slot_capacity == 16 and before.casing_state_allocations == 16, "Casings have sixteen preallocated active records and a hard sixteen-casing cap")
+	var before_queries: int = world.queries
+	effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, 0)
+	var start: Dictionary = effects.casing_snapshot(0)
+	var materials: Array[BaseMaterial3D] = _casing_materials(start.node)
+	var colors: Array[Color] = []
+	for material: BaseMaterial3D in materials:
+		colors.append(material.albedo_color)
+	var updates: int = effects.stats().casing_updates
+	effects.update_effects(1.75)
+	var flown: Dictionary = effects.casing_snapshot(0)
+	_check(effects.stats().casing_updates == updates + 1 and is_equal_approx(flown.age, 1.75), "A casing updates once per real elapsed frame")
+	_check(flown.position.is_finite() and flown.velocity.is_finite() and flown.node.global_transform.is_finite() and flown.position.distance_to(start.position) > 1.0, "Decorative casing flight advances with finite position and model transform")
+	_check(flown.opacity > 0.0 and flown.opacity < 1.0 and flown.node.visible, "A casing fades during the end of its two-second flight")
+	var faded: bool = not materials.is_empty()
+	for index: int in range(materials.size()):
+		faded = faded and is_equal_approx(materials[index].albedo_color.a, colors[index].a * flown.opacity)
+	_check(faded, "Compatibility casing materials publish the flight fade as actual alpha")
+	var expected_position: Vector3 = start.position + start.velocity * 1.75 + Vector3.DOWN * 16.0 * 1.75 * 1.75
+	_check(flown.position.distance_to(expected_position) < 0.0001, "Casing gravity advances analytically over the entire elapsed frame")
+	_check(world.queries == before_queries and contacts == 0 and effects.stats().audio == 0, "Casing flight has no terrain queries, contact event or contact sound")
+	effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, 0)
+	var fresh_materials: Array[BaseMaterial3D] = _casing_materials(effects.casing_snapshot(1).node)
+	var independent: bool = not materials.is_empty() and fresh_materials.size() == materials.size()
+	for index: int in range(mini(fresh_materials.size(), colors.size())):
+		independent = independent and not materials.has(fresh_materials[index]) and fresh_materials[index].albedo_color.is_equal_approx(colors[index])
+	_check(independent, "A new casing stays opaque while another casing fades through independent prewarmed materials")
+	effects.update_effects(0.25)
+	_check(effects.casing_count() == 1 and not start.node.visible, "Casing expiry returns and hides its original model after two seconds while a newer shell survives")
+	var restored: bool = not materials.is_empty()
+	for index: int in range(materials.size()):
+		restored = restored and materials[index].albedo_color.is_equal_approx(colors[index])
+	_check(restored, "Returning a casing restores its original material colors for reuse")
+	effects.max_casings = -10
+	effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, 0)
+	_check(effects.max_casings == 0 and effects.casing_count() == 0, "Negative casing budget clamps to zero and disables ejection")
+	effects.max_casings = 4
+	for index: int in range(40):
+		effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, index % 2)
+	_check(effects.casing_count() == 4, "Casing overload reuses only the configured active slots")
+	effects.max_casings = 2
+	_check(effects.casing_count() <= 2, "Lowering an active casing budget restores its cap immediately")
+	effects.clear()
+	effects.max_casings = 5000
+	effects.prewarm()
+	for index: int in range(100):
+		effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, index % 2)
+	_check(effects.max_casings == 16 and effects.casing_count() == 16 and effects.stats().casing_recycled > before.casing_recycled, "Oversized casing configuration clamps to sixteen and overload replaces old ejections")
+	_check(effects.stats().created_nodes == before.created_nodes and effects.stats().casing_state_allocations == before.casing_state_allocations, "Raising casing budgets and repeated ejection allocate no records or GLB nodes")
+	effects.clear()
+
+func _casing_materials(node: Node3D) -> Array[BaseMaterial3D]:
+	var materials: Array[BaseMaterial3D] = []
+	for child: Node in node.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance: MeshInstance3D = child as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		for surface: int in range(mesh_instance.mesh.get_surface_count()):
+			var material: BaseMaterial3D = mesh_instance.get_active_material(surface) as BaseMaterial3D
+			if material != null and not materials.has(material):
+				materials.append(material)
+	return materials
 
 func _test_batching(effects: OpenSpadesEffects, origin: Vector3) -> void:
 	effects.clear()
@@ -229,10 +365,12 @@ func _test_batching(effects: OpenSpadesEffects, origin: Vector3) -> void:
 	effects.update_effects(0.0)
 	_check(effects.stats().particles == 10 and effects.stats().batched_particles == 8 and effects._fragment_multimesh.visible_instance_count == 8, "White fragment sprites batch while both animated smoke sprites remain separate")
 	var visibility_correct := true
-	for entry: Dictionary in effects._particles:
-		visibility_correct = visibility_correct and entry.node.visible == (not entry.batched)
-	_check(visibility_correct and effects._fragment_batch.visible, "Batched fragment sprites stay hidden and emit one visible MultiMesh")
-	_check(effects._fragment_multimesh.instance_count == effects.max_particles and effects._fragment_material.vertex_color_use_as_albedo and effects._fragment_material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA, "Fragment batch has fixed capacity and shared transparent per-instance colors")
+	for index: int in range(effects.particle_count()):
+		var entry: Dictionary = effects.particle_snapshot(index)
+		visibility_correct = visibility_correct and entry.visible
+		visibility_correct = visibility_correct and (not entry.has("node") if entry.batched else entry.node.visible)
+	_check(visibility_correct and effects._fragment_batch.visible, "White fragments render through one MultiMesh without hidden sprite nodes")
+	_check(effects._fragment_multimesh.instance_count == effects.stats().particle_hard_cap and effects._fragment_material.vertex_color_use_as_albedo and effects._fragment_material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA, "Fragment batch retains fifty instances and shared transparent per-instance colors")
 	effects.clear()
 	var previous_transform := effects.transform
 	var previous_camera_transform := effects.camera.transform
@@ -246,9 +384,9 @@ func _test_batching(effects: OpenSpadesEffects, origin: Vector3) -> void:
 		print("EFFECTS_GPU_SKIPPED: 3 MultiMesh transform/color assertions (headless dummy renderer)")
 	else:
 		var pose: Transform3D = effects._fragment_batch.global_transform * effects._fragment_multimesh.get_instance_transform(0)
-		_check(pose.origin.is_equal_approx(origin) and pose.basis.get_scale().is_equal_approx(Vector3.ONE * 0.24), "Batched billboard preserves global position and inherited radius under a transformed manager")
+		_check(pose.origin.is_equal_approx(origin) and pose.basis.get_scale().is_equal_approx(Vector3.ONE * 0.2), "Batched billboard preserves world position and radius under a transformed manager")
 		_check(pose.basis.z.normalized().is_equal_approx(effects.camera.global_basis.z.normalized()), "Batched fragments face the current rotated camera after transform updates")
-		_check(effects._fragment_multimesh.get_instance_color(0).is_equal_approx(effects._particles[0].node.modulate), "Batch carries original fragment color and fade alpha")
+		_check(effects._fragment_multimesh.get_instance_color(0).is_equal_approx(effects.particle_snapshot(0).display_color), "Actual batch readback carries fragment color and fade alpha")
 	_check(effects.stats().created_nodes == created, "Fragment batch never creates mesh/material nodes per emission")
 	effects.clear()
 	effects.transform = previous_transform
@@ -272,7 +410,7 @@ func _test_reload(effects: OpenSpadesEffects, origin: Vector3) -> void:
 		disposed = disposed and node.is_queued_for_deletion() and not node.is_inside_tree()
 	_check(disposed, "Reload queues stale model/material nodes for deletion without retaining active nodes")
 	_check(effects._smoke_frames[1].size() == 180 and effects._smoke_frames[2].size() == 48 and effects._tracer_material != old_material and effects._tracer_mesh != old_mesh, "Reload rebuilds complete frame caches and replaces stale tracer resources")
-	_check(effects._fragment_multimesh != old_fragment_mesh and effects._fragment_multimesh.instance_count == effects.max_particles and effects._fragment_multimesh.visible_instance_count == 0, "Reload replaces stale fragment batch resources under the current budget")
+	_check(effects._fragment_multimesh != old_fragment_mesh and effects._fragment_multimesh.instance_count == effects.stats().particle_hard_cap and effects._fragment_multimesh.visible_instance_count == 0, "Reload replaces stale fragment resources with a hidden fifty-instance batch")
 	_check(effects.stats().pooled_particles == effects.max_particles and effects.stats().pooled_casings == effects.max_casings * 2 and effects.stats().pooled_tracers == effects.max_tracers and effects.stats().pooled_lights == effects.max_lights, "Reload automatically repopulates pools under current budgets")
 	effects.muzzle_fire(origin, Vector3.FORWARD, 1)
 	effects.eject_shell(origin, Vector3.FORWARD, Vector3.RIGHT, Vector3.UP, 1)

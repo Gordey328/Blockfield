@@ -3,6 +3,64 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Fixed50 noncolliding effects — 2026-10-11 (in progress)
+
+User authorizes a hard50 decorative particle pool and removal of particle
+collisions, with maximum practical performance. Root owns ADR0025, accepted
+replacement/contracts/evidence, isolated engine/browser/release integration.
+particle_runtime owns only Effects/new slot storage; particle_tests owns the
+effects/fragment/browser fixtures; particle_benchmark owns new diagnostic helpers
+and FallingVoxelCluster/its fixture after the user's expanded scope.
+Contracts agreed before edits: fixed reusable state, one particle update per
+rendered frame, no hidden fragment sprite mirroring, real-time age/fade and fresh
+combat feedback under saturation. User then also removes casing collisions;
+typed16 casing states use2s simple flight. Falling presentation becomes one
+group of at most64 cubes for1s with no collisions or impact debris. Authoritative
+grenade/collapse/map rules retain their contracts. See
+[ADR0025](decisions/0025-fixed-noncolliding-effects.md).
+Baseline26ea9883bdef9a7436bece87e36239857651dc8e archived under
+.cache/particle50-baseline; Godot4.7.2.stable.official.ed1daf0bf,
+upstream dcf449c845d509bbde9d79239b32d201c1389961. Mirage/Steam/optimization
+work is separately owned and preserved; root runs frozen/private projects only.
+Runtime/test handoffs are integrated and leases returned. Parser/import, effects
+20928/0 (three explicit headless skips), fragment43/0 and falling43/0 pass.
+Actual Intel UHD Compatibility readbacks pass: effects20931/0, falling45/0;
+experimental bulk publication267/0 is slower than retained setters. All13 affected
+world/gameplay/presentation/audio/Main suites and runtime/server smoke pass.
+Paired public effects CPU is91.0%/96.8% lower across two native runs; equal50
+implementation-only results vary, so no stable gain is claimed for that case.
+Casings live617.138 to31.877ms with zero terrain queries; falling no longer emits
+thousands of secondary particles. Evidence is in
+[simple effects performance](simple-effects-performance.md).
+Rendered baseline/candidate probes pass4/4 checks per workload; public component
+CPU9,083.5 to898.5ms (90.1% lower), with50 peak and full expiry. Actual-Main held
+SMG passes7/7, peaks50 particles/16 casings, with no new states/nodes or contacts.
+400-cell roof removal displays64 cubes and completes with zero debris/groups;
+map cells remain authoritatively removed. GPU/native visual and browser input
+checks are recorded in the evidence; initial helper/import/type errors are retained.
+Next: freeze the owned source, verify normal Web input, publish development build
+and verify matching public hashes. Unrelated Mirage work remains outside this release.
+
+## Runtime cost assessment — 2026-10-11
+
+User asks which part currently demands the most resources. Coordinator reads current
+HEAD b6fb8ff41543032d04cbb848d8b10c08aaabfe83 plus ongoing workspace edits,
+code and retained measurements; only this status entry is added. The latest paired
+Title Web G reports measure mean particle integration929.53ms and fragment
+publication375.8ms over roughly8s shooting, versus World self290.07ms; the two
+particle functions account for about45% of instrumented shoot script CPU.
+This is earlier measured Title gameplay, not a fresh profile of current3x3/mobile
+changes or total engine/GPU CPU. TDM's separate native authority mean/max
+1.415/42.787ms does not establish the browser bottleneck. Full-map storage is64MiB;
+retained snapshot first-write adds another64MiB and13.397–14.786ms in native fixtures.
+Evidence: [Title profile](title-impact-performance.md), [TDM](offline-tdm.md),
+[memory](optimization-audio-vxl-memory.md). Godot4.7.2.stable.official.ed1daf0bf,
+upstream dcf449c845d509bbde9d79239b32d201c1389961 remain pinned.
+Commands: Get-Content, rg, git status/rev-parse and ConvertFrom-Json inspection of
+`.cache/benchmarks/warm-title-candidate-web-g-a.json` and the paired summary; reports
+read successfully. No engine/browser/export/test/publication run or parity change.
+Next measurement: a controlled current3x3 whole-frame CPU/GPU profile.
+
 ## Mobile UX and aim friction — 2026-10-11 (verified development release)
 
 User requests asymmetric mobile UX and slight enemy aim stickiness. Root owns

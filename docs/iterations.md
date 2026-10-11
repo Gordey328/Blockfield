@@ -48,3 +48,14 @@ The user requests a thumb-oriented mobile combat layout and slight aim stickines
 on enemies. [ADR0023](decisions/0023-mobile-thumb-layout-and-aim-friction.md)
 defines the asymmetric controls and optional touch-only gain reduction. This
 explicit input adaptation retains authoritative weapon rules and desktop input.
+
+## Accepted decorative effects replacement — 2026-10-11
+
+The user replaces particle/casing collisions with collision-free presentation and
+limits the whole decorative particle pool to50 simultaneously active particles.
+Fresh important combat feedback has priority under saturation. Casings have simple
+finite flight/fade; falling components use a bounded sampled group without impact
+debris. Smaller visible counts and changed trajectories are accepted. Authoritative
+unsupported-component removal, grenade rules, bullets, damage and map transactions
+retain their contracts. See [ADR0025](decisions/0025-fixed-noncolliding-effects.md).
+This replacement does not accept unrelated parity or the complete port.

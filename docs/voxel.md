@@ -21,6 +21,8 @@ Original VXL `(x, y, z)` maps to Godot `(x, 63-z, y)`. The original 512 × 512 �
 
 ## Public boundary
 
+- `BlockfieldMap.load/load_bytes` stages native `.bfmap` data independently and returns `{error,message,data,metadata}`; failed validation preserves the installed world. `encode(data,metadata)` stores every occupied cell's RGB, including hidden interiors and solid black. BFM1 has a16-byte header (magic plus three little-endian lengths), UTF-8 JSON and a zlib payload of canonical big-endian cells; dimensions are bounded by512×64×512. Its feet spawn requires a clear0.9×2.7 body and four supported corners. Main applies title/spawn/view/dry-water metadata, preserves baseline bytes for reset and chooses a safe save spawn after terrain edits. See [ADR0024](decisions/0024-local-map-conversion.md).
+- `set_map_data(data,title,deferred_visuals=false,validated_spawn=Vector3.INF)` atomically installs already validated data; the optional finite in-bounds feet position initializes spawn and streaming. Main owns native package validation before adoption.
 - `generate_lab()` resets the local test arena.
 - `get_block(cell)`, `set_block(cell, color)` query or change one cell. Layer y=0 cannot be changed through gameplay.
 - `remove_blocks(cells, protect_lower_layer=false)` performs a batch removal and one connectivity pass. Set `protect_lower_layer=true` for grenade/three-block spade actions, matching OpenSpades' protected two bottom layers.
@@ -60,11 +62,16 @@ Support traversal stops as soon as a solid bottom-layer neighbor or a component 
 
 ## Falling presentation (W09)
 
-`falling_cluster.gd` preserves `FallingBlock.cpp`'s cosmetic behavior: one mesh centered at the mean voxel center, gravity 4 m/s², local rotation around mapped source axis `(1,0,1)` with incremental angle `time * 1.4 * dt`, and breakup when elapsed time exceeds one second or its center enters ClipBox geometry. Authoritative blocks remain removed; fallen models never settle as new terrain.
-
-At breakup, only component surface cells emit particles. The normal count is six white fragments and one original animated Smoke1 sprite per surface cell. Two MultiMesh batches replace individual particle nodes. Smoke runs at source 70 fps, grows from radius 1 at 0.5 units/s, has lifetime 1–1.5 seconds and ignores collisions. Fragments have source triangular random velocity scaled by 13, radius 0.35–0.45, gravity 19.2 m/s², lifetime two seconds and a one-second fade. Near impacts (observer distance <16 m and cluster <1000 blocks) use native axis selection and 0.36 velocity damping for weak bounces; other fragment collisions delete the sprite. Impacts farther than 170 m allocate no particles.
-
-Browser budgets are explicit: at most 24 active clusters, 4096 fragments and 1024 smoke sprites per cluster. Larger surface sets are sampled uniformly. For sets below these budgets, counts follow the native six-plus-one rule. Source original rendering also emits camera vibration proportional to `block_count / 100 / (distance + 5)` clamped to one; the world emits the breakup event so presentation can apply it. These caps preserve map rules while adapting effect load.
+The user explicitly replaces the original cosmetic falling physics with the
+simplified treatment in [ADR0025](decisions/0025-fixed-noncolliding-effects.md).
+`falling_cluster.gd` retains the exact detached block count/mean pivot, samples at
+most64 colored cubes into one grouped MultiMesh with a shared cube mesh, moves
+the whole group analytically for1s, then emits completion and disappears.
+There are no terrain collision queries or shatter fragment/smoke allocations.
+The existing24-group World budget remains. The world completion signal continues
+to supply presentation sound/camera feedback, with reason `simplified`.
+Authoritative unsupported blocks are still removed immediately and never reinserted;
+the new cosmetic geometry/motion is an accepted source deviation.
 
 ## Water and renderer baseline (U14)
 

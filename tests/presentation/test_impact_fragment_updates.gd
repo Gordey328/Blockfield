@@ -1,13 +1,15 @@
 extends SceneTree
-## Source-shaped numerical motion/bounce/fade plus actual hidden-node write
-## counts for the 3/6 substeps seen during sustained 50/100ms impact frames.
+## Accepted budget: real-time analytical motion, no terrain queries or hidden
+## fragment sprites, one update per active slot per frame.
 const EFFECTS = preload("res://presentation/openspades_effects.gd")
 var assertions: int = 0
 var failures: int = 0
 
 class FloorWorld extends Node3D:
 	var water_level: float = -100.0
+	var queries: int = 0
 	func get_block(cell: Vector3i) -> int:
+		queries += 1
 		return 0x01777777 if cell.y == 0 else 0
 
 class CountingData extends VoxelData:
@@ -50,108 +52,75 @@ func run() -> void:
 	effects.set_process(false)
 	effects.audio_enabled = false
 	effects.shake_level = 0
-	for duration: float in [0.05, 0.1]:
+	var initial: Dictionary = effects.stats()
+	for duration: float in [0.05, 0.1, 1.0]:
 		effects.clear()
 		effects._spawn(Vector3(2, 3, 4), Vector3(6, 3, -3), Color.RED, 0.2, 2.0,
-			{"gravity": 0.9, "collision": EFFECTS.IGNORE})
-		# Spawn applies random spin after scale. Moving a rotated Basis may add
-		# tiny scale roundoff, which legitimately needs one final mirror setter.
-		# Use an exact unrotated basis for this zero-redundant-write assertion.
-		var opaque: Sprite3D = effects._particles[0].node
-		opaque.rotation = Vector3.ZERO
-		opaque.scale = Vector3.ONE * 0.4
+			{"gravity": 0.9, "collision": EFFECTS.BOUNCE})
+		var spin: float = effects.particle_snapshot(0).spin
 		var before: Dictionary = effects.stats()
 		effects.update_effects(duration)
-		var particle: Dictionary = effects._particles[0]
-		var expected_steps: int = 3 if duration == 0.05 else 6
-		check(count_since(effects, before, "fragment_substeps") == expected_steps, "50/100ms frame retains every bounded physics substep")
-		check(count_since(effects, before, "fragment_position_writes") == 1, "3/6 fragment substeps mirror hidden position only once")
-		check(count_since(effects, before, "fragment_scale_writes") == 0 and count_since(effects, before, "fragment_color_writes") == 0, "constant-radius opaque fragment causes no redundant scale/color setters")
-		# Source explicit Euler: gravity follows each position integration.
-		var expected := Vector3(2.3, 3.126, 3.85) if duration == 0.05 else Vector3(2.6, 3.18, 3.7)
-		check(particle.node.global_position.distance_to(expected) < 0.00001, "source Euler trajectory survives consolidated hidden-node updates")
-		check(absf(particle.velocity.y - (1.56 if duration == 0.05 else 0.12)) < 0.00001, "gravity applies to every retained substep")
-		check(is_equal_approx(particle.age, duration) and not particle.node.visible, "real age and hidden fragment visibility are retained")
-		check(particle.node.scale.is_equal_approx(Vector3.ONE * 0.4) and particle.node.modulate == Color.RED, "post-update node inspection retains exact radius and color")
-	for duration: float in [0.05, 0.1]:
+		var particle: Dictionary = effects.particle_snapshot(0)
+		var acceleration := Vector3(0, -28.8, 0)
+		var expected := Vector3(2, 3, 4) + Vector3(6, 3, -3) * duration + acceleration * duration * duration * 0.5
+		check(particle.position.distance_to(expected) < 0.0001 and particle.velocity.distance_to(Vector3(6, 3, -3) + acceleration * duration) < 0.0001, "Analytical gravity advances by real elapsed time at %ss" % duration)
+		check(count_since(effects, before, "particle_updates") == 1 and count_since(effects, before, "fragment_substeps") == 1, "Each active fragment updates once in a %ss frame" % duration)
+		check(count_since(effects, before, "fragment_position_writes") == 0 and count_since(effects, before, "fragment_scale_writes") == 0 and count_since(effects, before, "fragment_color_writes") == 0, "Fragments perform no hidden Sprite3D writes")
+		check(not particle.has("node") and particle.batched and particle.visible, "An active fragment renders directly from its data slot")
+		check(is_equal_approx(particle.age, duration) and is_equal_approx(particle.spin, spin) and is_equal_approx(particle.radius, 0.2) and particle.color == Color.RED, "Age changes while canonical spin, radius and intrinsic color remain stable")
+		check(world.queries == 0 and particle.position.is_finite() and particle.velocity.is_finite(), "Collision options cannot cause terrain queries or non-finite motion")
+		check(count_since(effects, before, "fragment_batch_transform_writes") == 1 and count_since(effects, before, "fragment_batch_color_writes") == 1, "Direct batch publication writes one transform and color per fragment")
+	for collision: int in [EFFECTS.IGNORE, EFFECTS.DELETE, EFFECTS.BOUNCE]:
 		effects.clear()
-		effects._spawn(Vector3(2, 3, 4), Vector3(6, 3, -3), Color.RED, 0.2, 2.0,
-			{"gravity": 0.9, "collision": EFFECTS.IGNORE})
-		var spun: Sprite3D = effects._particles[0].node
-		spun.rotation = Vector3(0.0, 0.0, 1.234)
-		spun.scale = Vector3.ONE * 0.4
-		var before: Dictionary = effects.stats()
-		effects.update_effects(duration)
-		var particle: Dictionary = effects._particles[0]
-		var expected_steps: int = 3 if duration == 0.05 else 6
-		var expected := Vector3(2.3, 3.126, 3.85) if duration == 0.05 else Vector3(2.6, 3.18, 3.7)
-		check(count_since(effects, before, "fragment_substeps") == expected_steps and count_since(effects, before, "fragment_position_writes") == 1, "deterministic spin retains3/6 source substeps with one final position mirror")
-		check(count_since(effects, before, "fragment_scale_writes") <= 1 and count_since(effects, before, "fragment_color_writes") == 0, "rotated opaque fragment needs at most one final scale setter per frame")
-		check(spun.global_position.distance_to(expected) < 0.00001 and absf(particle.velocity.y - (1.56 if duration == 0.05 else 0.12)) < 0.00001, "deterministic spin preserves source Euler position and gravity")
-		check(is_equal_approx(particle.age, duration) and not spun.visible and is_equal_approx(particle.radius, 0.2), "deterministic spin retains real age, hidden state and canonical radius")
-		check(spun.scale.is_equal_approx(Vector3.ONE * 0.4) and spun.modulate == Color.RED and is_equal_approx(spun.rotation.z, 1.234), "final mirror preserves rotated fragment size, opaque color and spin")
+		effects._spawn(Vector3(0, 1.05, 0), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
+			{"collision": collision})
+		effects.update_effects(0.2)
+		var particle: Dictionary = effects.particle_snapshot(0)
+		check(effects.particle_count() == 1 and is_equal_approx(particle.position.y, -0.15) and particle.velocity == Vector3(0, -6, 0), "Legacy collision%s passes through the solid floor without deletion or bounce" % collision)
+	check(world.queries == 0, "All legacy particle collision policies make zero terrain queries")
 	effects.clear()
-	effects._spawn(Vector3(0, 1.05, 0), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
-		{"collision": EFFECTS.BOUNCE})
-	var before: Dictionary = effects.stats()
-	effects.update_effects(0.05)
-	var bounced: Dictionary = effects._particles[0]
-	check(absf(bounced.node.global_position.y - 1.122) < 0.00001 and absf(bounced.velocity.y - 2.16) < 0.00001, "source floor bounce retains old position then applies0.36 damping before remaining substeps")
-	check(count_since(effects, before, "fragment_position_writes") == 1 and count_since(effects, before, "fragment_substeps") == 3, "bounce changes dictionary trajectory without extra hidden-node setters")
-	effects.clear()
-	effects._spawn(Vector3(0, 3, 0), Vector3.ZERO, Color.WHITE, 0.1, 2.0,
-		{"collision": EFFECTS.IGNORE, "fade_out": 2.0})
-	before = effects.stats()
+	effects._spawn(Vector3(0, 3, 0), Vector3.RIGHT, Color.WHITE, 0.1, 2.0, {"fade_out": 2.0})
 	effects.update_effects(1.0)
-	check(is_equal_approx(effects._particles[0].age, 1.0) and is_equal_approx(effects._particles[0].node.modulate.a, 0.5), "one-second hitch keeps real elapsed lifetime/fade with bounded integration")
-	check(count_since(effects, before, "fragment_substeps") == 6 and count_since(effects, before, "fragment_position_writes") == 1 and count_since(effects, before, "fragment_color_writes") == 1, "hitch mirrors final faded color once after six substeps")
-	before = effects.stats()
+	var hitch: Dictionary = effects.particle_snapshot(0)
+	check(is_equal_approx(hitch.age, 1.0) and is_equal_approx(hitch.display_color.a, 0.5) and hitch.position.is_equal_approx(Vector3(1, 3, 0)), "A one-second hitch advances motion, age and fade by the same real elapsed time")
+	var before_expiry: Dictionary = effects.stats()
 	effects.update_effects(1.0)
-	check(effects.stats().particles == 0 and count_since(effects, before, "fragment_position_writes") == 0, "expired fragment releases without mirroring stale state")
-	effects._spawn(Vector3(0, 3, 0), Vector3.RIGHT, Color.RED, 0.2, 2.0,
-		{"collision": EFFECTS.IGNORE})
-	var moved: Sprite3D = effects._particles[0].node
-	moved.global_position = Vector3(10, 8, 5)
-	effects.update_effects(0.02)
-	check(moved.global_position.distance_to(Vector3(10.02, 8, 5)) < 0.00001, "external hidden-node movement becomes the next frame's canonical position")
-	effects.clear()
-	effects._spawn(Vector3(2, 3, 4), Vector3.ZERO, Color.BLUE, 0.2, 2.0,
-		{"collision": EFFECTS.IGNORE})
+	check(effects.particle_count() == 0 and count_since(effects, before_expiry, "fragment_batch_transform_writes") == 0, "Expired fragments release their slots without publishing stale geometry")
+	effects._spawn(Vector3(2, 3, 4), Vector3.ZERO, Color.BLUE, 0.2, 2.0)
 	effects.transform = Transform3D(Basis(Vector3.UP, 0.4) * Basis.from_scale(Vector3.ONE * 1.2), Vector3(3, 1, -2))
-	var inherited: Sprite3D = effects._particles[0].node
-	var inherited_position: Vector3 = inherited.global_position
 	effects.update_effects(0.0)
-	check(inherited.global_position.distance_to(inherited_position) < 0.00001 and inherited.global_basis.get_scale().is_equal_approx(Vector3.ONE * 0.48), "external manager transform and inherited radius remain inspectable after final mirror")
-	check(inherited.modulate == Color.BLUE and effects._fragment_batch.visible, "transformed fragment retains batch color and visibility")
+	var transformed: Dictionary = effects.particle_snapshot(0)
+	check(transformed.position == Vector3(2, 3, 4) and is_equal_approx(transformed.radius, 0.2) and transformed.color == Color.BLUE and effects._fragment_batch.visible, "Manager transforms preserve canonical world position, radius and color")
 	effects.clear()
 	effects.transform = Transform3D.IDENTITY
-	for options: Dictionary in [{"smoke": 1, "growth": 1.0, "collision": EFFECTS.IGNORE},
-		{"image": "Textures/Fluid.png", "fade_out": 2.0, "collision": EFFECTS.IGNORE}]:
+	for options: Dictionary in [{"smoke": 1, "growth": 1.0}, {"image": "Textures/Fluid.png", "fade_out": 2.0}]:
 		effects._spawn(Vector3(0, 3, 0), Vector3(2, 0, 0), Color.WHITE, 0.2, 2.0, options)
-		before = effects.stats()
+		var before: Dictionary = effects.stats()
 		effects.update_effects(0.1)
-		var visible: Dictionary = effects._particles[0]
-		check(visible.node.visible and not visible.batched and visible.node.global_position.distance_to(Vector3(0.2, 3, 0)) < 0.00001, "visible animated smoke/fluid retains its individual sprite path")
-		check(count_since(effects, before, "fragment_substeps") == 0 and count_since(effects, before, "fragment_position_writes") == 0, "visible sprites do not enter hidden-fragment mirroring")
+		var visible: Dictionary = effects.particle_snapshot(0)
+		check(visible.has("node") and visible.node.visible and not visible.batched and visible.position.is_equal_approx(Vector3(0.2, 3, 0)), "Animated smoke and fluid retain their visible individual sprites")
+		check(count_since(effects, before, "particle_updates") == 1 and count_since(effects, before, "fragment_substeps") == 0, "Animated smoke and fluid update once without fragment work")
 		if int(options.get("smoke", 0)) != 0:
-			check(visible.node.scale.is_equal_approx(Vector3.ONE * 0.6) and visible.frame == 6, "visible smoke keeps source radius growth and animation")
+			check(visible.node.scale.is_equal_approx(Vector3.ONE * 0.6) and visible.frame == 6 and visible.node.texture == effects._smoke_texture(1, 6), "Smoke retains elapsed-time radius growth and cached animation")
 		else:
-			check(is_equal_approx(visible.node.modulate.a, 0.95), "visible fluid keeps source elapsed fade")
+			check(is_equal_approx(visible.display_color.a, 0.95) and visible.node.texture == effects._texture("Textures/Fluid.png"), "Fluid retains its source texture and elapsed fade")
 		effects.clear()
-	# Non-identity source options must retain their geometric-series updates;
-	# identity fast paths may not approximate damping, growth or elapsed fade.
-	effects._spawn(Vector3(0, 3, 0), Vector3(3, 0, 0), Color(0.2, 0.4, 0.6, 0.8), 0.2, 0.2,
-		{"collision": EFFECTS.IGNORE, "damping": 0.8, "growth": 0.8,
-		"radius_damping": 0.1, "fade_in": 0.2, "fade_out": 0.4})
+	var motion_options: Dictionary = {"damping": 0.8, "gravity": 0.9, "growth": 0.8,
+		"radius_damping": 0.1, "fade_in": 0.2, "fade_out": 0.4}
+	effects._spawn(Vector3(0, 3, 0), Vector3(3, 0, 0), Color(0.2, 0.4, 0.6, 0.8), 0.2, 0.2, motion_options)
 	effects.update_effects(0.1)
-	var damped: Dictionary = effects._particles[0]
-	var decay: float = pow(0.8, 1.0 / 60.0)
-	var growth_decay: float = pow(0.1, 1.0 / 60.0)
-	var expected_x: float = 3.0 / 60.0 * (1.0 - pow(decay, 6.0)) / (1.0 - decay)
-	var expected_radius: float = 0.2 + 0.8 / 60.0 * (1.0 - pow(growth_decay, 6.0)) / (1.0 - growth_decay)
-	check(absf(damped.node.global_position.x - expected_x) < 0.00001 and absf(damped.velocity.x - 3.0 * pow(0.8, 0.1)) < 0.00001, "non-identity damping keeps source explicit integration and final velocity")
-	check(absf(damped.radius - expected_radius) < 0.00001 and is_equal_approx(damped.growth, 0.8 * pow(0.1, 0.1)), "nonzero growth and radius damping retain every source substep")
-	check(is_equal_approx(damped.node.modulate.a, 0.1), "final white-fragment fade retains combined fade-in/out and intrinsic alpha")
+	var damped: Dictionary = effects.particle_snapshot(0)
+	var damping_integral: float = (pow(0.8, 0.1) - 1.0) / log(0.8)
+	var growth_integral: float = (pow(0.1, 0.1) - 1.0) / log(0.1)
+	check(absf(damped.position.x - 3.0 * damping_integral) < 0.00001 and absf(damped.velocity.x - 3.0 * pow(0.8, 0.1)) < 0.00001, "Non-identity damping uses exact elapsed-time motion and final velocity")
+	check(absf(damped.radius - (0.2 + 0.8 * growth_integral)) < 0.00001 and is_equal_approx(damped.growth, 0.8 * pow(0.1, 0.1)), "Nonzero growth integrates radius damping analytically")
+	check(is_equal_approx(damped.display_color.a, 0.1), "Fragment fade combines fade-in/out with its intrinsic alpha")
+	effects.clear()
+	effects._spawn(Vector3(0, 3, 0), Vector3(3, 0, 0), Color(0.2, 0.4, 0.6, 0.8), 0.2, 0.2, motion_options)
+	for frame: int in range(6):
+		effects.update_effects(0.1 / 6.0)
+	var partitioned: Dictionary = effects.particle_snapshot(0)
+	check(partitioned.position.distance_to(damped.position) < 0.00001 and partitioned.velocity.distance_to(damped.velocity) < 0.00001 and absf(partitioned.radius - damped.radius) < 0.00001, "One long frame and six short frames produce the same decorative motion")
 	effects.clear()
 	var concrete := VoxelWorld.new()
 	var concrete_data := CountingData.new()
@@ -161,25 +130,35 @@ func run() -> void:
 	root.add_child(concrete)
 	concrete.set_process(false)
 	effects.world = concrete
-	effects._spawn(Vector3(2, 1.05, 2), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
-		{"collision": EFFECTS.BOUNCE})
-	effects.update_effects(0.05)
-	check(concrete_data.queries > 0 and absf(effects._particles[0].node.global_position.y - 1.122) < 0.00001, "concrete VoxelWorld direct Data query retains the same source floor bounce")
+	concrete_data.queries = 0
+	effects._spawn(Vector3(2, 1.05, 2), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0, {"collision": EFFECTS.BOUNCE})
+	effects.update_effects(0.2)
+	check(concrete_data.queries == 0 and effects.particle_snapshot(0).position.y < 0.0, "Particles bypass concrete VoxelWorld data queries and floor collision")
 	effects.clear()
 	var overridden := OverrideWorld.new()
 	overridden.clear_world(Vector3i(8, 8, 8))
 	root.add_child(overridden)
 	overridden.set_process(false)
 	effects.world = overridden
-	effects._spawn(Vector3(2, 7.05, 2), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
-		{"collision": EFFECTS.BOUNCE})
-	effects.update_effects(0.05)
-	check(overridden.queries > 0 and absf(effects._particles[0].node.global_position.y - 7.122) < 0.00001, "VoxelWorld subclass collision override keeps the dynamic query fallback")
+	overridden.queries = 0
+	effects._spawn(Vector3(2, 7.05, 2), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0, {"collision": EFFECTS.DELETE})
+	effects.update_effects(0.2)
+	check(overridden.queries == 0 and effects.particle_count() == 1 and effects.particle_snapshot(0).position.y < 6.0, "Particles bypass custom world collision overrides")
 	effects.clear()
 	effects.world = world
+	world.queries = 0
+	effects.grenade_explosion(Vector3(0, 2, 0))
+	effects.grenade_explosion(Vector3(0, 2, 0), true)
+	effects.blood(Vector3(0, 2, 0))
+	effects.block_hit(Vector3(0, 2, 0), Vector3.UP, Color.WHITE)
+	effects.water_hit(Vector3(0, 2, 0))
+	effects.update_effects(0.1)
+	check(world.queries == 0, "Public particle emitters including grenade visual bias make zero terrain queries")
+	effects.clear()
+	check(effects.stats().pooled_particles == effects.max_particles and effects.stats().batched_particles == 0, "Clear returns configured data slots and hides all fragments")
+	check(effects.stats().particle_state_allocations == initial.particle_state_allocations and effects.stats().created_nodes == initial.created_nodes, "Motion, expiry and mixed emission reuse all preallocated records and nodes")
 	concrete.queue_free()
 	overridden.queue_free()
-	check(effects.stats().pooled_particles == effects.max_particles and effects.stats().batched_particles == 0, "clear returns all fragment/smoke/fluid nodes to the unchanged bounded pool")
 	effects.queue_free()
 	world.queue_free()
 	camera.queue_free()
