@@ -276,3 +276,36 @@ overlay/default viewport and graphics throughout; canvas922x714 physical,
 or failed WebGL resource diagnostic was suppressed. Rare63.9ms frames still occur
 on this host. This accepts the measured improvement, not zero stalls everywhere,
 complete port acceptance or sustained physical iPhone performance.
+
+Console artifacts accumulate the single tab's prior navigations; URLs/timestamps
+identify each load. The seeded baseline G diagnostic reports a startup-only
+invalid scene-script UID and resolves it through the correct `res://__probe/impact.gd`
+text path. Its visible trusted-input gate and identical script hash confirm the
+new G script runs; no warning occurs in measured phases. This diagnostic-cache
+warning is retained and is separate from parser/resource failure. The frozen
+normal Main export must be checked independently without diagnostic scene/cache.
+
+Static cross-review of frozen427c64b9 found no actionable concern: Rules reviewed
+World/Chunk deadlines, unit caps, buffer ownership, cancellation and complete
+publication plus HUD visibility; World reviewed Extensions alias/ZIP/cache/fallback
+and Effects collision/fade semantics. Reviewers made no edits or engine runs.
+
+## Frozen-check fixture repair
+
+The first frozen427c64b9 all-suite run stopped at fragment34/1, not a passing
+release. All earlier gates passed; the failed log is retained under
+`.cache/release-427c64b9e26b/.cache/logs/test-impact-fragment-updates.log` and
+`.cache/logs/title-frozen-release.log`. The opaque fixture assumed zero scale
+writes after a random spin. Godot's basis decomposition/global-position mirror
+can round that scale slightly, legitimately causing one exact corrective write;
+trajectory, gravity, age, radius and color checks all passed. Root's actual
+`opaque-scale-diagnostic.log` reproduces it at deterministic1.234rad with one
+scale write and zero color writes, while zero spin performs no scale write.
+
+Only the fixture is repaired: zero-spin/exact-scale setup for the zero-write
+contract; separate1.234rad50/100ms cases require retained3/6substeps, one position
+mirror, at most one scale mirror, no color mirror and correct final source state.
+All prior collision/fade/external-transform/custom-world assertions remain.
+Ten serial invocations pass44/0 each, logs `test-impact-fragment-deterministic-1`
+through`-10`. Production game bytes and all paired Web evidence are unchanged.
+The final frozen revision repeats the full89 gates and normal Web export.

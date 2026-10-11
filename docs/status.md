@@ -37,7 +37,11 @@ gesture-activated actual-Main browser runs remove24 Title cells each, baseline
 shots73/73/72 versus73/73/73. Median of shoot p95 values114.1→46.6ms; mean
 instrumented script CPU per shot−9.1%, idle CPU/realsecond−20.3%. Candidate tail
 audio/World/effects drain; rare63.9ms frames and host pointer-lock limits remain.
-Next: frozen89-check validation, normal browser input/render acceptance/publication.
+First frozen427c64b9 validation stopped on fragment34/1: random-spin basis roundoff
+legitimately caused one scale correction despite matching source state. Failed
+logs retained; test-only zero-spin setup and separate1.234rad correction cases
+pass44/0 ten times. Production game bytes remain identical to the measured G.
+Next: repeat frozen89-check validation, normal browser acceptance/publication.
 
 ## Weapon/block impact optimization — 2026-10-11
 

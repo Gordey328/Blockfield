@@ -54,6 +54,12 @@ func run() -> void:
 		effects.clear()
 		effects._spawn(Vector3(2, 3, 4), Vector3(6, 3, -3), Color.RED, 0.2, 2.0,
 			{"gravity": 0.9, "collision": EFFECTS.IGNORE})
+		# Spawn applies random spin after scale. Moving a rotated Basis may add
+		# tiny scale roundoff, which legitimately needs one final mirror setter.
+		# Use an exact unrotated basis for this zero-redundant-write assertion.
+		var opaque: Sprite3D = effects._particles[0].node
+		opaque.rotation = Vector3.ZERO
+		opaque.scale = Vector3.ONE * 0.4
 		var before: Dictionary = effects.stats()
 		effects.update_effects(duration)
 		var particle: Dictionary = effects._particles[0]
@@ -67,6 +73,23 @@ func run() -> void:
 		check(absf(particle.velocity.y - (1.56 if duration == 0.05 else 0.12)) < 0.00001, "gravity applies to every retained substep")
 		check(is_equal_approx(particle.age, duration) and not particle.node.visible, "real age and hidden fragment visibility are retained")
 		check(particle.node.scale.is_equal_approx(Vector3.ONE * 0.4) and particle.node.modulate == Color.RED, "post-update node inspection retains exact radius and color")
+	for duration: float in [0.05, 0.1]:
+		effects.clear()
+		effects._spawn(Vector3(2, 3, 4), Vector3(6, 3, -3), Color.RED, 0.2, 2.0,
+			{"gravity": 0.9, "collision": EFFECTS.IGNORE})
+		var spun: Sprite3D = effects._particles[0].node
+		spun.rotation = Vector3(0.0, 0.0, 1.234)
+		spun.scale = Vector3.ONE * 0.4
+		var before: Dictionary = effects.stats()
+		effects.update_effects(duration)
+		var particle: Dictionary = effects._particles[0]
+		var expected_steps: int = 3 if duration == 0.05 else 6
+		var expected := Vector3(2.3, 3.126, 3.85) if duration == 0.05 else Vector3(2.6, 3.18, 3.7)
+		check(count_since(effects, before, "fragment_substeps") == expected_steps and count_since(effects, before, "fragment_position_writes") == 1, "deterministic spin retains3/6 source substeps with one final position mirror")
+		check(count_since(effects, before, "fragment_scale_writes") <= 1 and count_since(effects, before, "fragment_color_writes") == 0, "rotated opaque fragment needs at most one final scale setter per frame")
+		check(spun.global_position.distance_to(expected) < 0.00001 and absf(particle.velocity.y - (1.56 if duration == 0.05 else 0.12)) < 0.00001, "deterministic spin preserves source Euler position and gravity")
+		check(is_equal_approx(particle.age, duration) and not spun.visible and is_equal_approx(particle.radius, 0.2), "deterministic spin retains real age, hidden state and canonical radius")
+		check(spun.scale.is_equal_approx(Vector3.ONE * 0.4) and spun.modulate == Color.RED and is_equal_approx(spun.rotation.z, 1.234), "final mirror preserves rotated fragment size, opaque color and spin")
 	effects.clear()
 	effects._spawn(Vector3(0, 1.05, 0), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
 		{"collision": EFFECTS.BOUNCE})
