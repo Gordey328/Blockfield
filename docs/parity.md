@@ -192,3 +192,17 @@ Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path g
 2026-10-10, T01/B02: `game/ui/lab_hud.gd` enters `game/main.gd`'s `LocalSession` directly. Public HTTPS startup, original shotgun selection and entry into the rendered local FPS lab were exercised at https://gordey328.github.io/Blockfield/ using source `5d367dfafab5524c1f4c572218fb6a0605ec9c42`, Pages bundle `128f0059f686f14602ee669de1ba44cb75279b45`. No server creation/join flow is involved. GitHub Pages reports build `built` with no error. This verifies startup/publication and local entry for that revision; it does not verify mouse capture, audio or subsequent feature changes. Branch-publication adaptation: decisions/0003-pages-publication.md.
 
 2026-10-10 source/render integration: complete offline code rows are IMPLEMENTED without promoting them to VERIFIED. Contracts/evidence: source-audit.md (source motion128/0, scene146/0 and subsequent tool/selection corrections), assets.md (character/corpse/native weapon/spectator), ui.md (custom metadata/native palette/settings), audio.md (126 routing/parameter checks), voxel.md (AO atlas/spectral/GI/real geometry reflections and fog). Later handoffs above include the completed UI/camera/audio/action paths and normalized float HDR. B01 uses the local-validation/branch-publication replacement in ADR0003 while Actions is externally blocked. Trusted skins/data ZIP and renderer differences are recorded in ADR0004 and extensions.md. Browser evidence applies to the recorded deployed SHA, not newer workspace code.
+
+2026-10-11, U12: repair16f1e70 introduces bounded prewarmed effect pools and one
+fragment MultiMesh draw, retains native emission counts/near-distance grenade
+saturation, culls vibration beyond170 units, and consumes actual elapsed lifetime
+during long frames. Matching headless effects32588/0 (3 explicit GPU readback skips),
+native Compatibility32591/0 and camera45/0; frozen16 import/presentation504/0,
+extensions68/0, lab119/0, lifecycle19/0, mobile-look144/0/runtime/Web export passed.
+Actual-Main WebGL held-SMG wall scenario reached87 draw calls versus baseline571
+with the same512 particle cap;5/80/180-unit grenade states match source attenuation
+and cutoff. Browser throttling/concurrent work prevent controlled FPS acceptance.
+Alpha fragment sorting is a documented batch adaptation; other particle simulation,
+audio and terrain costs remain. U12 stays IMPLEMENTED. Exact hashes, commands,
+failure/correction records and release handoff: [effects performance](effects-performance.md),
+[ADR0011](decisions/0011-effect-pools-and-fragment-batching.md).

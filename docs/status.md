@@ -280,27 +280,43 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Commands and durable records
 
-### Active camera/effects repair (2026-10-11)
+### Camera/effects repair handoff (2026-10-11)
 
 Chat `01a1290b-3aaf-79f3-bc3d-a98e264cf7f5` owns only
 `game/presentation/openspades_effects.gd`, `tests/presentation/test_effects.gd`,
 new `tests/browser/effects_probe.gd` and `tools/export_effects_probe.py`, plus its
-effects evidence document. Specialist `effects_pool` owns those first two files;
+effects evidence document. Specialist `effects_pool` returned those first two files;
 `grenade_audit` and `shot_hotspots` completed read-only source audits.
 Main/controller/world/network/persistent-block-damage changes belong to the other
-active chat; this repair does not edit or publish those files. Engine checks use
+active chat; this repair does not edit those files. Engine checks use
 isolated `.cache/effects-probe-*` projects, not the shared import cache.
 
 Confirmed: grenade kick precedes the source170m cutoff; clamped0.1s effect time
 prolongs shake and particle lifetime during hitches. Native near-amplitude saturation
 is intentional source behavior. Effects have active caps but no reuse pools.
 Actual-Main baseline WebGL held-SMG wall scenario reached512 particles and571 draw
-calls. Pooling, fragment MultiMesh batching and elapsed-time repair are in progress;
-no final validation or publication claim yet. An early stale-pool-snapshot test
-failed3 assertions after the fixture advanced to the newer reload contract; preserve
-`.cache/effects-probe-pooled/.cache/logs/effects-pool.log` and rerun matching files.
-Next action: freeze matching effects/fixture, run parser/behavioral/GPU/Web checks,
-record results and return specialist leases.
+calls. Committed effects repair16f1e70 adds prewarmed bounded pools, cached smoke
+frames, one White.png fragment MultiMesh draw, cutoff-before-kick and actual elapsed
+lifetimes/shake. Matching native headless effects32588/0 (3 explicit GPU skips),
+GPU32591/0 and camera45/0 passed; native previews preserve particle groups/colors.
+Frozen16 additionally passed parser/import, presentation504/0, extensions68/0,
+actual Main lab119/0, lifecycle19/0, mobile-look144/0, runtime smoke and Web export.
+Actual-Main patched WebGL SMG stress reached87 draw calls versus baseline571 with
+the original512 particle cap; browser grenade5/80/180-unit states match the source
+curves/cutoff. Browser throttling/concurrent engine/viewport changes prevent a
+controlled FPS claim. Details, exact hashes/commands, failures and corrected fixtures:
+[effects performance](effects-performance.md), [ADR0011](decisions/0011-effect-pools-and-fragment-batching.md).
+All specialist leases returned. No shared `.godot` cache, production build folder,
+server artifact or public Pages branch was changed by this chat.
+
+Release handoff: later integrated source4c05163 (other-chat authority-clock repair)
+already contains16's byte-identical manager. The persistent-block-damage chat owns
+its shared export/publication lease; include this checked effects change in that
+newer release rather than publishing the older16 archive. U12 remains IMPLEMENTED;
+sustained target-device/original-map performance and audio/terrain hotspots remain
+unaccepted. No remaining code action in the effects repair; integrated publication
+belongs to the active shared release. Temporary probe tabs/HTTP helpers are stopped
+before ending this chat's turn.
 
 Python: `C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`.
 Godot: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe`.

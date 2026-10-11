@@ -72,7 +72,18 @@ Baseline actual WebKitWebGL run reached512 particles and571 draw calls. It repor
 engine activity and an externally changed browser viewport make that FPS result
 diagnostic, not a controlled performance comparison. Screenshot/log:
 `.cache/previews/effects/baseline.{jpg,json}`. Patched actual-Main WebGL sustained
-fire reached87 draw calls while admitting512 particles; final report is pending.
+fire reached87 draw calls while admitting512 particles. Final report:128 frames,
+12.0213 game seconds,10.6477 reportedFPS,127.778ms median/141.267ms p95,
+78.6403 wall seconds. The game-time/wall-time disparity demonstrates browser
+throttling/concurrent-work interference; do not present this as a measured target
+device speedup. Draw submissions fell571 to87 (84.8%) for the same source emission
+scenario. Pool creation counter remained873 (prewarmed roots/model descendants),
+with681 persistent manager children; idle pooled nodes are intentionally retained.
+Screenshot/report: `.cache/previews/effects/batched.{jpg,json}`. Actual browser
+grenade buttons showed5-unit fast/slow0.2/0.4,80-unit0.023529/0.117647, and180-unit0/0;
+screenshots `grenade-{5,80,180}.jpg`. Visible smoke/fragments and terrain destruction
+remained present. IAB pointer lock emitted its existing WrongDocumentError; fixture
+buttons operate without pointer capture.
 
 Matching manager SHA256 `099e258c612ce53c0f88b6ab1b9323ca99c54e92ad85abf0bc3fd34d0173e710`
 passed parser/import/Web export; headless effects32588/0 (three explicit GPU
@@ -83,6 +94,16 @@ checking no node creation after warmup, source emission counts, active/idle caps
 batch transforms/colors. Native visual previews preserve visible colored blood,
 fragments, smoke, muzzle and water at `.cache/previews/effects/batched-gpu/`.
 Logs are under `.cache/effects-probe-batched/.cache/logs/`.
+
+Frozen source `16f1e70572cd6090358935e17f72b5e6482d0390` additionally passed import,
+effects32588/0, camera45/0, presentation504/0, extensions68/0, actual-Main lab119/0,
+offline lifecycle19/0, mobile-look144/0, runtime smoke and production Web export.
+Archive/logs/manifest: `.cache/release-16f1e70572cd/`. These are targeted affected
+checks, not a full79-suite/server acceptance. A later other-chat authority clock
+repair `4c05163` supersedes this source for integrated publication;16's standalone
+production export must not overwrite that newer shared-release work. The effects
+manager is byte-identical across that clock repair. The other active release owns
+the shared build folder/publication lease; this chat hands off checked effects.
 
 An early pool-only archive captured the manager before automatic reload prewarm
 while its fixture was newer, causing3 reset/reload assertions. Preserve
