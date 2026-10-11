@@ -135,7 +135,15 @@ the user's chosen deployment scope is Docker/configuration preparation.
   Evidence: [optimization item4](optimization-audio-vxl-memory.md),
   [ADR0013](decisions/0013-audio-vxl-memory.md). Concurrent mobile records/files
   remain separately owned and are excluded from the frozen optimization source.
-  Next: browser staging/cancel/download and PCM, frozen85 checks and publication.
+  Final exported774 Main staging/cancel/restart and full lab save/download pass;
+  exact raw/canonical bytes checked. Stage Blob66.1ms and save Blob16.9ms are
+  separate from batch metrics; reset and first-write stalls remain. Initial Web
+  PCM113/2 then113/1 and environment64/2 exposed fixture wall-clock and single-query
+  setup issues; failures retained. Test-only complete audio-frame captures and
+  actual27-ray DSP setup preserve all thresholds and production budgets. Corrected
+  native PCM134/0+81/0 and parser pass. Read-only specialists found no production
+  blocker; obsolete synchronous-local wording in voxel.md was corrected.
+  Next: corrected Web PCM, frozen registered checks, normal browser and publication.
 
 - Optimization planning (2026-10-11): completed a read-only three-specialist audit
   of World, simulation/network and presentation/audio/UI, plus coordinator

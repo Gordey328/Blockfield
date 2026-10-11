@@ -115,8 +115,13 @@ func record(name: String, play: Callable, seconds: float, expect_sound: bool = t
 	var frames := PackedVector2Array()
 	var play_started := Time.get_ticks_usec()
 	var first_signal_us := -1
-	var end_time := Time.get_ticks_msec() + int(seconds * 1000)
-	while Time.get_ticks_msec() < end_time:
+	var target_frames: int = ceili(AudioServer.get_mix_rate() * seconds) if expect_sound else 0
+	# A PCM duration is measured in mixer frames, not wall time. Single-threaded
+	# Web Stream mixing may advance slowly; retain a bounded wall-time guard and
+	# report its actual speed instead of accepting a truncated PCM window.
+	var wall_limit: float = seconds + maxf(2.0, 2.0 * seconds) if expect_sound else seconds
+	var end_time: int = play_started + ceili(wall_limit * 1000000.0)
+	while Time.get_ticks_usec() < end_time and (not expect_sound or frames.size() < target_frames):
 		await create_timer(.02).timeout
 		var count := capture.get_frames_available()
 		if count > 0:
@@ -130,13 +135,24 @@ func record(name: String, play: Callable, seconds: float, expect_sound: bool = t
 	var remaining := capture.get_frames_available()
 	if remaining > 0:
 		frames.append_array(capture.get_buffer(remaining))
+	var capture_wall_seconds: float = float(Time.get_ticks_usec() - play_started) / 1000000.0
+	var captured_frames: int = frames.size()
+	if expect_sound and frames.size() > target_frames:
+		frames.resize(target_frames)
 	var metrics := measure(frames)
 	metrics.name = name
 	metrics.window_seconds = seconds
+	metrics.capture_clock = "audio_frames" if expect_sound else "fixed_wall"
+	metrics.target_frames = target_frames
+	metrics.captured_frames = captured_frames
+	metrics.capture_wall_seconds = capture_wall_seconds
+	metrics.capture_wall_limit_seconds = wall_limit
+	metrics.capture_timed_out = expect_sound and (captured_frames < target_frames or capture_wall_seconds > wall_limit)
+	metrics.captured_audio_seconds = float(frames.size()) / AudioServer.get_mix_rate()
 	metrics.discarded_frames = capture.get_discarded_frames() - discarded_before
 	metrics.first_signal_observed_ms = float(first_signal_us)/1000.0 if first_signal_us >= 0 else -1.0
 	if expect_sound:
-		check(frames.size() > int(AudioServer.get_mix_rate() * seconds * .6), name + " captured live mixer frames")
+		check(frames.size() >= target_frames and not bool(metrics.capture_timed_out), name + " captured requested live mixer frames before wall deadline")
 		check(bool(metrics.finite), name + " all mixed samples are finite")
 		check(float(metrics.rms) > .00001 and int(metrics.nonzero_frames) > 64, name + " mixed PCM contains audible energy")
 		check(float(metrics.left_rms) > .00001 and float(metrics.right_rms) > .00001, name + " both output channels contain signal")

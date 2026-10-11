@@ -151,4 +151,54 @@ preserving pointer capture callbacks; retired dialog close events cannot cancel
 a replacement. Node v24.19.0 `node --test tests/browser/test_exports.mjs` passes
 3/3 tests using production JS, real Blob bytes and URL lifecycle. Final Blob
 creation is timed separately and remains synchronous. Browser verification of
-this follow-up is pending; the earlier save is not its performance evidence.
+this follow-up used the isolated actual-Main probe with `game/` copied from
+`.cache/optimization4-source-774e506bfa81/`, exported to
+`.cache/optimization-probe-item4-staging-774e506/`; production build files were
+preserved.
+
+Direct staging of the original Title file was cancelled after1 input click:
+20 batches staged606,208 of2,106,956bytes, `cancelled=true`, with no download
+dialog. Reset still caused an864.3ms frame gap outside the staging budget.
+Restarted staging completed in6.7183s (wall including completion tail6.9956s),
+with69 UI frames and1 handled input click. Its68 batches had maximum4.1ms;
+the soft target is2ms, not a strict limit. Final Blob construction took66.1ms;
+frame p95=116.4ms/max165.3ms. The `original-title` download matched the exact
+raw input bytes, SHA256
+`48fe6c8e9b8287c1aea12e67742362cd7001d72c7bc027b993f7a22982beed62`.
+
+Full actual-Main lab save completed in21.9119s (wall including completion tail
+22.1779s), with234 UI frames and1 handled input click. Its67 staging batches
+transferred2,112,288bytes, maximum3.9ms; final Blob construction took16.9ms.
+Frame p95=112.1ms/max148.2ms. Download `blockfield-map (1).vxl` was confirmed
+byte-identical to the unchanged synchronous encoder by pinned native validation,
+SHA256 `46c808dee7ca7a514375284df503b1f068a2e4e64053940297c9876af6d0e766`.
+Evidence: `.cache/logs/optimization4-downloaded-lab-vxl.log` and
+`.cache/previews/optimization-item4/staging-web-log.json`,
+`staging-download.jpg`, `staging-save.jpg`.
+
+These diagnostic runs establish yielding, cancellation, handled input and exact
+download bytes. They do not establish rendering FPS, a strict2ms batch guarantee,
+or a fix for the reset/first-write copy-on-write pause. The earlier slow and failed
+attempts above remain evidence of the intermediate implementations.
+Final-source parser/import passed; Main lifecycle checks passed15/0. Read-only
+simulation review found no blockers. Full behavioral/latency regression, final-source PCM validation
+and publication remain pending.
+
+Current exported PCM initially reported113/2 and a repeat113/1: different cases
+failed only the old wall-window minimum-frame check, with no overflow and with
+finite signal/pan/gain/distance checks passing. Environment PCM initially64/2:
+one minimum-frame failure plus missing high-frequency obstruction. The latter
+is a separate problem: both clear/blocked early energies were identical, so it
+cannot be explained by unequal sample counts. Reports and complete logs are
+preserved as `audio-pcm-web-first`, `audio-pcm-web-repeat`, `audio-env-web-first`
+under `.cache/previews/optimization-item4/`. They are failed attempts, not Web
+PCM acceptance. Sound captures now require the complete `ceil(rate*seconds)`
+audio-frame window (stronger than the old60% minimum), bounded by
+`seconds+max(2,2*seconds)` wall seconds; silence/disabled capture keep fixed wall
+windows. Reports retain actual wall duration, raw captured frames and timeouts.
+The DSP fixture freezes service updates, so its single budgeted obstruction query
+could return unknown on slow Web rays and retain the clear route. It now runs the
+actual production27-ray predicate with128 rays and no fixture preparation time
+cap; production remains128 rays/1.5ms and budget tests stay separate. No blocked
+answer is injected. Routing/ray/exhaustion diagnostics are recorded. Parser and
+native corrected PCM134/0+81/0 passed; final corrected Web proof remains pending.

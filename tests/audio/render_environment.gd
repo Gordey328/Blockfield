@@ -111,23 +111,57 @@ func record(name: String,play: Callable,seconds: float,room_size: float=0,feedba
 	var out: int=AudioServer.get_bus_index(audio.get_output_bus())
 	AudioServer.set_bus_effect_enabled(out,0,limiter)
 	capture.clear_buffer();var discarded: int=capture.get_discarded_frames()
+	# This isolated DSP fixture freezes service updates. Complete the actual
+	# 27-ray obstruction predicate before playback instead of retaining an
+	# unknown/clear route when a slow Web query exceeds the production time cap.
+	# Production still uses128 rays/1.5ms; its budget behavior is tested separately.
+	audio._begin_environment_turn()
+	audio._environment.begin_turn(float(Time.get_ticks_usec())/1000000.0,ENV.MAX_RAYS_PER_TURN,0)
 	play.call()
-	var frames:=PackedVector2Array();var end: int=Time.get_ticks_msec()+int(seconds*1000)
-	while Time.get_ticks_msec()<end:
+	var query_rays: int=audio._environment.last_turn_rays
+	var query_exhausted: bool=audio._environment.budget_exhausted
+	var blocked_voices: Array[bool]=[]
+	for voice: Node in audio._voices:blocked_voices.append(bool(voice.get_meta("blocked",false)))
+	var frames:=PackedVector2Array()
+	var target_frames: int=ceili(AudioServer.get_mix_rate()*seconds)
+	# Use the same complete audio-duration window for every compared signal.
+	# A bounded3x guard for long captures allows the observed slow Web mixer
+	# cadence without changing PCM or obstruction acceptance thresholds.
+	var wall_limit: float=seconds+maxf(2.0,2.0*seconds)
+	var capture_started: int=Time.get_ticks_usec()
+	var end: int=capture_started+ceili(wall_limit*1000000.0)
+	while Time.get_ticks_usec()<end and frames.size()<target_frames:
 		await create_timer(.01).timeout
 		var count: int=capture.get_frames_available()
 		if count>0:frames.append_array(capture.get_buffer(count))
 	var remaining: int=capture.get_frames_available()
 	if remaining>0:frames.append_array(capture.get_buffer(remaining))
+	var capture_wall_seconds: float=float(Time.get_ticks_usec()-capture_started)/1000000.0
+	var captured_frames: int=frames.size()
+	if frames.size()>target_frames:frames.resize(target_frames)
 	var metrics: Dictionary=measure(frames)
 	metrics.name=name
+	metrics.window_seconds=seconds
+	metrics.capture_clock="audio_frames"
+	metrics.target_frames=target_frames
+	metrics.captured_frames=captured_frames
+	metrics.capture_wall_seconds=capture_wall_seconds
+	metrics.capture_wall_limit_seconds=wall_limit
+	metrics.capture_timed_out=captured_frames<target_frames or capture_wall_seconds>wall_limit
+	metrics.captured_audio_seconds=float(frames.size())/AudioServer.get_mix_rate()
+	metrics.fixture_query_ray_limit=ENV.MAX_RAYS_PER_TURN
+	metrics.fixture_query_time_cap_usec=0
+	metrics.query_rays=query_rays
+	metrics.query_budget_exhausted=query_exhausted
+	metrics.blocked_voices=blocked_voices
+	metrics.discarded_frames=capture.get_discarded_frames()-discarded
 	metrics.first_frame=first_signal(frames)
 	metrics.early_energy=energy_window(frames,.02,.14,int(metrics.first_frame))
 	metrics.tail_energy=energy_window(frames,.45,seconds,int(metrics.first_frame))
 	metrics.echo_peak_delay=echo_delay(frames,int(metrics.first_frame))
 	metrics.measured_t60=schroeder_t60(frames,int(metrics.first_frame)+int(.12*AudioServer.get_mix_rate()))
 	metrics.source_parameters=audio._environment.parameters.duplicate(true)
-	check(frames.size()>int(AudioServer.get_mix_rate()*seconds*.6),name+" realcapturedframes")
+	check(frames.size()>=target_frames and not bool(metrics.capture_timed_out),name+" requested realcapturedframes before wall deadline")
 	check(metrics.finite and metrics.nonzero_frames>0,name+" finite nonzerosignal")
 	check(capture.get_discarded_frames()==discarded,name+" boundedcapture nooverflow")
 	check(write_wav(output.path_join(name+".wav"),frames,.95/maxf(1,float(metrics.peak))),name+" WAVsaved")
