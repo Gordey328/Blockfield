@@ -159,9 +159,31 @@ inspection helper and research; those pending files are not included or modified
 by the mobile release. Earlier mobile research bytes are preserved in the main
 checkout's `.cache/nexquake-integration-backup-20261011`, and their substantive
 records are included in this branch. Subsequent documentation-only commits do not
-change the tested game bytes. PR1 is ready for integration after these checks.
+change the tested game bytes. PR1 merged as0fd90e75e508e83adbab410628940ca689d00da0.
 
-Publication evidence is recorded below after deployment. Physical Android/iPhone
+Publication is complete (evidence below). Physical Android/iPhone
 multitouch, aiming comfort, OS safe areas and sustained performance remain pending.
 The existing66e4b5b dedicated-server package stays compatible: wire/authority files
 are byte-identical. No new hosted server or complete-port acceptance is claimed.
+
+## Published phone-test checkpoint
+
+`tools/publish_pages.py` published the checked source1c04665 as bundle
+83ce7fa206d7f4e602fff2a01dfe0071e32d6b11. GitHub Pages reports built with no error.
+Independent HTTPS requests confirm the clean source metadata and exact SHA256 for
+HTML, JS, WASM, PCK and both audio worklets. PCK16,202,560bytes:
+`c098fb35b23d33d771dfc4d669bf117cf6735b5560359fc1d039db88e1573289`.
+Report in the main checkout: `.cache/browser/nexquake-public-hashes.json`.
+
+The actual public site rendered and accepted Mobile On from the real menu,
+movement-stick drag, horizontal/vertical swipe and fire-and-look with100% gain.
+Public normal-game error/warning capture was empty. Screenshot in main:
+`.cache/browser/nexquake-public-mobile.jpg`. The original public Auto mode was
+restored after checking. This remains desktop input-preview evidence, alongside
+synthetic multitouch checks; the user's physical-phone feel check is next.
+
+The main checkout fast-forward preserved the concurrent AoS research's complete
+pending status insertion and left its helper/documents untouched. That insertion
+remains pending under its owning chat rather than being committed into this release.
+All own diagnostic/normal/public browser tabs and preview servers8877/8878 closed;
+other chats' tabs/processes were retained. Engine/release leases are returned.

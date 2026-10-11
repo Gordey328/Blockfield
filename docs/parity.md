@@ -8,9 +8,19 @@ Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION
 
 Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. Iteration 2 delivers multiplayer. Rows marked `1+2` require offline behavior in iteration 1 and synchronized behavior in iteration 2.
 
-## Published mobile FPS checkpoint31c513d0aa18
+## Current NexQuake mobile checkpoint1c046655fef2
 
-[Pages](https://gordey328.github.io/Blockfield/) identifies clean source31, bundle
+Clean source1c046655fef23dcf46257dc10649d345ec4256d0 is merged into main and
+published as bundle83ce7fa206d7f4e602fff2a01dfe0071e32d6b11. All85 native
+behavioral/latency checks, import/smokes/export and30 exported actual-Main touch
+assertions passed. Normal local/public mobile movement/look/fire were exercised;
+public artifacts independently match SHA256. All other production game files match
+the completed922f230 optimization source. Physical-phone comfort and complete-row
+acceptance remain open; no status rows promoted. [Evidence](nexquake-mobile-camera.md).
+
+## Earlier mobile FPS checkpoint31c513d0aa18
+
+The earlier checked [Pages](https://gordey328.github.io/Blockfield/) release identified clean source31, bundle
 `e28bfddd165209defbc388e398c9fc35d5bfae84`; public PCK SHA256 matches the checked export
 (`7be6d3864fe75fa089082d0b4ad4cf1c99f350940ff1284b9592af675a0356bd`). Full79 behavioral/
 latency checks, import/smokes/export passed on3c; subsequent exact UI-only diffs

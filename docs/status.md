@@ -26,13 +26,23 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `66e4b5b7eb89956657f97d7f623856080ea117b5`, committed/pushed.
-- Subsequent documentation records do not change the published binaries. Optimization
-  item4, specialist handoffs and publication are complete; root engine/release and
-  specialist leases have been returned. Concurrent mobile integration remains separate.
+- Published client source: `1c046655fef23dcf46257dc10649d345ec4256d0`, merged/pushed.
+- NexQuake mobile controls are merged into main through PR1, merge0fd90e75e508.
+  All completed optimization commits through922f230 remain intact. Subsequent
+  documentation does not change the checked game bytes. Mobile engine/release and
+  specialist leases are returned; the separate Steam AoS research files remain pending.
 
 ## Frozen validation
 
+- Integrated NexQuake mobile release (2026-10-11): clean frozen1c046655fef2 passed
+  all85 registered native behavioral/latency invocations, import/parser, runtime,
+  server-launcher smoke and Web export on pinned Godot4.7.2. Actual-Main exported
+  touch probe passed15/0 at844x390 and15/0 at390x844, including genuine movement/fire.
+  Normal local and public mobile movement, horizontal/vertical look and fire-drag
+  were exercised; both normal-game captures had no warnings/errors. Probe-only
+  unattributed MutationObserver exception is retained in [evidence](nexquake-mobile-camera.md).
+  Public metadata/HTML/JS/WASM/PCK and both audio worklets match local SHA256.
+  Physical-phone feel/safe areas/performance remain pending; no parity rows promoted.
 - Optimization item4 (2026-10-11): frozen66e4b5b7eb89 passed all85 registered
   native behavioral/latency invocations, import/runtime/Web/server export and PCK
   smoke. Separate Web PCM113/0+DSP64/0 and JS lifecycle3/3 passed. Actual Main
@@ -88,24 +98,28 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Published artifacts
 
-- [Pages development build](https://gordey328.github.io/Blockfield/) serves the checked
-  clean66e4b5b7eb89 export. Bundle `22fd63050e11fad69aa3b421a4e0b8a1c3a0caa7`, built.
-- Public metadata/HTML/JS/WASM/PCK independently match local frozen artifacts.
-  PCK16,200,448bytes SHA256
-  `8c54b5408d6f8d0055f9340fc4bd6685937a99af026bf2f8e9a730e13c53d5d8`;
-  HTML5568bytes SHA256 `96074516bd05e1f45968de943337ce2fa6568d52c15942825439dfe3dd5c8fde`.
-  Reports `.cache/previews/optimization-item4/{frozen-validation,public-hashes}.json`.
-- Matching [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
-  ZIP independently downloaded/hash-verified:29,344,396bytes SHA256
+- [Pages development build](https://gordey328.github.io/Blockfield/) serves clean
+  source `1c046655fef23dcf46257dc10649d345ec4256d0`.
+  Bundle `83ce7fa206d7f4e602fff2a01dfe0071e32d6b11`, Pages status built/no error.
+  PR1 merged in main as `0fd90e75e508e83adbab410628940ca689d00da0`; game/test/tool
+  bytes match the frozen source. Later documentation commits do not change them.
+- Independently downloaded public metadata/HTML/JS/WASM/PCK and both audio worklets
+  match the frozen export. PCK16,202,560bytes SHA256
+  `c098fb35b23d33d771dfc4d669bf117cf6735b5560359fc1d039db88e1573289`;
+  HTML5568bytes SHA256 `60c75e2e53041b707a7e72354d0c5be06e77fd31de09c434b29b9e71d1b18966`.
+  Hash report `.cache/browser/nexquake-public-hashes.json`; normal public screenshot
+  `.cache/browser/nexquake-public-mobile.jpg`. Movement/swipe/fire-drag exercised
+  with100% touch gain; the pre-test public Auto setting was restored.
+- Compatible [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
+  stays unchanged:29,344,396bytes SHA256
   `76935d2fc59be4d5af6387266714001292a9c11a5adbf1c276a4e0a7799e168b`.
-  Network5 / authority5-no-block-regen remain; new client/server fingerprints share
-  the same frozen source. Previous4c/57 artifacts are historical checkpoints.
-- Windows exported-PCK smoke did not execute Linux. Docker/Linux execution and
-  deployed TLS/WSS remain unverified; see [server deployment](server-deployment.md).
-- Current ordinary local/public IAB lab/Title checks and retained pointer-lock
-  drag fallback are in [optimization evidence](optimization-audio-vxl-memory.md).
-  Historical4c/dcee15f/mobile31 evidence remains in their subsystem/history docs.
-  Documentation commits after66e4b5b do not change these binaries.
+  Network5 / authority5-no-block-regen remain byte-identical; client/server source
+  commits now differ because this release changes mobile presentation/input only.
+  Earlier66e4b5b/22fd630 optimization,4c/57 and31 artifacts retain their historical
+  evidence. See [optimization evidence](optimization-audio-vxl-memory.md).
+- Windows exported-PCK smoke on66e did not execute Linux. No server export/PCK smoke
+  was repeated on1c; its full native server-launcher/network checks passed. Docker,
+  Linux execution and deployed TLS/WSS remain unverified; see [server deployment](server-deployment.md).
 
 ## Earlier frozen57 Web evidence
 
@@ -150,8 +164,12 @@ the user's chosen deployment scope is Docker/configuration preparation.
   Web probe passed15/0 each at844x390 and390x844, including real movement and shots.
   Normal rendered Mobile On/mirrored look/fire-drag also passed with empty logs.
   Probe-only unattributed MutationObserver exception is retained in the evidence.
-  No game bytes changed in subsequent documentation. Main merge/publication is
-  next; physical-phone feel remains pending and parity rows are not promoted.
+  No game bytes changed in subsequent documentation. PR1 is merged in main0fd90e75;
+  checked Pages bundle83ce7fa is built, hash-verified and interactively checked.
+  Pending AoS status insertion and research files were preserved during the local
+  main fast-forward, without committing them as part of this release. Own browser
+  tabs and preview servers8877/8878 closed; engine/release leases returned.
+  Next: user's physical-phone camera feedback; parity rows are not promoted.
 
 - Optimization item4 completed/published (2026-10-11): user approved audio,
   VXL loading/saving and memory. Frozen66e4b5b7eb89956657f97d7f623856080ea117b5
