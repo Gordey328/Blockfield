@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Modern combat UI — 2026-10-11 (integration in progress)
+## Modern combat UI — 2026-10-11 (verified development release)
 
 User requests researched modern combat styling. Root owns LabHUD, new
 CombatTheme/CombatReadout, Inter font/provenance/import, build registration,
@@ -12,12 +12,29 @@ only MobileControls presentation; all29 nonvisual methods compare unchanged.
 Specialist hud_checks owns only new tests/ui/test_combat_hud.gd. Both handoffs
 are complete and engine leases returned. Baseline d2c9acbd47ccf51e4b45f68919ce95cc27ba1550;
 Godot4.7.2.stable.official.ed1daf0bf, upstream dcf449c845d509bbde9d79239b32d201c1389961.
-Native parser/import passes via tools.build.run('combat-ui-import',
-['--editor','--import','--quit']). Current work adds translucent rounded edge
-readouts, tabular ammo, slim HP, line icons, centered TDM score and circular
-touch actions. Existing template/optimization/Steam edits are preserved.
-Focused behavior checks and normal Web rendering/input/publication are next;
-no parity promotion or new release is claimed at this intermediate milestone.
+Adds translucent rounded edge readouts, tabular ammo, slim HP, line icons,
+centered TDM score and circular touch actions; [ADR0022](decisions/0022-modern-combat-ui.md).
+Existing template/optimization/Steam edits are preserved. Frozen source
+2f1e1147099e102c792b629df82033e5c44df774 passes all93 test runs (92 Godot
+fixtures plus latency462/0), import/parser, both smokes and normal Web export. UI284/0,
+controls3099/0, look225/0, combat readout166/0, lab119/0 and TDM62/0 pass.
+Initial fixture WeakRef parse error and live saved-HDR lab119/1 are retained;
+the latter passes in the checkpoint's private test settings without changing
+gameplay. Native Compatibility helper produces7 desktop/mobile/TDM captures
+under .cache/previews/combat-ui. Local normal exported browser checks rifle
+10→8, reload18%→10/48, block palette/50 stock, movement, portrait390×844
+Fire10→9/reload10%, landscape844×390 and TDM3:6 at4:31. Score clears toolbar/
+minimap in portrait; settings return to Auto and viewport reset. Local IAB
+records two known pointer-lock WrongDocumentErrors; fallback remains available.
+Command with bundled Python: `tools/release_checkpoint.py --revision 2f1e1147099e102c792b629df82033e5c44df774 --import-cache game/.godot`.
+Publication: source main pushed, Pages bundleed057d408453cda87c588787eb3a0f6f7b773ffa
+reports built; .cache/verify_combat_pages.py compares metadata/core artifacts/
+Inter notice to the frozen export: all7 SHA256s match. Public normal UI starts
+and displays the new touch/HUD treatment; captured warning/error list is empty.
+[Published game](https://gordey328.github.io/Blockfield/).
+Own specialist leases are returned and no own server helper was started.
+Original parity rows remain IMPLEMENTED; physical-device feel/full-port
+acceptance remain separate. Next: user assessment of the new combat style.
 
 ## Offline 3×3 team combat — 2026-10-11 (verified Crossroads addition)
 

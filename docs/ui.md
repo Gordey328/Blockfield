@@ -126,6 +126,25 @@ Commands (bundled Python/engine paths are in status.md):
 Native previews: `.cache/previews/combat-ui/`; browser acceptance remains separate
 from headless state assertions and these GPU captures.
 
+Final frozen source `2f1e1147099e102c792b629df82033e5c44df774` passes all93
+test runs (92 Godot fixtures and latency462/0), import, both smokes and normal Web export.
+The isolated actual lab119/0, UI284/0, controls3099/0, look225/0, modern HUD166/0
+and TDM62/0 pass. `tools/release_checkpoint.py --revision 2f1e1147099e102c792b629df82033e5c44df774 --import-cache game/.godot`
+provides the archived source, private fixture settings and reproducible logs.
+Local ordinary Web: rifle10→8, reload18% then10/48, movement, block stock50 and
+palette relocation; portrait390×844 Fire10→9/reload10%, landscape844×390 and
+TDM3:6 at4:31 are observed. Rounded score capsule clears portrait minimap and
+both toolbar rows. Viewport and touch Auto preference are restored. Local IAB
+has two known pointer-lock WrongDocumentErrors; no claim of successful capture
+is made. Seven native Compatibility captures are retained; initial map-not-ready
+captures were repeated after progressive preparation before visual acceptance.
+Pages bundle `ed057d408453cda87c588787eb3a0f6f7b773ffa` is built. Public metadata,
+six core SHA256s and Inter license match in `.cache/combat-pages-verification.json`.
+Normal public UI starts with the new touch/HUD treatment; captured warning/error
+list is empty. The final browser tab stays open for visual review.
+This is a development release with an accepted visual replacement; original
+parity status and physical-phone/performance limits remain separate.
+
 Current unpublished integration passed actual-Main UI247/0, console76/0 and
 preparation menu72/0. It adds legacy source eyedropper/fog miss behavior,
 progressive map completion, independent source gain/EFX preferences and exact

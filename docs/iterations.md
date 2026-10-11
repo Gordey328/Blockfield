@@ -33,3 +33,11 @@ playable match with shared movement, shooting, damage and respawn rules, cover a
 flanking behavior. Initial acceptance uses one authored compact arena; see
 [ADR0020](decisions/0020-offline-team-bots.md). This addition does not replace the
 full-port or multiplayer acceptance gates.
+
+## Accepted presentation replacement — 2026-10-11
+
+The user requested researching current shooter combat UI and modernizing the
+boxy interface. Health/ammunition/resources, score and touch controls use the
+authored modern treatment in [ADR0022](decisions/0022-modern-combat-ui.md).
+Gameplay rules, input ownership and original feedback semantics retain their
+existing acceptance requirements. This change does not accept the full port.

@@ -93,7 +93,7 @@ promote full P01/P08–P16 or W03 acceptance.
 | --- | --- | --- | --- | --- |
 | U01 | Main menu, profile/player name, startup/loading/disconnect/error feedback | `Resources/Scripts/Gui/MainScreen/`; `Gui/StartupScreen/`; `Client_Draw.cpp:185,211,852` | 1+2 | IMPLEMENTED |
 | U02 | Limbo team/weapon chooser, pause menu, setup and return-to-game | `LimboView.cpp`; `Resources/Scripts/Gui/Client/Menu.as` | 1 | IMPLEMENTED |
-| U03 | HUD: HP, clip/stock, block/grenade stocks, crosshair, hit indicator, reload/cook states | `Client_Draw.cpp:393,446,764`; `ClientPlayer.cpp:Draw2D` | 1 | IMPLEMENTED |
+| U03 | HUD: HP, clip/stock, block/grenade stocks, crosshair, hit indicator, reload/cook states | `Client_Draw.cpp:393,446,764`; `ClientPlayer.cpp:Draw2D`; user-selected modern visual replacement [ADR0022](decisions/0022-modern-combat-ui.md), state/input evidence [UI](ui.md) | 1 | IMPLEMENTED |
 | U04 | Minimap + large map, scale/zoom, coordinate grid, players, teams, bases/intel/territories | `MapView.cpp:172,178,239,549,585`; `Client_Input.cpp:536` | 1+2 | IMPLEMENTED |
 | U05 | Scoreboard, team score, players/kills, map-linked player ID colors, spectator list and match result messages | `ScoreboardView.cpp:278,291-298`; `CenterMessageView.cpp`; `Client_NetHandler.cpp` | 1+2 | IMPLEMENTED |
 | U06 | Kill feed, alerts, hurt overlay, names under crosshair and TC progress bar | `ChatWindow.cpp`; `HurtRingView.cpp`; `TCProgressView.cpp`; `Client_Draw.cpp:288,675,790` | 1+2 | IMPLEMENTED |
