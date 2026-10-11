@@ -309,3 +309,40 @@ All prior collision/fade/external-transform/custom-world assertions remain.
 Ten serial invocations pass44/0 each, logs `test-impact-fragment-deterministic-1`
 through`-10`. Production game bytes and all paired Web evidence are unchanged.
 The final frozen revision repeats the full89 gates and normal Web export.
+
+## Final frozen native/Web export
+
+Frozen19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a passes parser/import,
+all89 registered behavioral/latency invocations, runtime/server-launcher smoke
+and normal Compatibility single-threaded Web export. Version
+`4.7.2.stable.official.ed1daf0bf`; upstream remains
+`dcf449c845d509bbde9d79239b32d201c1389961`. Release metadata has
+source_dirty=false. `git diff427c64b9..19c4d51 -- game` is empty: the test repair
+does not change measured production game bytes.
+
+```powershell
+python tools/release_checkpoint.py --revision 19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a --import-cache game/.godot
+```
+
+The archive is immutable `.cache/release-19c4d51c73db`; the seeded native cache
+does not bypass parser, checks or export. Root stdout
+`.cache/logs/title-frozen-release-retry.log`, exact per-suite logs inside the
+release's `.cache/logs/`, frozen export/build-info inside `build/web` and copied
+normal `build/web`. Fragment44/0, PCM523/0, environment76/0, impact4441/0,
+minimap37/0, effects32588/0 with three explicit headless GPU skips, source
+audio128/0, audio-render134/0, environment-render81/0,
+latency462/0 with clean engine exit. Normal browser/publication is recorded next.
+
+Normal frozen local Web at127.0.0.1:8911 is exercised with no diagnostic overlay:
+selectSMG, enter offline lab, mouse-drag/capture fallback, turn off unlimited
+ammo for observable magazine depletion, load original Title through the menu,
+hold/drag fire into editable terrain. Before/after screenshots show a persistent
+cliff opening and colored fragments; magazine30→0, R reload30/90. F7 statistics
+opens with324chunks/current draw calls/FPS, closes again; Verification tab shows
+fresh Title.vxl/324chunks/SMG/profile0.75. Screenshots
+`.cache/previews/title-normal-local{,-stats,-verification}.png`; console
+`.cache/logs/title-normal-local-console.json` contains three host pointer-lock
+UnknownError entries and no engine script/parser/resource warning. Mouse fallback
+is visibly surfaced and used; capture/physical-device/listening acceptance is not
+implied. Exact imported samples and active Web mixer release counts remain the
+audio evidence. Public metadata/hashes and normal public interaction follow.

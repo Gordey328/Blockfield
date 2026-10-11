@@ -41,7 +41,13 @@ First frozen427c64b9 validation stopped on fragment34/1: random-spin basis round
 legitimately caused one scale correction despite matching source state. Failed
 logs retained; test-only zero-spin setup and separate1.234rad correction cases
 pass44/0 ten times. Production game bytes remain identical to the measured G.
-Next: repeat frozen89-check validation, normal browser acceptance/publication.
+Frozen19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a now passes import/parser, all89
+native behavioral/latency invocations, runtime/server-launcher smoke and normal
+Web export; source_dirty=false, Godot4.7.2.stable.official.ed1daf0bf, same upstream.
+Normal local Web SMG/Title terrain destruction, magazine depletion/reload and
+F7/Verification fresh statistics are exercised. Only host pointer-lock errors
+remain; visible drag fallback works. Next: Pages publication, public hashes/input,
+final milestone documentation; all specialist/release engine leases are returned.
 
 ## Weapon/block impact optimization — 2026-10-11
 
