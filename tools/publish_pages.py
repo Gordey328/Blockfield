@@ -15,8 +15,9 @@ def git(*args,cwd=ROOT):
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--repo',default='Gordey328/Blockfield')
+    parser.add_argument('--directory',type=Path,help='Checked Web bundle in a separate Pages checkout')
     args=parser.parse_args()
-    folder=ROOT/'build'/'web'
+    folder=args.directory.resolve() if args.directory else ROOT/'build'/'web'
     metadata=json.loads((folder/'build-info.json').read_text(encoding='utf-8'))
     revision=metadata.get('source_commit','')
     if metadata.get('source_dirty') is not False or not re.fullmatch(r'[0-9a-f]{40}',revision):
@@ -38,7 +39,7 @@ def main():
     changed=git('status','--porcelain',cwd=folder)
     if changed:git('commit','-m','Publish checked Godot Web development build',cwd=folder)
     # Keep sibling builds published from independent checkouts.
-    git('fetch','origin','gh-pages',cwd=folder)
+    git('fetch','origin','+refs/heads/gh-pages:refs/remotes/origin/gh-pages',cwd=folder)
     git('rebase','origin/gh-pages',cwd=folder)
     git('push','origin','HEAD:gh-pages',cwd=folder)
     api('/repos/'+args.repo+'/pages','PUT',{'build_type':'legacy','source':{'branch':'gh-pages','path':'/'}})
