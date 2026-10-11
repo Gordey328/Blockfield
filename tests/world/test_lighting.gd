@@ -75,7 +75,7 @@ func _run() -> void:
 	check(world._material.get_shader_parameter("lighting_enabled") and world._material.get_shader_parameter("ambient_occlusion_strength") == 1.0, "both lighting settings must re-enable")
 	world.set_block(Vector3i(7, 7, 7), 0x01708030)
 	world.rebuild_now()
-	check(chunk.collision.shape == shape_before and chunk.mesh_instance.mesh != mesh_before, "palette repaint must rebuild visible colors without recooking identical collision")
+	check(chunk.collision.shape == shape_before and chunk.mesh_instance.mesh == mesh_before, "palette repaint must update visible colors while retaining mesh and collision")
 	world.clear_world(Vector3i(16, 16, 16))
 	world._fill_box(Vector3i.ZERO, Vector3i(16, 2, 16), palette)
 	world._mark_all_chunks()

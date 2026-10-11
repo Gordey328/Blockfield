@@ -93,6 +93,7 @@ def main():
     suites += [('mobile-controls','tests/ui/test_mobile_controls.gd')]
     suites += [('mobile-look','tests/integration/test_mobile_look.gd')]
     suites += [('block-damage-visual','tests/world/test_block_damage_visual.gd')]
+    suites += [('block-impact-optimization','tests/world/test_block_impact_optimization.gd'),('minimap-impact-upload','tests/ui/test_minimap_impact_upload.gd')]
     suites += [('network-block-damage','tests/network/test_network_block_damage.gd')]
     suites += [('audio-optimization','tests/audio/test_audio_optimization.gd'),('vxl-jobs','tests/world/test_vxl_jobs.gd'),('model-cache-bounds','tests/presentation/test_model_cache_bounds.gd'),('vxl-main','tests/integration/test_vxl_main.gd')]
     for name,path in suites:

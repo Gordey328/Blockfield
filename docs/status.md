@@ -3,6 +3,31 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Active weapon/block impact optimization — 2026-10-11
+
+User reports stalls while firing into terrain, especially SMG. Baseline source
+`662a288`; Godot `4.7.2.stable.official.ed1daf0bf`, upstream unchanged. Root owns
+integration, docs, build registration, diagnostic export and publication. Specialist
+`impact_world` owns only `game/world/voxel_{world,chunk}.gd`; `impact_rules` owns
+only `game/ui/lab_map.gd` and its new upload fixture; `impact_tests` owns new native
+impact correctness/benchmark and browser Main probe files. Engine runs are serial
+under the coordinator's lease. Baseline archived at `.cache/block-impact-baseline`.
+Existing AoS research and its status insertion are preserved. Initial audit finds
+color-only damage rebuilding full mesh/AO and frame budgets checked only after
+indivisible chunk builds. Agreed contract: targeted color attribute updates,
+bounded staged geometry with atomic publication, cancellation on invalidation,
+retained synchronous `rebuild_now`, and unchanged authority/collapse rules.
+Implementation is integrated. Import, damage31/0, lighting30/0, impact4441/0,
+minimap37/0 and preparation53/0 pass. Old world fixture expected neighbor rebuild
+for a border repaint; updated to the new palette-only contract after its recorded
+failure. RGB0..255 dynamic bytes exactly match full-build RGBA8/AO/UV bytes.
+CPU baseline first-hit mesh median8.65ms lab /6.25ms Title; actual Main Web SMG
+wall72–73 shots/8s,14–18 removals, p95 frames51.7/64.3/73.8ms. One Title run73
+shots/1 removal, p9560.3ms; this shallow-ground case includes protected terrain.
+Failed initial typed-array CPU fixture and zero-shot focus Web attempt are retained.
+Next: paired benchmark/export, frozen full checks and public verification.
+No new acceptance claims yet; [evidence](block-impact-performance.md).
+
 ## Recover context
 
 1. Read [AGENTS.md](../AGENTS.md), this page and [accepted iterations](iterations.md).

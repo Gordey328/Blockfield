@@ -13,6 +13,9 @@ var per_player_colors:=true
 var scale_mode:=2
 var _scale:=1.0
 var _texture: ImageTexture
+var _terrain_image_id: int = 0
+var _terrain_revision: int = -1
+var _terrain_upload_count: int = 0
 var _dirty:=true
 var _clock:=0.0
 var _terrain_source: LabMap
@@ -123,9 +126,32 @@ func _process(delta: float) -> void:
 					var cell:=Vector3i(x*world.dimensions.x/64,world.dimensions.y-1,z*world.dimensions.z/64)
 					while cell.y>0 and world.get_block(cell)==0:cell.y-=1
 					image.set_pixel(x,z,VoxelWorld.block_color(world.get_block(cell)))
-		if _texture==null or _texture.get_size()!=Vector2(image.get_size()):_texture=ImageTexture.create_from_image(image)
-		else:_texture.update(image)
+		_upload_terrain(image)
 	queue_redraw()
+
+func get_terrain_upload_count() -> int:
+	return _terrain_upload_count
+
+func _upload_terrain(image: Image) -> void:
+	if image == null:
+		return
+	# Buried edits still notify the map, but do not change its top surface.
+	# Keep pending preparation polling above; a completed final batch has a new
+	# revision even when is_topdown_pending() already became false.
+	var revision: int = -1
+	if world != null and world.has_method("get_visual_preparation_stats"):
+		var stats: Dictionary = world.call("get_visual_preparation_stats")
+		revision = int(stats.get("topdown_revision", -1))
+	var image_id: int = image.get_instance_id()
+	if _texture == null or _texture.get_size() != Vector2(image.get_size()):
+		_texture = ImageTexture.create_from_image(image)
+	elif image_id != _terrain_image_id or revision < 0 or revision != _terrain_revision:
+		_texture.update(image)
+	else:
+		return
+	_terrain_image_id = image_id
+	_terrain_revision = revision
+	_terrain_upload_count += 1
 
 func _draw_icon(kind: String, point: Vector2, color: Color, yaw: float=0, width: float=14) -> void:
 	var texture: Texture2D=_icons.get(kind)

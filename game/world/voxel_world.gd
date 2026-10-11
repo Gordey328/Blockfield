@@ -70,6 +70,14 @@ var _blocks: PackedInt32Array:
 var _chunks: Dictionary = {}
 var _dirty: Dictionary = {}
 var _collision_dirty: Dictionary = {}
+var _geometry_dirty: Dictionary[Vector3i, bool] = {}
+var _color_dirty: Dictionary[Vector3i, Dictionary] = {}
+var _active_chunk: VoxelChunk
+var _active_key := Vector3i(-1000, -1000, -1000)
+var _rebuild_stats: Dictionary = {"mesh_builds": 0, "collision_builds": 0, "color_updates": 0,
+	"color_vertices": 0, "color_upload_bytes": 0, "build_cancellations": 0,
+	"last_frame_usec": 0, "max_frame_usec": 0, "max_step_usec": 0,
+	"last_publish_usec": 0, "max_publish_usec": 0}
 var _damaged_blocks: Dictionary[Vector3i, bool] = {}
 var _streaming := false
 var _view_chunk := Vector3i(-1000, 0, -1000)
@@ -107,17 +115,10 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	cancel_vxl_jobs()
+	_cancel_active_build()
 
 func _process(_delta: float) -> void:
-	var rebuilt := 0
-	var started := Time.get_ticks_usec()
-	for key in _dirty.keys():
-		_dirty.erase(key)
-		if not _streaming or _is_chunk_near(key):
-			_rebuild_chunk(key)
-			rebuilt += 1
-			if rebuilt >= rebuild_budget or Time.get_ticks_usec() - started >= rebuild_time_budget_ms * 1000.0:
-				break
+	process_rebuild_work(0, int(rebuild_time_budget_ms * 1000.0))
 	if irradiance_enabled:
 		_ensure_irradiance()
 		_irradiance.update()
@@ -151,14 +152,14 @@ func set_block_damaged(cell: Vector3i, damaged: bool) -> void:
 	else:
 		_damaged_blocks.erase(cell)
 	# Only this cell's colors change. Neither AO neighbors nor collision change.
-	_dirty[_chunk_of(cell)] = true
+	_queue_color_update(cell)
 
 func is_block_damaged(cell: Vector3i) -> bool:
 	return _damaged_blocks.has(cell)
 
 func clear_block_damage() -> void:
 	for cell: Vector3i in _damaged_blocks:
-		_dirty[_chunk_of(cell)] = true
+		_queue_color_update(cell)
 	_damaged_blocks.clear()
 
 func get_render_color(cell: Vector3i, packed: int) -> Color:
@@ -219,6 +220,9 @@ func _present_transaction(transaction: Dictionary) -> void:
 	map_transaction_committed.emit(transaction)
 
 func _mark_dirty(cell: Vector3i, geometry_changed: bool = true) -> void:
+	if not geometry_changed:
+		_queue_color_update(cell)
+		return
 	# AO uses the eight neighbors on the exterior face plane. An edit at a
 	# chunk edge/corner must also rebuild diagonal neighboring chunks.
 	var native := dimensions == Vector3i(512, 64, 512)
@@ -227,13 +231,41 @@ func _mark_dirty(cell: Vector3i, geometry_changed: bool = true) -> void:
 			for y in range(cell.y - 1, cell.y + 2):
 				var neighbor := Vector3i(posmod(x, dimensions.x) if native else x, y, posmod(z, dimensions.z) if native else z)
 				if is_in_bounds(neighbor):
-					_dirty[_chunk_of(neighbor)] = true
+					_queue_geometry_update(_chunk_of(neighbor))
 	if geometry_changed:
 		_collision_dirty[_chunk_of(cell)] = true
 		for direction in DIRECTIONS:
 			var neighbor := cell + direction
 			if is_in_bounds(neighbor):
 				_collision_dirty[_chunk_of(neighbor)] = true
+
+func _queue_color_update(cell: Vector3i) -> void:
+	var key := _chunk_of(cell)
+	if not _color_dirty.has(key):
+		_color_dirty[key] = {}
+	_color_dirty[key][cell] = true
+	_dirty[key] = true
+
+func _queue_geometry_update(key: Vector3i) -> void:
+	_dirty[key] = true
+	_geometry_dirty[key] = true
+	# A fresh job samples current palette/damage. Discard older requests; any
+	# color edit after this point is retained until the job publishes.
+	_color_dirty.erase(key)
+	if _active_chunk != null and _active_key == key:
+		_cancel_active_build()
+
+func _cancel_active_build() -> void:
+	if _active_chunk == null:
+		return
+	if _active_chunk.is_rebuilding():
+		_rebuild_stats.build_cancellations += 1
+	_active_chunk.cancel_rebuild()
+	if not _chunks.has(_active_key):
+		# New chunks are detached until publication; cancelled staging owns them.
+		_active_chunk.free()
+	_active_chunk = null
+	_active_key = Vector3i(-1000, -1000, -1000)
 
 func _chunk_of(cell: Vector3i) -> Vector3i:
 	return Vector3i(floori(float(cell.x) / CHUNK_SIZE), floori(float(cell.y) / CHUNK_SIZE), floori(float(cell.z) / CHUNK_SIZE))
@@ -422,6 +454,7 @@ func clear_world(size: Vector3i) -> void:
 	_clear_world_visuals()
 
 func _clear_world_visuals() -> void:
+	_cancel_active_build()
 	cancel_vxl_jobs()
 	_damaged_blocks.clear()
 	_irradiance = null
@@ -454,6 +487,8 @@ func _clear_world_visuals() -> void:
 	_chunks.clear()
 	_dirty.clear()
 	_collision_dirty.clear()
+	_geometry_dirty.clear()
+	_color_dirty.clear()
 	_topdown_image = null
 	_topdown_heights.clear()
 	_topdown_dirty.clear()
@@ -662,18 +697,24 @@ func set_view_position(position: Vector3) -> void:
 	if center.x == _view_chunk.x and center.z == _view_chunk.z:
 		return
 	_view_chunk = center
+	if _active_chunk != null and not _is_chunk_near(_active_key):
+		_cancel_active_build()
 	for key in _chunks.keys():
 		if not _is_chunk_near(key):
 			var chunk: Node3D = _chunks[key]
 			remove_child(chunk)
 			chunk.queue_free()
 			_chunks.erase(key)
+			_dirty.erase(key)
+			_geometry_dirty.erase(key)
+			_color_dirty.erase(key)
+			_collision_dirty.erase(key)
 	for z in range(maxi(0, center.z - render_radius), mini(ceili(float(dimensions.z) / CHUNK_SIZE), center.z + render_radius + 1)):
 		for x in range(maxi(0, center.x - render_radius), mini(ceili(float(dimensions.x) / CHUNK_SIZE), center.x + render_radius + 1)):
 			for y in range(ceili(float(dimensions.y) / CHUNK_SIZE)):
 				var key := Vector3i(x, y, z)
 				if not _chunks.has(key):
-					_dirty[key] = true
+					_queue_geometry_update(key)
 
 func set_effects_observer(position: Vector3) -> void:
 	_effects_observer = position
@@ -807,32 +848,142 @@ func _mark_all_chunks(geometry_changed: bool = true) -> void:
 	for z in range(ceili(float(dimensions.z) / CHUNK_SIZE)):
 		for x in range(ceili(float(dimensions.x) / CHUNK_SIZE)):
 			for y in range(ceili(float(dimensions.y) / CHUNK_SIZE)):
-				_dirty[Vector3i(x, y, z)] = true
+				_queue_geometry_update(Vector3i(x, y, z))
 				if geometry_changed:
 					_collision_dirty[Vector3i(x, y, z)] = true
 
 func rebuild_now() -> void:
 	_ensure_material()
-	for key in _dirty.keys():
+	# Complete an in-flight build using its current halo and final color queue.
+	# Geometry invalidation always cancels stale jobs before reaching this API.
+	if _active_chunk != null:
+		_finish_active_build()
+	for key: Vector3i in _dirty.keys():
 		if not _streaming or _is_chunk_near(key):
 			_rebuild_chunk(key)
 	_dirty.clear()
+	_geometry_dirty.clear()
+	_color_dirty.clear()
+	_collision_dirty.clear()
 
 func _rebuild_chunk(key: Vector3i) -> void:
-	var chunk: StaticBody3D
+	if _color_dirty.has(key) and not _geometry_dirty.has(key) and _chunks.has(key):
+		for cell: Vector3i in _color_dirty[key]:
+			_update_chunk_color(_chunks[key], cell)
+		_color_dirty.erase(key)
+		return
+	_start_chunk_build(key)
+	_finish_active_build()
+
+func _start_chunk_build(key: Vector3i) -> void:
 	var rebuild_collision := _collision_dirty.has(key) or not _chunks.has(key)
+	_active_key = key
 	if _chunks.has(key):
-		chunk = _chunks[key]
+		_active_chunk = _chunks[key]
 	else:
-		chunk = CHUNK_SCRIPT.new()
-		chunk.coordinate = key
-		chunk.position = Vector3(key * CHUNK_SIZE)
-		chunk.name = "Chunk_%d_%d_%d" % [key.x, key.y, key.z]
-		add_child(chunk)
-		_chunks[key] = chunk
-	chunk.rebuild(self, _material, rebuild_collision)
-	_collision_dirty.erase(key)
-	chunk.mesh_instance.visibility_range_end = get_draw_distance() + CHUNK_SIZE * 0.8660254
+		_active_chunk = CHUNK_SCRIPT.new()
+		_active_chunk.coordinate = key
+		_active_chunk.position = Vector3(key * CHUNK_SIZE)
+		_active_chunk.name = "Chunk_%d_%d_%d" % [key.x, key.y, key.z]
+	_active_chunk.begin_rebuild(self, rebuild_collision)
+
+func _finish_active_build() -> void:
+	while not _active_chunk.advance_rebuild(self, _material, _color_dirty.get(_active_key, {})):
+		pass
+	_publish_chunk_build()
+
+func _publish_chunk_build() -> void:
+	_rebuild_stats.mesh_builds += 1
+	if _collision_dirty.has(_active_key) or not _chunks.has(_active_key):
+		_rebuild_stats.collision_builds += 1
+	_rebuild_stats.last_publish_usec = _active_chunk.publish_usec
+	_rebuild_stats.max_publish_usec = maxi(_rebuild_stats.max_publish_usec, _active_chunk.publish_usec)
+	if not _chunks.has(_active_key):
+		add_child(_active_chunk)
+		_chunks[_active_key] = _active_chunk
+	_active_chunk.mesh_instance.visibility_range_end = get_draw_distance() + CHUNK_SIZE * 0.8660254
+	_dirty.erase(_active_key)
+	_geometry_dirty.erase(_active_key)
+	_color_dirty.erase(_active_key)
+	_collision_dirty.erase(_active_key)
+	_active_chunk = null
+	_active_key = Vector3i(-1000, -1000, -1000)
+
+func _update_chunk_color(chunk: VoxelChunk, cell: Vector3i) -> void:
+	var bytes := chunk.update_color(self, cell)
+	if bytes > 0:
+		_rebuild_stats.color_updates += 1
+		_rebuild_stats.color_upload_bytes += bytes
+		_rebuild_stats.color_vertices += bytes / chunk._attribute_stride
+
+func _nearest_dirty_key(colors_only: bool = false) -> Vector3i:
+	var result := Vector3i(-1000, -1000, -1000)
+	var distance := INF
+	var observer := _chunk_of(Vector3i(_effects_observer.floor()))
+	var candidates: Dictionary = _color_dirty if colors_only else _dirty
+	for key: Vector3i in candidates:
+		if colors_only and (_geometry_dirty.has(key) or not _chunks.has(key)):
+			continue
+		var score := Vector3(key - observer).length_squared()
+		if score < distance:
+			result = key
+			distance = score
+	return result
+
+func process_rebuild_work(max_units: int = 0, time_budget_usec: int = 4000) -> Dictionary:
+	# Unit count zero means no count limit; nonpositive time means no work.
+	# One active job bounds staging memory. Cheap color uploads take priority,
+	# then the nearest dirty chunk advances without replacing partial meshes.
+	var started := Time.get_ticks_usec()
+	var units := 0
+	var completed := 0
+	if time_budget_usec > 0 and rebuild_budget > 0:
+		_ensure_material()
+		while (max_units <= 0 or units < max_units) and completed < rebuild_budget and Time.get_ticks_usec() - started < time_budget_usec:
+			var step_started := Time.get_ticks_usec()
+			var key := _nearest_dirty_key(true)
+			if key.x != -1000:
+				var cell: Vector3i = _color_dirty[key].keys()[0]
+				if not _streaming or _is_chunk_near(key):
+					_update_chunk_color(_chunks[key], cell)
+				_color_dirty[key].erase(cell)
+				if _color_dirty[key].is_empty():
+					_color_dirty.erase(key)
+					_dirty.erase(key)
+					completed += 1
+			else:
+				if _active_chunk == null:
+					key = _nearest_dirty_key()
+					if key.x == -1000:
+						break
+					if _streaming and not _is_chunk_near(key):
+						_dirty.erase(key)
+						_geometry_dirty.erase(key)
+						_color_dirty.erase(key)
+						_collision_dirty.erase(key)
+						continue
+					_start_chunk_build(key)
+				if _active_chunk.advance_rebuild(self, _material, _color_dirty.get(_active_key, {})):
+					_publish_chunk_build()
+					completed += 1
+			units += 1
+			_rebuild_stats.max_step_usec = maxi(_rebuild_stats.max_step_usec, Time.get_ticks_usec() - step_started)
+	var elapsed := Time.get_ticks_usec() - started
+	_rebuild_stats.last_frame_usec = elapsed
+	_rebuild_stats.max_frame_usec = maxi(_rebuild_stats.max_frame_usec, elapsed)
+	return {"processed_units": units, "completed_chunks": completed, "pending_chunks": _dirty.size(), "elapsed_usec": elapsed, "active_build": _active_chunk != null}
+
+func get_rebuild_stats() -> Dictionary:
+	var stats := _rebuild_stats.duplicate()
+	stats.color_backend = "dummy_surface" if DisplayServer.get_name() == "headless" else "attribute_region"
+	stats.pending_chunks = _dirty.size()
+	stats.pending_color_chunks = _color_dirty.size()
+	stats.active_build = _active_chunk != null
+	var cache_bytes := 0
+	for chunk: VoxelChunk in _chunks.values():
+		cache_bytes += chunk.get_cached_color_bytes()
+	stats.cached_color_bytes = cache_bytes
+	return stats
 
 func _ensure_material() -> void:
 	if _material == null:

@@ -26,7 +26,7 @@ func _run() -> void:
 	world.rebuild_now()
 	check(world.get_stats().faces == 10, "adjacent blocks across a chunk border must hide both internal faces")
 	world.set_block(Vector3i(15, 5, 8), 0x01aabbcc)
-	check(world.get_stats().dirty_chunks == 2, "border edit must dirty only its chunk and the touched neighbor")
+	check(world.get_stats().dirty_chunks == 1, "border repaint must update only its chunk's palette")
 	world.rebuild_now()
 	world.set_block(Vector3i(14, 5, 8), black)
 	check(world.get_stats().dirty_chunks == 1, "interior edit must dirty only its own chunk")
