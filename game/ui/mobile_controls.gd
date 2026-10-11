@@ -24,6 +24,8 @@ const MOUSE_POINTER := -1
 const MOVE_WIDTH_RATIO := 0.4
 const TOP_ACTIONS: Array[String] = ["tool_spade", "tool_block", "tool_weapon", "tool_grenade", "map", "view_toggle", "menu"]
 const PLAY_ACTIONS: Array[String] = ["primary", "secondary", "reload", "jump", "crouch", "sprint"]
+const TOOL_ACTIONS: Array[String] = ["tool_spade", "tool_block", "tool_weapon", "tool_grenade"]
+const UTILITY_ACTIONS: Array[String] = ["map", "view_toggle", "menu"]
 
 enum PointerKind { MOVE, LOOK, ACTION, BLOCKED, ACTION_LOOK }
 
@@ -77,6 +79,7 @@ var _normal_style: StyleBoxFlat
 var _held_style: StyleBoxFlat
 var _font: Font
 var _displayed_tool: int = -1
+var _layout_height: float = 0.0
 
 func setup(player: BlockfieldPlayer, hud: LabHUD) -> void:
 	release_all()
@@ -144,6 +147,26 @@ func release_all() -> void:
 func get_hit_regions() -> Dictionary:
 	_ensure_layout()
 	return _regions.duplicate()
+
+## HUD placement uses these copied rectangles, never an assumed action grid.
+func get_action_rects() -> Dictionary[String, Rect2]:
+	_ensure_layout()
+	var rectangles: Dictionary[String, Rect2] = {}
+	for action: String in TOP_ACTIONS + PLAY_ACTIONS:
+		if _regions.has(action): rectangles[action] = _regions[action]
+	return rectangles
+
+func get_tool_rects() -> Dictionary[String, Rect2]:
+	_ensure_layout()
+	var rectangles: Dictionary[String, Rect2] = {}
+	for action: String in TOOL_ACTIONS:
+		if _regions.has(action): rectangles[action] = _regions[action]
+	return rectangles
+
+## Bottom edge of the tool/utility band in local logical pixels.
+func get_layout_height() -> float:
+	_ensure_layout()
+	return _layout_height
 
 ## These two public methods use local logical pixels, exactly as _input does
 ## after converting viewport coordinates. Web Touch.identifier is signed32;
@@ -396,42 +419,43 @@ func _ensure_layout() -> void:
 	_layout_size = size
 	_regions.clear()
 	_look_hint_rect = Rect2()
-	if size.x < 440.0 or size.y < 320.0:
-		return
+	_layout_height = 0.0
 	var button_floor: float = _logical_button_floor()
+	var css_unit: float = button_floor / MIN_CSS_BUTTON_SIZE
+	if size.x < 320.0 * css_unit or size.y < 320.0 * css_unit:
+		return
 	# Measure CSS scale only when laying out, keeping Web interop out of _draw.
 	var font_floor: int = ceili(button_floor * MIN_CSS_LABEL_SIZE / MIN_CSS_BUTTON_SIZE)
 	_button_font_size = maxi(clampi(roundi(15.0 * _control_scale), 12, 21), font_floor)
 	_hint_font_size = maxi(13, font_floor)
-	var desired_button: float = maxf(clampf(size.y * 0.13, MIN_BUTTON_SIZE, MAX_BUTTON_SIZE) * _control_scale, button_floor)
-	var two_rows: bool = size.x < desired_button * 7.0 + GAP * 6.0 + MARGIN * 2.0
-	var columns: int = 4 if two_rows else 7
-	var width_limit: float = (size.x - MARGIN * 2.0 - GAP * (columns - 1)) / columns
-	# Extremely small CSS canvases may be unable to fit the physical floor.
-	_button_size = minf(desired_button, width_limit)
-	var top_bottom: float = MARGIN + _button_size
-	if two_rows:
-		_layout_row(TOP_ACTIONS.slice(0, 4), MARGIN)
-		_layout_row(TOP_ACTIONS.slice(4), MARGIN + _button_size + GAP)
-		top_bottom += _button_size + GAP
-	else:
-		_layout_row(TOP_ACTIONS, MARGIN)
-	var look_top: float = top_bottom + GAP
-	var desired_stick: float = STICK_SIZE * _control_scale
-	var play_columns: int = 3
-	if size.x - MARGIN * 2.0 - (_button_size * 3.0 + GAP * 2.0) - GAP < desired_stick:
-		play_columns = 2
-	var play_rows: int = ceili(float(PLAY_ACTIONS.size()) / float(play_columns))
-	var grid_width: float = _button_size * play_columns + GAP * (play_columns - 1)
-	var grid_origin := Vector2(size.x - MARGIN - grid_width, size.y - HUD_BOTTOM_RESERVE - _button_size * play_rows - GAP * (play_rows - 1))
+	var margin: float = MARGIN * css_unit
+	var gap: float = GAP * css_unit
+	var top_band: Dictionary[String, float] = _layout_top_band(css_unit, margin, gap, button_floor)
+	var combat_top: float = top_band["combat_top"]
+	var combat_gap: float = top_band["gap"]
+	var bottom: float = size.y - HUD_BOTTOM_RESERVE - margin
 	var move_width: float = size.x * MOVE_WIDTH_RATIO
-	_stick_extent = maxf(32.0, minf(desired_stick, minf(grid_origin.x - MARGIN - GAP, size.y - HUD_BOTTOM_RESERVE - look_top - GAP - 32.0)))
+	var look_width: float = size.x - margin - move_width - combat_gap
+	# Fit the thumb arc as a whole. CSS minima survive both narrow portrait and
+	# large control preferences; fire retains at least 1.2× the minimum target.
+	var low: float = 0.0
+	var high: float = _control_scale
+	for iteration: int in range(16):
+		var candidate: float = (low + high) * 0.5
+		var dimensions: Dictionary[String, float] = _combat_dimensions(css_unit, candidate, button_floor)
+		if _combat_fits(dimensions, look_width, bottom - combat_top, combat_gap): low = candidate
+		else: high = candidate
+	var combat: Dictionary[String, float] = _combat_dimensions(css_unit, low, button_floor)
+	_layout_combat(combat, size.x - margin, bottom, move_width + combat_gap, combat_gap)
+	var sprint_size: float = maxf(button_floor, 60.0 * css_unit * _control_scale)
+	var desired_stick: float = STICK_SIZE * css_unit * _control_scale
+	_stick_extent = maxf(32.0 * css_unit, minf(desired_stick, bottom - _layout_height - gap * 3.0 - sprint_size))
 	if not _floating_stick:
 		# A fixed activation pad must fit inside the movement column. Floating
 		# mode keeps the existing radius and only clamps its visible base.
-		_stick_extent = minf(_stick_extent, move_width - MARGIN * 2.0)
+		_stick_extent = minf(_stick_extent, move_width - margin * 2.0)
 	_stick_radius = STICK_RADIUS * _stick_extent / STICK_SIZE
-	_resting_stick_center = Vector2(MARGIN + _stick_extent * 0.5, size.y - HUD_BOTTOM_RESERVE - _stick_extent * 0.5)
+	_resting_stick_center = Vector2(margin + _stick_extent * 0.5, bottom - _stick_extent * 0.5)
 	if _floating_stick:
 		# Buttons have hit-test priority. The left thumb need not hit a small
 		# drawn circle to begin movement; each gesture starts neutral at DOWN.
@@ -439,14 +463,17 @@ func _ensure_layout() -> void:
 		_stick_radius = minf(_stick_radius, minf(move_width, _regions["move"].size.y) * 0.5)
 		_resting_stick_center.x = clampf(_resting_stick_center.x, _stick_radius, move_width - _stick_radius)
 	else:
-		_regions["move"] = Rect2(Vector2(MARGIN, size.y - HUD_BOTTOM_RESERVE - _stick_extent), Vector2.ONE * _stick_extent)
-	for index: int in range(PLAY_ACTIONS.size()):
-		var offset := Vector2(index % play_columns, floori(float(index) / float(play_columns))) * (_button_size + GAP)
-		_regions[PLAY_ACTIONS[index]] = Rect2(grid_origin + offset, Vector2.ONE * _button_size)
-	# Blank space behind the toolbar, action grid and footer can begin look;
+		_regions["move"] = Rect2(Vector2(margin, bottom - _stick_extent), Vector2.ONE * _stick_extent)
+	var sprint_x: float = clampf(_resting_stick_center.x + _stick_extent * 0.12 - sprint_size * 0.5, margin, move_width - margin - sprint_size)
+	_regions["sprint"] = Rect2(Vector2(sprint_x, bottom - _stick_extent - gap - sprint_size), Vector2.ONE * sprint_size)
+	# Blank space behind the toolbar, thumb arc and footer can begin look;
 	# buttons win the DOWN hit test, then this role stays owned until release.
 	_regions["look"] = Rect2(Vector2(move_width, 0.0), Vector2(size.x - move_width, size.y))
-	_look_hint_rect = Rect2(Vector2(move_width, grid_origin.y - GAP - 24.0), Vector2(size.x - move_width - MARGIN, 24.0))
+	var actions_top: float = size.y
+	for action: String in PLAY_ACTIONS:
+		if action != "sprint": actions_top = minf(actions_top, _regions[action].position.y)
+	var hint_height: float = 24.0 * css_unit
+	_look_hint_rect = Rect2(Vector2(move_width, actions_top - gap - hint_height), Vector2(size.x - move_width - margin, hint_height))
 	if _left_handed:
 		for name: String in _regions:
 			_regions[name] = _mirror_rect(_regions[name])
@@ -458,12 +485,85 @@ func _ensure_layout() -> void:
 func _mirror_rect(rect: Rect2) -> Rect2:
 	return Rect2(Vector2(size.x - rect.end.x, rect.position.y), rect.size)
 
-func _layout_row(actions: Array[String], y: float) -> void:
-	var width: float = actions.size() * _button_size + (actions.size() - 1) * GAP
-	var x: float = (size.x - width) * 0.5
+func _layout_row(actions: Array[String], origin: Vector2, extent: float, gap: float) -> void:
+	var x: float = origin.x
 	for action: String in actions:
-		_regions[action] = Rect2(Vector2(x, y), Vector2.ONE * _button_size)
-		x += _button_size + GAP
+		_regions[action] = Rect2(Vector2(x, origin.y), Vector2.ONE * extent)
+		x += extent + gap
+
+func _layout_top_band(css_unit: float, margin: float, gap: float, floor_size: float) -> Dictionary[String, float]:
+	var tool_size: float = maxf(floor_size, 60.0 * css_unit * _control_scale)
+	tool_size = minf(tool_size, (size.x - margin * 2.0 - gap * 3.0) / 4.0)
+	var utility_size: float = maxf(floor_size, 56.0 * css_unit * _control_scale)
+	utility_size = minf(utility_size, (size.x - margin * 2.0 - gap * 2.0) / 3.0)
+	var tool_width: float = tool_size * 4.0 + gap * 3.0
+	var utility_width: float = utility_size * 3.0 + gap * 2.0
+	var utility_x: float = size.x - margin - utility_width
+	_button_size = tool_size
+	if tool_width + gap * 3.0 <= utility_x - margin:
+		var tool_x: float = margin + (utility_x - margin - gap * 3.0 - tool_width) * 0.5
+		_layout_row(TOOL_ACTIONS, Vector2(tool_x, margin), tool_size, gap)
+		_layout_row(UTILITY_ACTIONS, Vector2(utility_x, margin), utility_size, gap)
+		_layout_height = margin + maxf(tool_size, utility_size)
+		return {"combat_top": _layout_height + gap, "gap": gap}
+	if size.y < 400.0 * css_unit:
+		# A short, narrow canvas cannot spare two complete top rows. Keep the
+		# utilities on the right and compact the tools onto the unused left.
+		var compact_gap: float = 4.0 * css_unit
+		var compact_utility_width: float = floor_size * 3.0 + compact_gap * 2.0
+		_layout_row(UTILITY_ACTIONS, Vector2(size.x - margin - compact_utility_width, margin), floor_size, compact_gap)
+		if floor_size * 7.0 + compact_gap * 6.0 + margin * 2.0 <= size.x:
+			_layout_row(TOOL_ACTIONS, Vector2(margin, margin), floor_size, compact_gap)
+			_layout_height = margin + floor_size
+		else:
+			_layout_row(TOOL_ACTIONS.slice(0, 2), Vector2(margin, margin), floor_size, compact_gap)
+			_layout_row(TOOL_ACTIONS.slice(2), Vector2(margin, margin + floor_size + compact_gap), floor_size, compact_gap)
+			_layout_height = margin + floor_size * 2.0 + compact_gap
+		var compact_combat_gap: float = 6.0 * css_unit
+		return {"combat_top": margin + floor_size + compact_combat_gap, "gap": compact_combat_gap}
+	_layout_row(UTILITY_ACTIONS, Vector2(utility_x, margin), utility_size, gap)
+	_layout_row(TOOL_ACTIONS, Vector2((size.x - tool_width) * 0.5, margin + utility_size + gap), tool_size, gap)
+	_layout_height = margin + utility_size + gap + tool_size
+	return {"combat_top": _layout_height + gap, "gap": gap}
+
+func _combat_dimensions(css_unit: float, factor: float, floor_size: float) -> Dictionary[String, float]:
+	return {
+		"primary": maxf(floor_size * 1.2, 96.0 * css_unit * factor),
+		"secondary": maxf(floor_size, 76.0 * css_unit * factor),
+		"reload": maxf(floor_size, 56.0 * css_unit * factor),
+		"jump": maxf(floor_size, 68.0 * css_unit * factor),
+		"crouch": maxf(floor_size, 64.0 * css_unit * factor),
+	}
+
+func _combat_fits(dimensions: Dictionary[String, float], width: float, height: float, gap: float) -> bool:
+	var column_width: float = dimensions["primary"] + maxf(dimensions["jump"], dimensions["crouch"]) + gap
+	if column_width > width: return false
+	var folded: bool = column_width + dimensions["secondary"] + gap > width
+	var required_height: float = dimensions["crouch"] * 0.5 + dimensions["primary"] + gap + dimensions["reload"]
+	if folded:
+		required_height = maxf(dimensions["crouch"] * 0.5 + dimensions["primary"] + gap + dimensions["secondary"], dimensions["crouch"] + dimensions["jump"] + gap * 2.0 + dimensions["reload"])
+	return required_height <= height
+
+func _layout_combat(dimensions: Dictionary[String, float], right: float, bottom: float, left: float, gap: float) -> void:
+	var primary_size: float = dimensions["primary"]
+	var secondary_size: float = dimensions["secondary"]
+	var reload_size: float = dimensions["reload"]
+	var jump_size: float = dimensions["jump"]
+	var crouch_size: float = dimensions["crouch"]
+	var posture_width: float = maxf(jump_size, crouch_size)
+	var fire_x: float = right - posture_width - gap - primary_size
+	var fire_bottom: float = bottom - crouch_size * 0.5
+	var fire_y: float = fire_bottom - primary_size
+	var jump_y: float = bottom - crouch_size - gap - jump_size
+	_regions["primary"] = Rect2(Vector2(fire_x, fire_y), Vector2.ONE * primary_size)
+	_regions["jump"] = Rect2(Vector2(right - jump_size, jump_y), Vector2.ONE * jump_size)
+	_regions["crouch"] = Rect2(Vector2(right - crouch_size, bottom - crouch_size), Vector2.ONE * crouch_size)
+	if fire_x - gap - secondary_size >= left:
+		_regions["secondary"] = Rect2(Vector2(fire_x - gap - secondary_size, fire_bottom - secondary_size * 0.8), Vector2.ONE * secondary_size)
+		_regions["reload"] = Rect2(Vector2(fire_x + (primary_size - reload_size) * 0.5, fire_y - gap - reload_size), Vector2.ONE * reload_size)
+	else:
+		_regions["secondary"] = Rect2(Vector2(fire_x, fire_y - gap - secondary_size), Vector2.ONE * secondary_size)
+		_regions["reload"] = Rect2(Vector2(right - reload_size, jump_y - gap - reload_size), Vector2.ONE * reload_size)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_PAUSED:
@@ -514,19 +614,26 @@ func _draw() -> void:
 
 func _draw_action(rect: Rect2, action: String, held: bool) -> void:
 	var is_play_action: bool = PLAY_ACTIONS.has(action)
+	var is_round: bool = is_play_action or UTILITY_ACTIONS.has(action)
 	var tool_index: int = TOP_ACTIONS.find(action)
 	var is_tool: bool = tool_index >= 0 and tool_index < 4
 	var selected: bool = is_tool and _displayed_tool == tool_index
 	var emphasized: bool = held or selected
 	var color: Color = Color(0.45, 0.88, 1.0, 0.96) if emphasized else Color(0.95, 0.97, 1.0, 0.90)
-	if is_play_action:
+	var inactive_secondary: bool = action == "secondary" and _displayed_tool == LocalSession.Tool.GRENADE
+	if inactive_secondary: color.a = 0.28
+	if is_round:
 		var radius: float = minf(rect.size.x, rect.size.y) * 0.5 - 2.0
 		var fill: Color = Color(0.08, 0.24, 0.30, 0.64) if held else Color(0.035, 0.055, 0.075, 0.34)
 		var ring: Color = Color(0.45, 0.88, 1.0, 0.96) if held else Color(0.92, 0.96, 1.0, 0.36)
 		if action == "primary" and not held:
 			ring = Color(0.45, 0.88, 1.0, 0.65)
+			fill.a = 0.46
+		if inactive_secondary:
+			fill.a = 0.18
+			ring.a = 0.16
 		draw_circle(rect.get_center(), radius, fill)
-		draw_arc(rect.get_center(), radius, 0.0, TAU, 64, ring, 1.5, true)
+		draw_arc(rect.get_center(), radius, 0.0, TAU, 64, ring, 2.2 if action == "primary" else 1.3, true)
 	else:
 		draw_style_box(_held_style if emphasized else _normal_style, rect.grow(-1.0))
 		if selected:
@@ -552,6 +659,16 @@ func _draw_label(rect: Rect2, text: String, font_size: int, color: Color) -> voi
 		y += height
 
 func _label(action: String) -> String:
+	if action == "primary":
+		match _displayed_tool:
+			LocalSession.Tool.SPADE: return _ui("Удар", "Strike")
+			LocalSession.Tool.BLOCK: return _ui("Блок", "Place")
+			LocalSession.Tool.GRENADE: return _ui("Бросок", "Throw")
+	if action == "secondary":
+		match _displayed_tool:
+			LocalSession.Tool.SPADE: return _ui("Копать", "Dig")
+			LocalSession.Tool.BLOCK: return _ui("Линия", "Line")
+			LocalSession.Tool.GRENADE: return ""
 	match action:
 		"primary": return _ui("Огонь", "Fire")
 		"secondary": return _ui("Прицел", "Aim")

@@ -459,12 +459,7 @@ func _update_tdm_status() -> void:
 		_tdm_score.text=score_text
 		_combat_readout.score_text=score_text
 		if uses_mobile_controls() and mobile_controls != null:
-			# The toolbar can occupy one or two rows and honors control scaling.
-			var regions: Dictionary=mobile_controls.get_hit_regions()
-			var below_toolbar: float=88.0
-			for action: String in MOBILE_CONTROLS.TOP_ACTIONS:
-				var region: Rect2=regions.get(action,Rect2())
-				below_toolbar=maxf(below_toolbar,region.end.y+8.0)
+			var below_toolbar: float=maxf(88.0,mobile_controls.get_layout_height()+8.0)
 			_tdm_score.offset_top=below_toolbar
 			_tdm_score.offset_bottom=below_toolbar+28.0
 		_combat_readout.score_y=_tdm_score.offset_top
@@ -757,6 +752,8 @@ func _process(delta: float) -> void:
 		if session.is_cooking_grenade:_weapon_status.text=_ui("Фитиль: %.1f с","Fuse: %.1f s")%maxf(0,3-session.grenade_cook_time)
 		elif session.grenades==0:_weapon_status.text=OpenSpadesLocalization.text("Out of Grenade","Client")
 	_combat_readout.status_text=_weapon_status.text
+	if uses_mobile_controls() and session.current_tool==LocalSession.Tool.WEAPON and not session.is_reloading and session.magazine>0 and session.reserve>0 and session.magazine<floori(float(info.clip_size)/4):
+		_combat_readout.status_text=_ui("Перезарядите","Reload")
 	_mode.text="%s   ·   %s"%[world.map_name,session.mode.to_upper()]
 	_update_tdm_status()
 	_performance.visible=_show_statistics
@@ -937,6 +934,7 @@ func _build_touch_settings(column: VBoxContainer) -> void:
 	_ui_settings_controls.touch_sensitivity = _touch_setting_slider(column,"Обзор пальцем","Touch look",0.25,3.0,player.touch_sensitivity,func(value: float):player.touch_sensitivity=value;main.save_settings())
 	_ui_settings_controls.touch_ads_sensitivity = _touch_setting_slider(column,"Обзор в прицеле","Touch ADS look",0.25,2.0,player.touch_ads_sensitivity,func(value: float):player.touch_ads_sensitivity=value;main.save_settings())
 	_ui_settings_controls.invert_touch = _ui_check(column,"Инвертировать обзор пальцем","Invert touch look",player.invert_touch,func(value: bool):player.invert_touch=value;main.save_settings())
+	_ui_settings_controls.touch_aim_assist = _ui_check(column,"Лёгкое прилипание прицела · мобильное","Light aim stickiness · touch",player.touch_aim_assist,func(value: bool):player.touch_aim_assist=value;main.save_settings())
 	_ui_settings_controls.floating_stick = _ui_check(column,"Плавающий джойстик","Floating joystick",floating_stick,func(value: bool):floating_stick=value;_apply_touch_preferences();_save_ui_settings())
 	_ui_settings_controls.left_handed_touch = _ui_check(column,"Джойстик справа · для левшей","Joystick on the right · left-handed",left_handed_touch,func(value: bool):left_handed_touch=value;_apply_touch_preferences();_save_ui_settings())
 	_ui_settings_controls.fire_drag_look = _ui_check(column,"Огонь и обзор одним пальцем","Fire and look with one finger",fire_drag_look,func(value: bool):fire_drag_look=value;_apply_touch_preferences();_save_ui_settings())
@@ -968,6 +966,7 @@ func _reset_touch_settings() -> void:
 	player.touch_sensitivity=1.0
 	player.touch_ads_sensitivity=1.0
 	player.invert_touch=false
+	player.touch_aim_assist=true
 	floating_stick=true
 	touch_control_scale=1.0
 	fire_drag_look=true
@@ -977,7 +976,7 @@ func _reset_touch_settings() -> void:
 		slider.set_value_no_signal(1.0)
 		var amount: Label = slider.get_meta("touch_amount_label")
 		amount.text="100%"
-	for key: String in ["invert_touch","floating_stick","fire_drag_look","left_handed_touch"]:
+	for key: String in ["invert_touch","touch_aim_assist","floating_stick","fire_drag_look","left_handed_touch"]:
 		var button: CheckButton = _ui_settings_controls[key]
 		button.set_pressed_no_signal(false if key in ["invert_touch","left_handed_touch"] else true)
 	_apply_touch_preferences()
@@ -1289,10 +1288,13 @@ func add_event(event: Dictionary) -> void:
 func _update_feed() -> void:
 	_feed.clear()
 	var shown:=0
+	var mobile: bool=uses_mobile_controls()
+	var limit: int=mini(3,maxi(0,floori(_feed.size.y/18.0))) if mobile else 7
 	for index in range(_events.size()-1,-1,-1):
 		var event:=_events[index]
 		var age:=_event_clock-float(event.hud_time)
-		if age>15 or shown>=7:continue
+		if age>15 or shown>=limit:continue
+		if mobile and str(event.get("type","")) in ["respawn","team","mode"]:continue
 		var text:=_event_text(event)
 		if text.is_empty():continue
 		shown+=1
@@ -1442,39 +1444,52 @@ func _load_ui_settings() -> void:
 
 func _apply_map_settings() -> void:
 	if _map==null:return
-	var map_size:=mini(_minimap_size,112) if uses_mobile_controls() else _minimap_size
-	var inset:=16 if uses_mobile_controls() else 28
-	var top: int=(184 if get_window().size.y>get_window().size.x else 86) if uses_mobile_controls() else 24
-	if uses_mobile_controls() and mobile_controls!=null:
-		var regions: Dictionary=mobile_controls.get_hit_regions()
-		# Toolbar height follows the actual control scale and portrait row count.
-		var toolbar_bottom:=0.0
-		for action: String in ["tool_spade","tool_block","tool_weapon","tool_grenade","map","view_toggle","menu"]:
-			if regions.has(action):toolbar_bottom=maxf(toolbar_bottom,regions[action].end.y)
+	var mobile: bool=uses_mobile_controls()
+	var map_size:=mini(_minimap_size,112) if mobile else _minimap_size
+	var inset:=16 if mobile else 28
+	var top: int=(184 if get_window().size.y>get_window().size.x else 86) if mobile else 24
+	var map_left: float=-map_size-inset
+	if mobile and mobile_controls!=null:
+		var regions: Dictionary=mobile_controls.get_action_rects()
+		var toolbar_bottom: float=mobile_controls.get_layout_height()
 		if toolbar_bottom>0.0:top=ceili(toolbar_bottom+16.0)
+		# Mirror the map with the thumb layout. Short CSS canvases may need a
+		# smaller minimap to clear the action arc; the full map remains available.
+		var width: float=mobile_controls.size.x
+		for attempt: int in range(7):
+			map_left=-width+inset if left_handed_touch else -map_size-inset
+			var frame: Rect2=Rect2(width+map_left-6.0,top-6.0,map_size+12.0,map_size+12.0)
+			var blocked: bool=false
+			for rectangle: Rect2 in regions.values():
+				if frame.intersects(rectangle):blocked=true;break
+			if not blocked or map_size<=64:break
+			map_size=maxi(64,map_size-8)
 		var actions_top: float=mobile_controls.size.y-52.0
-		for action: String in ["primary","secondary","reload","jump","crouch","sprint"]:
+		for action: String in ["primary","secondary","reload","jump","crouch"]:
 			if regions.has(action):actions_top=minf(actions_top,regions[action].position.y)
-		# Leave the look hint its own row; building feedback must clear the
-		# action grid even when portrait controls grow into three rows.
+		# Building feedback clears the right-thumb action cluster.
 		var hint_width:=minf(640.0,mobile_controls.size.x-32.0)
 		_set_hud_rect(_build_status,Rect2(-hint_width*0.5,actions_top-64.0-mobile_controls.size.y,hint_width,24))
+		var feed_width: float=minf(240.0,width-2.0*(map_size+inset+8.0))
+		var feed_top: float=maxf(88.0,toolbar_bottom+8.0)+40.0
+		_set_hud_rect(_feed,Rect2(-width*0.5-feed_width*0.5,feed_top,feed_width,clampf(actions_top-feed_top-8.0,0.0,60.0)))
 	_map.size=Vector2(map_size,map_size)
-	_map.offset_left=-map_size-inset
-	_map.offset_right=-inset
+	_map.offset_left=map_left
+	_map.offset_right=map_left+map_size
 	_map.offset_top=top
 	_map.offset_bottom=top+map_size
 	# Align the read-only color palette beside the map, clear of both button rows.
 	_native_palette.anchor_top=0.0
 	_native_palette.anchor_bottom=_native_palette.anchor_top
-	_set_hud_rect(_native_palette,Rect2(-map_size-inset-98,top,90,90))
-	_set_hud_rect(_map_frame,Rect2(-map_size-inset-6,top-6,map_size+12,map_size+12))
+	var palette_left: float=map_left+map_size+8 if mobile and left_handed_touch else map_left-98
+	_set_hud_rect(_native_palette,Rect2(palette_left,top,90,90))
+	_set_hud_rect(_map_frame,Rect2(map_left-6,top-6,map_size+12,map_size+12))
 	_map.show_weapon_icons=_map_weapon_icons
 	_large_map.show_weapon_icons=_map_weapon_icons
 	_map.per_player_colors=_map_player_colors
 	_large_map.per_player_colors=_map_player_colors
 	_scoreboard.per_player_colors=_map_player_colors
-	_feed.position.y=top+map_size+26
+	if not mobile:_feed.position.y=top+map_size+26
 
 func _save_ui_settings() -> void:
 	var config:=ConfigFile.new()
@@ -1811,6 +1826,7 @@ func _refresh_ui_controls() -> void:
 			"touch_sensitivity":value=player.touch_sensitivity
 			"touch_ads_sensitivity":value=player.touch_ads_sensitivity
 			"invert_touch":value=player.invert_touch
+			"touch_aim_assist":value=player.touch_aim_assist
 			"floating_stick":value=floating_stick
 			"touch_control_scale":value=touch_control_scale
 			"fire_drag_look":value=fire_drag_look

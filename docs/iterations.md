@@ -41,3 +41,10 @@ boxy interface. Health/ammunition/resources, score and touch controls use the
 authored modern treatment in [ADR0022](decisions/0022-modern-combat-ui.md).
 Gameplay rules, input ownership and original feedback semantics retain their
 existing acceptance requirements. This change does not accept the full port.
+
+## Accepted mobile input addition — 2026-10-11
+
+The user requests a thumb-oriented mobile combat layout and slight aim stickiness
+on enemies. [ADR0023](decisions/0023-mobile-thumb-layout-and-aim-friction.md)
+defines the asymmetric controls and optional touch-only gain reduction. This
+explicit input adaptation retains authoritative weapon rules and desktop input.

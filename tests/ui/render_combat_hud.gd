@@ -15,7 +15,7 @@ func run() -> void:
 	existed=FileAccess.file_exists("user://settings.cfg")
 	if existed: original=FileAccess.get_file_as_bytes("user://settings.cfg")
 	ConfigFile.new().save("user://settings.cfg")
-	folder=ProjectSettings.globalize_path("res://../.cache/previews/combat-ui")
+	folder=ProjectSettings.globalize_path("res://../.cache/previews/mobile-ux")
 	DirAccess.make_dir_recursive_absolute(folder)
 	app=LAB.instantiate()
 	root.add_child(app)
@@ -46,6 +46,12 @@ func run() -> void:
 	root.size=Vector2i(390,844)
 	hud._update_mobile_layout()
 	await capture("touch-portrait")
+	hud.left_handed_touch=true
+	hud._apply_touch_preferences()
+	await capture("touch-portrait-left")
+	hud.touch_control_scale=1.4
+	hud._apply_touch_preferences()
+	await capture("touch-portrait-large")
 	await free_app()
 	root.size=Vector2i(1280,720)
 	app=TDM.instantiate()
@@ -57,12 +63,19 @@ func run() -> void:
 	hud.set_mobile_controls_mode(2)
 	hud.set_menu_visible(false)
 	await capture("team-battle")
+	session.invulnerable=true
+	root.size=Vector2i(844,390)
+	hud.set_mobile_controls_mode(1)
+	await capture("team-battle-touch-landscape")
+	root.size=Vector2i(390,844)
+	hud._update_mobile_layout()
+	await capture("team-battle-touch-portrait")
 	await free_app()
 	if existed:
 		var file:=FileAccess.open("user://settings.cfg",FileAccess.WRITE)
 		file.store_buffer(original)
 	else: DirAccess.remove_absolute(ProjectSettings.globalize_path("user://settings.cfg"))
-	print("COMBAT RENDER: 7 actual scene captures; "+folder)
+	print("COMBAT RENDER: 11 actual scene captures; "+folder)
 	quit()
 
 func frames(count: int) -> void:

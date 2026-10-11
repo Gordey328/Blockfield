@@ -19,7 +19,8 @@ distinguishes automated/browser checks from physical-phone acceptance.
 
 The update adds separate touch look/ADS gain and inversion, floating/fixed stick,
 fire-and-look and control size, with a reset button. `[input]` stores
-`touch_sensitivity` (0.25–3.0), `touch_ads_sensitivity` (0.25–2.0), `invert_touch`;
+`touch_sensitivity` (0.25–3.0), `touch_ads_sensitivity` (0.25–2.0), `invert_touch`,
+`touch_aim_assist` (default true);
 `[ui]` stores `floating_stick`, `touch_control_scale` (0.8–1.4), `fire_drag_look`,
 `left_handed_touch` (default false).
 Defaults are gain1, ADS gain1, normal Y, floating stick, size1 and fire-and-look on.
@@ -77,8 +78,11 @@ Main/HUD owns menu/chat detection and the auto/on/off preference.
 Controls respect the size preference and a 56 CSS-pixel Web button floor, derived
 from actual canvas bounds and local canvas size. Native/headless fallback is a
 logical-pixel floor, not a claim about physical display units. The toolbar and
-action grid wrap on narrow canvases; map/palette placement follows actual toolbar
-height. Drawn controls retain a 52-pixel bottom HUD reserve; blank movement/look
+asymmetric action cluster adapts on narrow canvases; map/palette placement follows
+actual tool/utility band height. Primary fire is largest, ADS nearby, reload smaller,
+jump/crouch staggered, and sprint above the movement pad. Separate utility and tool
+groups use `get_action_rects`, `get_tool_rects` and `get_layout_height` for clearance
+checks. Drawn controls retain a 52-pixel bottom HUD reserve; blank movement/look
 areas extend to the canvas edge. Required layouts
 include960×540,854×480,480×854 and raw844×390, plus size0.8/1.4. Root's expanding
 viewport can turn physical844×390 into a taller logical canvas. Geometry checks
@@ -95,7 +99,11 @@ render/physics boundary consumes displacement once, before command sampling.
 Network life changes discard stale queued gestures; orbit refresh retains the
 last sampled camera shake without ticking effects again. Touch gain
 is independent of mouse exponent/sensitivity/inversion, without frame-time gain
-or smoothing. Existing own-view ADS zoom, spectator behavior and pitch bounds
+or smoothing. Optional first-person firearm touch friction reduces small motion
+over a visible living enemy by at most18%; fast4-degree motion escapes. It uses
+the nearest original hit volume within64 blocks and source terrain visibility;
+allies/cover prevent assistance. It produces no movement from zero input. Existing
+own-view ADS zoom, spectator behavior and pitch bounds
 apply. Menu opens the existing HUD menu; deactivation releases overlay actions
 before global cleanup. Networking remains the same prediction/authenticated
 command/authoritative Runtime path with unchanged wire/rule limits.

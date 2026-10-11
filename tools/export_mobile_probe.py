@@ -90,18 +90,26 @@ def main() -> None:
     )
     config.write_text(text, encoding="utf-8")
     files = ["ui/mobile_controls.gd", "ui/lab_hud.gd", "gameplay/player_controller.gd", "__probe/mobile.gd"]
+    if (target / "game/gameplay/touch_aim_assist.gd").is_file():
+        files.append("gameplay/touch_aim_assist.gd")
     identity = {
         "source": str(source), "engine": str(engine), "kind": "test-only-mobile-web-probe",
         "physical_phone_tested": False,
         "sha256": {name: hashlib.sha256((target / "game" / name).read_bytes()).hexdigest() for name in files},
     }
-    (target / "identity.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
     build.ROOT = target
     build.engine = lambda: engine
     build.run("import", ["--editor", "--import", "--quit"])
     folder = target / "build" / "web"
     folder.mkdir(parents=True)
-    build.run("export", ["--export-release", "Web", str(folder / "index.html")])
+    from web_release_template import select
+    preset, original, template_metadata = select(target)
+    try:
+        build.run("export", ["--export-release", "Web", str(folder / "index.html")])
+    finally:
+        preset.write_bytes(original)
+    identity.update(template_metadata)
+    (target / "identity.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
     (folder / ".nojekyll").write_text("", encoding="utf-8")
     (folder / "build-info.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
     (folder / "preview.html").write_text(PREVIEW_HTML, encoding="utf-8")

@@ -92,6 +92,7 @@ def main():
     suites += [('map-backpressure','tests/network/test_map_backpressure.gd')]
     suites += [('mobile-controls','tests/ui/test_mobile_controls.gd')]
     suites += [('mobile-look','tests/integration/test_mobile_look.gd')]
+    suites += [('mobile-aim-assist','tests/integration/test_mobile_aim_assist.gd')]
     suites += [('block-damage-visual','tests/world/test_block_damage_visual.gd')]
     suites += [('block-impact-optimization','tests/world/test_block_impact_optimization.gd'),('minimap-impact-upload','tests/ui/test_minimap_impact_upload.gd')]
     suites += [('impact-fragment-updates','tests/presentation/test_impact_fragment_updates.gd')]
@@ -102,7 +103,7 @@ def main():
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','offline-tdm-scene') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene') else [])+['--script',str(path)],timeout=300)
     latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
     run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
                 '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)

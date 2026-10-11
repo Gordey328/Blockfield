@@ -158,6 +158,7 @@ func _preferences(mirrored: bool) -> void:
 	app.hud.fire_drag_look = true
 	app.hud.left_handed_touch = mirrored
 	mobile.set_touch_preferences(true, 1.0, true, mirrored)
+	app.hud._apply_map_settings()
 	# Desktop mouse remains available on the gameplay fixture. PanelInputGuard
 	# reserves the test UI footprint, including clicks while a run is active.
 	mobile.set_mouse_preview_enabled(true)
@@ -287,6 +288,83 @@ func _blank_point(zone: String) -> Vector2:
 func _yaw_is(expected: float) -> bool:
 	return absf(angle_difference(app.player.rotation.y, expected)) < EPS
 
+func _layout_checks(description: String) -> void:
+	var actions: Dictionary[String, Rect2] = mobile.get_action_rects()
+	var regions: Dictionary = mobile.get_hit_regions()
+	var map_frame: Rect2 = app.hud._map_frame.get_global_rect()
+	var map_clear: bool = actions.size() == 13
+	var primary: Rect2 = regions["primary"]
+	var primary_largest: bool = true
+	for name: String in actions:
+		var action: Rect2 = actions[name]
+		var global_action: Rect2 = Rect2(mobile.global_position + action.position, action.size)
+		map_clear = map_clear and not map_frame.intersects(global_action)
+		primary_largest = primary_largest and primary.get_area() + 0.1 >= action.get_area()
+	_check(map_clear, description + " minimap frame clears all13 actual touch buttons",
+		{"map_frame": {"x": map_frame.position.x, "y": map_frame.position.y, "width": map_frame.size.x, "height": map_frame.size.y}})
+	_check(primary_largest, description + " primary fire remains the largest touch action",
+		{"primary_width": primary.size.x, "primary_height": primary.size.y})
+	_check((regions["look"] as Rect2).has_point(primary.get_center()) \
+		and (regions["move"] as Rect2).has_point((regions["sprint"] as Rect2).get_center()),
+		description + " fire belongs to the look thumb and sprint to the movement thumb")
+
+func _fine_dom_look(look: Vector2, delta: Vector2) -> float:
+	_neutral()
+	_touch(1, look, true)
+	_drag(1, look + delta)
+	_touch(1, look + delta, false)
+	app.player.flush_touch_motion()
+	return app.player.rotation.y
+
+func _aim_friction_checks() -> void:
+	phase = "Fine touch aim friction"
+	var saved_assist: bool = app.player.touch_aim_assist
+	var saved_targets: Array[Dictionary] = app.session.targets.duplicate(true)
+	app.world.clear_world(Vector3i(32, 32, 32))
+	app.world.water_enabled = false
+	app.world.data.seed_box(Vector3i.ZERO, Vector3i(32, 4, 32), 0x01608070)
+	app.world._mark_all_chunks()
+	app.world.rebuild_now()
+	app.player.respawn_at(Vector3(16.5, 20.0, 27.5))
+	var target: Dictionary = {"id": 7, "position": Vector3(16.5, 20.0, 7.5),
+		"yaw": 0.0, "pitch": 0.0, "crouching": false, "team": 1, "alive": true,
+		"health": 100, "health_known": true, "name": "Aim fixture enemy"}
+	app.session.targets.assign([target])
+	app.session.select_weapon(LocalSession.Weapon.RIFLE)
+	app.session.select_tool(LocalSession.Tool.WEAPON)
+	_neutral()
+	var hit: Dictionary = LabHitVolumes.cast_ray(app.player.get_aim_origin(), app.player.get_aim_direction(), target.position, 0.0, false)
+	var terrain: Dictionary = app.world.cast_source_ray(app.player.get_aim_origin(), app.player.get_aim_direction(), 30)
+	_check(bool(hit.hit) and (not bool(terrain.hit) or app.player.get_aim_origin().distance_to(terrain.position) > float(hit.distance)),
+		"Fine aim fixture intersects a visible original soldier body volume", {"distance": hit.distance})
+	var look: Vector2 = _blank_point("look")
+	var fine: Vector2 = Vector2(mobile.size.x * 0.0015, 0.0)
+	app.player.touch_aim_assist = false
+	var unassisted: float = _fine_dom_look(look, fine)
+	app.player.touch_aim_assist = true
+	var assisted: float = _fine_dom_look(look, fine)
+	var ratio: float = assisted / unassisted if absf(unassisted) > EPS else 0.0
+	_check(absf(unassisted + TURN * 0.0015) < EPS and absf(ratio - 0.82) < 0.005,
+		"Fine DOM touch over a visible enemy keeps user motion with mild 18 percent friction",
+		{"unassisted_degrees": rad_to_deg(unassisted), "assisted_degrees": rad_to_deg(assisted), "ratio": ratio})
+	_check(absf(_fine_dom_look(look, Vector2.ZERO)) < EPS,
+		"Visible enemy cannot rotate the view without DOM finger displacement")
+	target.team = 0
+	app.session.targets.assign([target])
+	var ally_yaw: float = _fine_dom_look(look, fine)
+	_check(absf(ally_yaw - unassisted) < EPS, "Fine DOM touch over an ally retains full gain", {"yaw_degrees": rad_to_deg(ally_yaw)})
+	target.team = 1
+	app.session.targets.assign([target])
+	app.world.set_block(Vector3i(16, 22, 17), VoxelWorld.pack_color(Color.WHITE))
+	var wall_yaw: float = _fine_dom_look(look, fine)
+	_check(absf(wall_yaw - unassisted) < EPS, "Foreground voxel removes friction through actual Web touch", {"yaw_degrees": rad_to_deg(wall_yaw)})
+	app.world.set_block(Vector3i(16, 22, 17), 0)
+	var escape_yaw: float = _fine_dom_look(look, Vector2(mobile.size.x * 0.02, 0.0))
+	_check(absf(escape_yaw + TURN * 0.02) < EPS, "Deliberate fast DOM swipe escapes touch friction", {"yaw_degrees": rad_to_deg(escape_yaw)})
+	app.player.touch_aim_assist = saved_assist
+	app.session.targets.assign(saved_targets)
+	_neutral()
+
 func _run_checks() -> void:
 	if busy or not is_ready:
 		return
@@ -326,6 +404,7 @@ func _run_checks() -> void:
 		and absf(look_rect.size.x / mobile.size.x - 0.6) < EPS \
 		and move_rect.size.y == mobile.size.y and look_rect.size.y == mobile.size.y,
 		"Full-canvas movement40% / look60%", {"width": mobile.size.x})
+	_layout_checks("Normal layout")
 	var move: Vector2 = _blank_point("move")
 	var look: Vector2 = _blank_point("look")
 	var fire: Vector2 = regions["primary"].get_center()
@@ -422,6 +501,7 @@ func _run_checks() -> void:
 		var expected: Rect2 = Rect2(Vector2(mobile.size.x - original.end.x, original.position.y), original.size)
 		mirror_ok = mirror_ok and mirrored[name].is_equal_approx(expected)
 	_check(mirror_ok and mobile.left_handed, "Left-handed layout independently mirrors zones and every button")
+	_layout_checks("Mirrored layout")
 	move = _blank_point("move")
 	look = _blank_point("look")
 	fire = mirrored["primary"].get_center()
@@ -435,6 +515,7 @@ func _run_checks() -> void:
 		"Mirrored real events retain camera direction, movement and firing")
 	_neutral()
 	_preferences(false)
+	_aim_friction_checks()
 	_prepare_world()
 	_freeze(false)
 	phase = "Visible actual movement and weapon fire"

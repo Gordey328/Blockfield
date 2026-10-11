@@ -147,7 +147,7 @@ func geometry(size: Vector2) -> void:
 		var rect: Rect2 = regions[name]
 		check(rect.position.is_finite() and rect.size.is_finite() and rect.size.x > 0 and rect.size.y > 0, "finite usable region %s" % name)
 		check(Rect2(Vector2.ZERO, size).encloses(rect), "region %s stays inside logical viewport" % name)
-		if name in BUTTONS: check(rect.size.x >= 60 and rect.size.y >= 60, "minimum touch target %s" % name)
+		if name in BUTTONS: check(rect.size.x >= 56 and rect.size.y >= 56, "minimum touch target %s" % name)
 	for i: int in range(BUTTONS.size()):
 		var a: Rect2 = regions[BUTTONS[i]]
 		for j: int in range(i + 1, BUTTONS.size()):
@@ -411,6 +411,49 @@ func nexquake_layout_and_routing() -> void:
 				overlay.handle_touch(2, point, false)
 				await settle_input()
 				check(not Input.is_action_pressed(action) and look_cancellations == 0, "ordinary button up only releases its action")
+		overlay.free()
+		overlay = null
+
+func thumb_hierarchy() -> void:
+	for extent: Vector2 in [Vector2(960, 540), Vector2(844, 390), Vector2(480, 854), Vector2(390, 844), Vector2(320, 640), Vector2(440, 320), Vector2(320, 320)]:
+		make_overlay(extent, null, false)
+		for floating: bool in [true, false]:
+			for scale: float in [0.8, 1.0, 1.4]:
+				overlay.set_touch_preferences(floating, scale, true)
+				var regions: Dictionary = overlay.get_hit_regions()
+				var actions: Dictionary[String, Rect2] = overlay.get_action_rects()
+				var tools: Dictionary[String, Rect2] = overlay.get_tool_rects()
+				check(actions.size() == BUTTONS.size() and tools.size() == 4, "HUD geometry copies expose actions and the separate tool selector")
+				var fire: Rect2 = regions.primary
+				var aim: Rect2 = regions.secondary
+				var jump: Rect2 = regions.jump
+				var crouch: Rect2 = regions.crouch
+				var reload: Rect2 = regions.reload
+				var sprint: Rect2 = regions.sprint
+				check(fire.size.x > aim.size.x and fire.size.x > jump.size.x and fire.size.x > crouch.size.x and fire.size.x > reload.size.x, "fire keeps largest thumb target at %s/%s" % [extent, scale])
+				check(reload.end.y <= fire.position.y or reload.end.y <= jump.position.y, "compact reload sits above combat rather than in a common row")
+				check(jump.get_center().x > fire.get_center().x and crouch.get_center().x > fire.get_center().x and jump.end.y < crouch.position.y, "jump and crouch form the staggered outer thumb arc")
+				check(aim.get_center().x < fire.get_center().x or aim.end.y <= fire.position.y, "aim stays beside fire or folds above it in narrow portrait")
+				check(sprint.get_center().x < extent.x * 0.4 and sprint.end.y < overlay._resting_stick_center.y - overlay._stick_extent * 0.5, "sprint belongs above the movement thumb")
+				for name: String in BUTTONS:
+					var rect: Rect2 = actions[name]
+					check(rect.size.x >= 56.0 and rect.size.y >= 56.0 and Rect2(Vector2.ZERO, extent).encloses(rect), "thumb layout keeps each target usable and in bounds: %s" % name)
+					check(overlay._hit_region(rect.get_center(), true) == name, "asymmetric button remains independently routable: %s" % name)
+					if not floating: check(not rect.intersects(regions.move), "asymmetric action stays clear of fixed MOVE: %s" % name)
+					for other: String in BUTTONS:
+						if name < other: check(not rect.intersects(actions[other]), "thumb/utility/tool targets never overlap: %s/%s" % [name, other])
+				for name: String in ["primary", "secondary", "reload", "jump", "crouch"]:
+					var rect: Rect2 = actions[name]
+					check(rect.position.x >= extent.x * 0.4 and rect.end.y <= extent.y - 52.0, "combat target stays in its thumb column and above footer: %s" % name)
+					check(rect.get_center().distance_to(fire.get_center()) <= fire.size.x * 2.0, "combat target remains within one thumb reach of fire: %s" % name)
+				for name: String in MOBILE.TOP_ACTIONS:
+					check(actions[name].end.y <= overlay.get_layout_height(), "layout height covers every top tool/utility action")
+				var toolbar_height: float = overlay.get_layout_height()
+				actions.clear()
+				tools.clear()
+				check(overlay.get_action_rects().size() == BUTTONS.size() and overlay.get_tool_rects().size() == 4 and overlay.get_layout_height() == toolbar_height, "HUD geometry copies cannot mutate pointer regions")
+				if extent.y >= 390.0:
+					check(overlay._hit_region(Vector2(extent.x * 0.7, extent.y * 0.5), true) == "look", "middle right canvas stays clear for natural camera drag")
 		overlay.free()
 		overlay = null
 
@@ -1021,6 +1064,7 @@ func run() -> void:
 	await signed_touch_identifiers()
 	await floating_and_scaled_layout()
 	await nexquake_layout_and_routing()
+	thumb_hierarchy()
 	await mirrored_controls()
 	await look_cancellation()
 	await composite_fire_look()

@@ -3,6 +3,27 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Mobile UX and aim friction — 2026-10-11 (native verified, browser pending)
+
+User requests asymmetric mobile UX and slight enemy aim stickiness. Root owns
+TouchAimAssist, Player integration, Main/settings/HUD clearance, build registration,
+ADR0023/docs and serial engine/release checks. touch_ui owns MobileControls geometry
+and its component tests; hud_checks owns actual-scene aim/readout and browser probe
+fixtures. Contracts agreed before edits; both handoffs complete, engine leases
+returned. Baseline b6fb8ff41543032d04cbb848d8b10c08aaabfe83, accepted reduced-template
+integration0714e489f07939d3f4ca7800c73859bf2fa83f2d retained,
+Godot4.7.2.stable.official.ed1daf0bf, upstream
+dcf449c845d509bbde9d79239b32d201c1389961. Aim module and persisted toggle implemented;
+parser/import, actual Main aim79/0, touch look226/0, source input35/0,
+controls8778/0, CombatHUD680/0 and UI284/0 pass. Root integrates mirrored/adaptive
+minimap clearance, touch-specific reload copy and compact mobile event feed.
+The first aim fixture's inferred WeakRef parse warning was corrected with explicit
+typing; no production parse errors. Native Compatibility produces11 actual-scene
+captures under .cache/previews/mobile-ux; portrait/landscape, max scale, mirror and
+TDM readouts checked. Browser checks and frozen development publication pending. Other template,
+optimization and Steam work is preserved. Next: freeze/export all suites and check
+actual normal Web plus42 DOM-touch probe assertions, then publish development build.
+
 ## Modern combat UI — 2026-10-11 (verified development release)
 
 User requests researched modern combat styling. Root owns LabHUD, new

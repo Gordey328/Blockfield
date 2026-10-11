@@ -72,6 +72,11 @@ func run() -> void:
 		check(int(state().health) == session.health and int(state().ammo) == session.magazine,
 			"team battle readout mirrors its authoritative owner values")
 		await resize_and_check(Vector2i(390, 844), true, "team battle portrait")
+		await resize_and_check(Vector2i(844, 390), true, "team battle landscape")
+		await resize_and_check(Vector2i(390, 844), true, "team battle portrait large controls", false, 1.4)
+		await resize_and_check(Vector2i(844, 390), true, "team battle landscape large controls", false, 1.4)
+		await resize_and_check(Vector2i(390, 844), true, "team battle mirrored portrait large controls", true, 1.4)
+		await resize_and_check(Vector2i(844, 390), true, "team battle mirrored landscape large controls", true, 1.4)
 	await free_scene()
 	await restore()
 	print("COMBAT HUD: %d assertions, %d failures" % [assertions, failures])
@@ -220,17 +225,23 @@ func test_layouts() -> void:
 	await resize_and_check(Vector2i(2560, 1080), false, "ultrawide")
 	await resize_and_check(Vector2i(390, 844), true, "portrait")
 	await resize_and_check(Vector2i(844, 390), true, "landscape")
+	await resize_and_check(Vector2i(390, 844), true, "portrait large controls", false, 1.4)
+	await resize_and_check(Vector2i(844, 390), true, "landscape large controls", false, 1.4)
 	await resize_and_check(Vector2i(390, 844), true, "mirrored portrait", true)
+	await resize_and_check(Vector2i(390, 844), true, "mirrored portrait large controls", true, 1.4)
+	await resize_and_check(Vector2i(844, 390), true, "mirrored landscape large controls", true, 1.4)
 	hud.left_handed_touch = false
+	hud.touch_control_scale = 1.0
 	hud.set_mobile_controls_mode(2)
 
 
-func resize_and_check(extent: Vector2i, mobile: bool, description: String, mirrored: bool = false) -> void:
+func resize_and_check(extent: Vector2i, mobile: bool, description: String, mirrored: bool = false, control_scale: float = 1.0) -> void:
 	root.size = extent
 	if not mobile:
 		hud._desktop_scale = extent
 	hud.floating_stick = false
 	hud.left_handed_touch = mirrored
+	hud.touch_control_scale = control_scale
 	hud.set_mobile_controls_mode(1 if mobile else 2)
 	hud._update_mobile_layout()
 	hud._apply_touch_preferences()
@@ -251,10 +262,45 @@ func resize_and_check(extent: Vector2i, mobile: bool, description: String, mirro
 	if mobile:
 		var regions: Dictionary = hud.mobile_controls.get_hit_regions()
 		check(hud.mobile_controls.visible and regions.has("primary") and regions.has("reload"), description + " actual touch overlay is active")
+		check(is_equal_approx(float(hud.mobile_controls.get("control_scale")), control_scale),
+			description + " actual touch overlay receives the chosen control size")
+		var actions: Dictionary = hud.mobile_controls.call("get_action_rects")
+		var map_frame := hud._map_frame.get_global_rect()
+		check(viewport_rect.grow(0.1).encloses(map_frame), description + " complete minimap frame stays inside the logical viewport")
+		check(actions.size() == 13, description + " minimap placement checks all13 actual action buttons")
+		for name: String in actions:
+			var action: Rect2 = actions[name]
+			var global_action := Rect2(hud.mobile_controls.global_position + action.position, action.size)
+			check(not map_frame.intersects(global_action), description + " minimap frame stays clear of touch " + name)
 		for rectangle: Rect2 in global_panels:
 			for name: String in ["primary", "reload", "jump", "crouch", "sprint", "move"]:
 				if regions.has(name):
 					check(not rectangle.intersects(regions[name]), description + " readout stays clear of touch " + name)
+		if session.mode == "tdm":
+			check_match_score_layout(description, viewport_rect, global_panels)
+
+
+func check_match_score_layout(description: String, viewport_rect: Rect2, islands: Array[Rect2]) -> void:
+	var score: String = str(readout.get("score_text"))
+	check(not score.is_empty() and score == hud._tdm_score.text, description + " drawn score receives the real match score and clock")
+	# CombatReadout's compact score drawing uses a204×32 island. The wide
+	# invisible semantic Label is not its rendering or collision footprint.
+	var score_y: float = float(readout.get("score_y"))
+	var rectangle := Rect2(readout.global_position + Vector2((readout.size.x - 204.0) * 0.5, score_y), Vector2(204, 32))
+	check(viewport_rect.grow(0.1).encloses(rectangle), description + " score stays inside the logical viewport")
+	check(is_equal_approx(rectangle.get_center().x, viewport_rect.get_center().x), description + " match score remains centered")
+	var toolbar_bottom: float = float(hud.mobile_controls.call("get_layout_height"))
+	check(rectangle.position.y >= hud.mobile_controls.global_position.y + toolbar_bottom + 7.9,
+		description + " score clears the actual scaled tool and utility band")
+	check(not rectangle.intersects(hud._map_frame.get_global_rect()), description + " score does not cover the complete minimap frame")
+	for island: Rect2 in islands:
+		check(not rectangle.intersects(island), description + " score remains separate from resources and ammunition")
+	var actions: Dictionary = hud.mobile_controls.call("get_action_rects")
+	check(actions.size() == 13, description + " placement checks all13 actual tool utility and combat buttons")
+	for name: String in actions:
+		var action: Rect2 = actions[name]
+		var global_action := Rect2(hud.mobile_controls.global_position + action.position, action.size)
+		check(not rectangle.intersects(global_action), description + " score stays clear of touch " + name)
 
 
 func test_font() -> void:

@@ -34,6 +34,7 @@ var touch_ads_sensitivity: float = 1.0:
 	set(value):
 		touch_ads_sensitivity = clampf(value, 0.25, 2.0) if is_finite(value) else 1.0
 var invert_touch: bool = false
+var touch_aim_assist: bool = true
 var wheel_tool_direction: int = 1
 var eject_brass:=true
 var animations_enabled:=true
@@ -776,6 +777,8 @@ func _apply_touch_look(normalized: Vector2) -> bool:
 	# Own first/third-person views retain the existing weapon zoom reduction.
 	delta /= get_aim_zoom()
 	delta *= pow(touch_ads_sensitivity, _aim_down_state)
+	if touch_aim_assist and camera_mode == CameraMode.FIRST_PERSON and session.health > 0 and session.team in [0, 1] and session.current_tool == LocalSession.Tool.WEAPON:
+		delta *= TouchAimAssist.gain(get_aim_origin(), get_aim_direction(), session.targets, session.team, session.local_player_id(), world, delta)
 	rotate_y(-delta.x)
 	head.rotation.x = clampf(head.rotation.x - delta.y * vertical, -1.55, 1.55)
 	return true
