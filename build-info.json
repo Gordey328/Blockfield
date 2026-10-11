@@ -3,7 +3,7 @@
   "iteration": 1,
   "status": "development",
   "upstream": "dcf449c845d509bbde9d79239b32d201c1389961",
-  "source_commit": "20889b25bbd035639c88bc4b6cc63d2b57d8e90b",
+  "source_commit": "2561c83b4297ef8611eb8334930d5878237700a8",
   "source_dirty": false,
   "template_kind": "reduced",
   "template_sha256": "a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922"
