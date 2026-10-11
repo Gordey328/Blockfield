@@ -350,7 +350,49 @@ Initial actual-Main startup exceeded one accessibility-call deadline and the
 browser logged a generic Chromium UnknownError. Rebinding the already-created tab
 worked; Godot integration checks passed. No Godot script/renderer error was observed.
 
-## Frozen development release — pending
+## Frozen development release
 
-Coordinator will append the exact clean source revision, frozen parser/check/export
-results, public bundle hashes and URL after normal-game input and publication checks.
+Source commit `1b02c6451cf6976225c680f1ab77ddfcb9f47aa5` contains only the owned
+effects/falling/fixtures/docs changes. Unrelated Mirage and research edits remain
+in the shared workspace. Git archive is retained at `.cache/particle50-release`.
+Its parser/import, effects 20,928/0 (three explicit dummy-renderer skips), fragment
+43/0, falling 43/0, client/server runtime smokes and reduced-template Web export
+pass. Project configuration is restored to exact archived bytes before export;
+build metadata reports `source_dirty: false`, status `development`.
+The initial frozen helper's byte comparison rejected CRLF versus Git-normalized
+LF in falling source before any engine check. Comparing normalized text fixes
+that helper assumption; the original archive is preserved. Production semantics
+are unchanged, and frozen checks are rerun successfully.
+
+Normal Web QA at `http://127.0.0.1:8094/release/index.html` verifies menu/SMG
+selection, walking, mouse fire (30 to 14 rounds with unlimited ammo temporarily
+disabled), drag-look fallback, grenade selection/throw (3 to 2), and restoring
+the original unlimited-ammo setting. Diagnostic Main terrain/collapse checks
+above verify map edits. The in-app browser denies pointer capture and reports
+generic Chromium UnknownErrors; fallback controls work. No Godot script error is
+observed. Local screenshot: `.cache/particle50-release/local-game.png`; collapse
+screenshots: `.cache/particle50-candidate-v1/web-collapse{,-cleanup}.png`.
+
+Source is pushed to `main`; a separate ignored publication checkout preserves
+existing sibling Pages paths. `tools/publish_pages.py` publishes the checked
+export from that checkout through its normal branch-hosting flow. Pages reports
+`built` at bundle `6e4c14c21cdf4c297ac85d87cb613461757e232e`.
+At 2026-10-11 18:58:47 UTC, fresh public requests confirm the exact clean source
+metadata and all five matching file hashes. Full result is retained in
+`.cache/particle50-release/public-verification.json`.
+
+| Public file | SHA256 |
+| --- | --- |
+| `build-info.json` | `546ac2c1c96ac22c3efad23232800086a6256c6934a9231e822ecbc44abaab9d` |
+| `index.html` | `431ccdd085a36a96a9a0221da9b5d5ea10ee30f1694fd5fcb7a5bac52a2e08a9` |
+| `index.js` | `6cd28515e4bf854b729d9d506761cb53df661b0f133dc3b266925589244b8ed3` |
+| `index.wasm` | `a5e1eb468696dcc8a21161deaaca8c382e2c722edbec151832de0c28a938eadb` |
+| `index.pck` | `24ee893e1c35e9aa1b7c0ebd8782d4a68f2c79be6d1a4afc66b935ce7bd19935` |
+
+Published development game: [Blockfield](https://gordey328.github.io/Blockfield/).
+Public interactive startup also passes: retained mobile-control preference is
+preserved, SMG selection and entry work, forward movement changes the scene/minimap,
+and held Fire registers a visible `head · 75` hit. Screenshot:
+`.cache/particle50-release/public-game.png`. Temporary probe/browser/server leases
+are returned at turn end; all specialist handoffs are complete.
+No full-port, physical-phone or whole-game performance acceptance is promoted.

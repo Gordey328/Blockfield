@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Fixed50 noncolliding effects — 2026-10-11 (in progress)
+## Fixed50 noncolliding effects — 2026-10-11 (published development build)
 
 User authorizes a hard50 decorative particle pool and removal of particle
 collisions, with maximum practical performance. Root owns ADR0025, accepted
@@ -38,8 +38,17 @@ SMG passes7/7, peaks50 particles/16 casings, with no new states/nodes or contact
 400-cell roof removal displays64 cubes and completes with zero debris/groups;
 map cells remain authoritatively removed. GPU/native visual and browser input
 checks are recorded in the evidence; initial helper/import/type errors are retained.
-Next: freeze the owned source, verify normal Web input, publish development build
-and verify matching public hashes. Unrelated Mirage work remains outside this release.
+Frozen1b02c6451cf6976225c680f1ab77ddfcb9f47aa5 passes parser/import, effects20928/0,
+fragment43/0, falling43/0, client/server smokes and reduced-template Web export.
+Normal local Web verifies movement, SMG30 to14 rounds, grenade3 to2 and settings
+restoration. Source main is pushed; private Pages checkout preserves sibling paths.
+Pages bundle6e4c14c21cdf4c297ac85d87cb613461757e232e is built; fresh public metadata,
+HTML/JS/WASM/PCK all match the checked source/export. Public URL:
+https://gordey328.github.io/Blockfield/. Unrelated Mirage work remains outside this
+release. Public startup, forward movement and SMG Fire pass; visible head75 damage
+confirms firing with retained mobile controls. All specialist handoffs are complete;
+temporary probe tabs/HTTP helper are closed before turn end. Next acceptance:
+target-device/whole-game CPU/GPU and broader port parity, with no FPS claim here.
 
 ## Runtime cost assessment — 2026-10-11
 
