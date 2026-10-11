@@ -77,6 +77,8 @@ func _ready() -> void:
 	if offline_tdm_mode:
 		var arena_data: VoxelData = TDM_ARENA.build()
 		world.set_map_data(arena_data,"Crossroads · 3×3",true)
+		# Effects and actor views sample the current rendered camera pose.
+		player.process_priority = process_priority-1
 	if network_mode:
 		# Receive the latest authority/terminal event before the player's commands.
 		process_physics_priority = player.process_physics_priority-1
