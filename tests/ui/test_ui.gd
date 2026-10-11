@@ -109,6 +109,7 @@ func test_mobile_bridge() -> bool:
 	var yaw:=player.rotation.y
 	hud.mobile_controls.handle_touch(1,look.get_center(),true)
 	hud.mobile_controls.handle_drag(1,look.get_center()+Vector2(25,0),Vector2(25,0))
+	await frames(1)
 	check(not is_equal_approx(yaw,player.rotation.y),"real HUD look signal reaches player camera")
 	hud.mobile_controls.handle_touch(2,regions.primary.get_center(),true)
 	Input.flush_buffered_events();await frames(1)

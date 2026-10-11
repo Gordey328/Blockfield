@@ -128,6 +128,31 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
+- NexQuake mobile integration (2026-10-11): the user requested checking the other
+  chat, merging into main and updating Pages while preserving all its changes.
+  Chat "Изучить проект и составить план" is idle/completed; optimization item4 is
+  published and all its leases are returned. Mobile branch now incorporates all
+  main commits through922f230, including browser staging774e506 and corrected
+  audio evidence66e4b5b. Implementation4af719a and documentation3e75233 remain in
+  history. Only the mobile controller/HUD/UI paths, their fixtures/probe and mobile
+  documents differ from that main source; optimization code is preserved exactly.
+  Reference: NexQuakef9fd869074f13f3ad6aad55dca95427f8935027e; Godot4.7.2 and
+  upstreamdcf449c845d509bbde9d79239b32d201c1389961 are unchanged. Previous isolated
+  validation passed4635/0 native and15/0 Web touch assertions in each orientation;
+  normal rendered Mobile On/mirrored look/fire/reload settings were checked.
+  [Evidence](nexquake-mobile-camera.md), [ADR0014](decisions/0014-nexquake-mobile-camera.md),
+  [PR1](https://github.com/Gordey328/Blockfield/pull/1). Main's pending research
+  records are incorporated; their original bytes and unrelated untracked
+  tools/inspect_aos_install.py snapshot are retained in .cache/nexquake-integration-backup-20261011.
+  The live inspection helper continues under its separate research chat ownership.
+  Frozen combined1c04665 passed all85 registered native behavioral/latency checks,
+  parser/import, runtime/server-launcher smoke and Web export. Actual integrated
+  Web probe passed15/0 each at844x390 and390x844, including real movement and shots.
+  Normal rendered Mobile On/mirrored look/fire-drag also passed with empty logs.
+  Probe-only unattributed MutationObserver exception is retained in the evidence.
+  No game bytes changed in subsequent documentation. Main merge/publication is
+  next; physical-phone feel remains pending and parity rows are not promoted.
+
 - Optimization item4 completed/published (2026-10-11): user approved audio,
   VXL loading/saving and memory. Frozen66e4b5b7eb89956657f97d7f623856080ea117b5
   passed all85 registered native behavioral/latency checks, import/runtime,
@@ -152,6 +177,45 @@ the user's chosen deployment scope is Docker/configuration preparation.
   records remain untouched by this task. Main source66e4b5b is stable/pushed for
   separate mobile integration. Next optimization: controlled device baseline and
   the remaining measured stages of the plan, rather than unmeasured pooling.
+
+- Mobile addon research (2026-10-11, examples/discussion only): root compared primary
+  Godot/GitHub sources with the existing touch contract; two read-only specialists
+  reviewed current routing and candidate libraries, with no file/engine leases.
+  Native VirtualJoystick/TouchScreenButton and MIT Virtual Joystick DX are the movement
+  shortlist; MIT Action Manager is a button-behavior reference. MarcoFazio's class_name
+  VirtualJoystick matches the new engine class and needs adaptation. Detailed pros,
+  cons, source links and Web limitations are in [candidate research](mobile-controls.md#open-source-control-candidates--2026-10-11).
+  Base HEAD556c6dce324f; pinned Godot4.7.2/upstream unchanged. Commands: Get-Content,
+  rg and git status/rev-parse plus primary-source browsing; documentation-only
+  git diff --check passed. Files changed: docs/mobile-controls.md and docs/status.md.
+  No game/test/export edits, addon installation or device verification. Specialists
+  returned read-only handoffs; next action is user selection/discussion of examples.
+  Camera-specific follow-up: user narrowed the target to rotation settings. Read-only
+  controller/HUD inspection confirms existing touch/ADS gain, inversion and fire-look;
+  recommend our native-event per-pointer swipe layer for camera rotation. DX remains
+  a movement reference. Optional separate X/Y gain/smoothing would need later work.
+  Root updated only the two research documents; documentation diff check passed;
+  no new engine/test/export run. Unrelated voxel/optimization documents belong to
+  concurrent work and were not edited. Next action: discuss desired camera tuning.
+  Expanded search follow-up: the user reports current camera control still feels
+  poor and requested a concrete refined reference. This supersedes the provisional
+  recommendation to retain the existing handler as sufficient. Released Android
+  FPS candidates now include Open Touch Gaming / MobileTouchControls (UX/source
+  correspondence explicitly limited), Xash3D FWGS (clearest open camera source)
+  and idTech4A++; Luanti covers voxel/tools, NexQuake and Ashworth cover runnable Web
+  comparisons. Exact inspected revisions, licensing, source links and caveats are in
+  [expanded camera research](mobile-controls.md#expanded-camera-reference-search--2026-10-11).
+  Two specialists returned read-only handoffs, with no file/engine leases. Root
+  inspected primary sources, used public git ls-remote to pin two references, opened
+  NexQuake's rendered server menu and launched/rendered Ashworth on desktop; physical
+  touch feel and multitouch remain unverified. Temporary tabs closed; no viewport
+  override or engine/test/export run. Only the two mobile research documents changed
+  under root ownership; unrelated optimization/voxel work is preserved.
+  Documentation-only git diff --check passed (exit0); no new gameplay validation.
+  Next action:
+  compare the chosen released-app reference against Blockfield on a physical phone,
+  then select camera response/layout changes from that evidence. No new architecture
+  or parity acceptance is claimed.
 
 - Optimization planning (2026-10-11): completed a read-only three-specialist audit
   of World, simulation/network and presentation/audio/UI, plus coordinator

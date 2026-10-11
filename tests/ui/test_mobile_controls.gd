@@ -20,6 +20,7 @@ var new_actions: Array[String] = []
 var overlay: MOBILE
 var action_events: Array[Dictionary] = []
 var look_events: Array[Vector2] = []
+var look_cancellations: int = 0
 var movement_events: Array[Vector2] = []
 var menu_events := 0
 var player: PLAYER
@@ -85,7 +86,11 @@ func _bridge_movement(axis: Vector2) -> void:
 
 func _bridge_look(relative: Vector2) -> void:
 	look_events.append(relative)
-	if is_instance_valid(player): player.apply_touch_motion(relative, overlay.size)
+	if is_instance_valid(player): player.queue_touch_motion(relative, overlay.size)
+
+func _bridge_look_canceled() -> void:
+	look_cancellations += 1
+	if is_instance_valid(player): player.clear_touch_motion()
 
 func make_overlay(size: Vector2, bound_player: PLAYER = null, fixed_legacy: bool = true) -> void:
 	overlay = MOBILE.new()
@@ -100,6 +105,7 @@ func make_overlay(size: Vector2, bound_player: PLAYER = null, fixed_legacy: bool
 	overlay.action_changed.connect(_bridge_action)
 	overlay.movement_changed.connect(_bridge_movement)
 	overlay.look_moved.connect(_bridge_look)
+	overlay.look_canceled.connect(_bridge_look_canceled)
 	overlay.menu_requested.connect(func(): menu_events += 1)
 	overlay.set_enabled(true)
 	clear_trace()
@@ -107,6 +113,7 @@ func make_overlay(size: Vector2, bound_player: PLAYER = null, fixed_legacy: bool
 func clear_trace() -> void:
 	action_events.clear()
 	look_events.clear()
+	look_cancellations = 0
 	movement_events.clear()
 	menu_events = 0
 
@@ -145,7 +152,8 @@ func geometry(size: Vector2) -> void:
 		var a: Rect2 = regions[BUTTONS[i]]
 		for j: int in range(i + 1, BUTTONS.size()):
 			check(not a.intersects(regions[BUTTONS[j]]), "button regions do not overlap: %s/%s" % [BUTTONS[i], BUTTONS[j]])
-		check(not a.intersects(regions.move) and not a.intersects(regions.look), "button %s is separated from stick/look" % BUTTONS[i])
+		check(not a.intersects(regions.move), "button %s is separated from fixed stick" % BUTTONS[i])
+		check(overlay._hit_region(a.get_center(), true) == BUTTONS[i], "button %s takes priority over full LOOK" % BUTTONS[i])
 	check(not (regions.move as Rect2).intersects(regions.look), "stick and look are separate")
 	check((regions.move as Rect2).end.y <= size.y - 52, "stick leaves bottom HUD reserve")
 	overlay.free()
@@ -267,9 +275,10 @@ func floating_and_scaled_layout() -> void:
 				var rect: Rect2 = regions[BUTTONS[i]]
 				for j: int in range(i + 1, BUTTONS.size()):
 					check(not rect.intersects(regions[BUTTONS[j]]), "scaled buttons stay separate %s/%s" % [BUTTONS[i], BUTTONS[j]])
-				check(not rect.intersects(regions.move) and not rect.intersects(regions.look), "scaled action stays outside MOVE/LOOK")
-			check((regions.move as Rect2).end.x <= size.x * 0.45 + 0.0001 and (regions.move as Rect2).size.x >= size.x * 0.3, "floating MOVE has generous left-thumb activation area")
-			check((regions.move as Rect2).end.y <= size.y - 52 and not (regions.move as Rect2).intersects(regions.look), "floating MOVE leaves HUD and independent LOOK space")
+				check(overlay._hit_region(rect.get_center(), true) == BUTTONS[i], "scaled action takes priority over MOVE/LOOK")
+			check((regions.move as Rect2).is_equal_approx(Rect2(Vector2.ZERO, Vector2(size.x * 0.4, size.y))), "floating MOVE covers the full left40%")
+			check((regions.look as Rect2).is_equal_approx(Rect2(Vector2(size.x * 0.4, 0), Vector2(size.x * 0.6, size.y))) and not (regions.move as Rect2).intersects(regions.look), "LOOK covers the full right60% independently of MOVE")
+			check(overlay._look_hint_rect.end.y + 8.0 <= (regions.primary as Rect2).position.y, "look hint remains above the action grid")
 		overlay.free()
 		overlay = null
 	make_overlay(Vector2(960, 540), null, false)
@@ -299,6 +308,120 @@ func floating_and_scaled_layout() -> void:
 	check(overlay.control_scale == 1.4, "control scale clamps upper bound")
 	overlay.control_scale = NAN
 	check(overlay.control_scale == 1.4, "nonfinite scale preserves validated layout preference")
+	overlay.free()
+	overlay = null
+
+func nexquake_layout_and_routing() -> void:
+	for extent: Vector2 in [Vector2(960, 540), Vector2(854, 480), Vector2(480, 854), Vector2(844, 390)]:
+		make_overlay(extent, null, false)
+		for floating: bool in [true, false]:
+			overlay.set_touch_preferences(floating, 1.0, false)
+			var split: float = extent.x * 0.4
+			var regions: Dictionary = overlay.get_hit_regions()
+			check((regions.look as Rect2).is_equal_approx(Rect2(Vector2(split, 0), Vector2(extent.x - split, extent.y))), "fixed/floating LOOK keeps full right60%")
+			# These starts cover the exact split, the previous45–50% gap, blank
+			# footer space and blank space above the toolbar. None is a button.
+			for point: Vector2 in [Vector2(split, extent.y - 12), Vector2(extent.x * 0.45, extent.y - 12), Vector2(extent.x - 2, extent.y - 12), Vector2(extent.x - 2, 2)]:
+				clear_trace()
+				check(overlay.handle_touch(0, point, true), "blank full-canvas point acquires LOOK at %s" % point)
+				check(overlay.handle_drag(0, point + Vector2(-3, 2), Vector2(800, -900)) and look_events == [Vector2(-3, 2)], "full LOOK start emits its own position delta")
+				check(overlay.movement_axis == Vector2.ZERO and action_events.is_empty(), "full LOOK start cannot move or press an underlying action")
+				overlay.handle_touch(0, point, false)
+				check(look_cancellations == 0, "normal LOOK up preserves motion queued by its last drag")
+			clear_trace()
+			var left_of_split := Vector2(split - 1.0, extent.y - 12)
+			if floating:
+				check(overlay.handle_touch(1, left_of_split, true) and overlay.movement_axis == Vector2.ZERO, "left side of40% split begins neutral floating MOVE")
+				overlay.handle_drag(1, left_of_split + Vector2(-31, -10), Vector2.ZERO)
+				check(look_events.is_empty() and overlay.movement_axis.x < 0.0, "floating MOVE near split never becomes LOOK")
+				overlay.handle_touch(1, left_of_split, false)
+			else:
+				check(not overlay.handle_touch(1, left_of_split, true), "fixed mode leaves left blank space outside its pad unclaimed")
+			for action: String in ["primary", "secondary", "reload", "jump", "tool_weapon"]:
+				clear_trace()
+				var point: Vector2 = (regions[action] as Rect2).get_center()
+				check((regions.look as Rect2).has_point(point), "routing regression uses a button inside LOOK: %s" % action)
+				check(overlay.handle_touch(2, point, true), "button inside LOOK owns DOWN: %s" % action)
+				overlay.handle_drag(2, point + Vector2(1, 1), Vector2(500, 500))
+				await settle_input()
+				check(Input.is_action_pressed(action) and events_for(action, true) == 1 and look_events.is_empty() and overlay.movement_axis == Vector2.ZERO, "button wins overlapping LOOK without camera motion: %s" % action)
+				overlay.handle_touch(2, point, false)
+				await settle_input()
+				check(not Input.is_action_pressed(action) and look_cancellations == 0, "ordinary button up only releases its action")
+		overlay.free()
+		overlay = null
+
+func mirrored_controls() -> void:
+	for extent: Vector2 in [Vector2(960, 540), Vector2(480, 854)]:
+		make_overlay(extent, null, false)
+		for floating: bool in [true, false]:
+			for scale: float in [0.8, 1.0, 1.4]:
+				overlay.set_touch_preferences(floating, scale, true)
+				var original: Dictionary = overlay.get_hit_regions()
+				var original_stick: Vector2 = overlay._resting_stick_center
+				var original_hint: Rect2 = overlay._look_hint_rect
+				overlay.left_handed = true
+				var mirrored: Dictionary = overlay.get_hit_regions()
+				check(overlay.left_handed and overlay.floating_stick == floating and overlay.control_scale == scale and overlay.fire_drag_look, "left-handed property preserves the other touch preferences")
+				for name: String in BUTTONS + ["move", "look"]:
+					var before: Rect2 = original[name]
+					var expected := Rect2(Vector2(extent.x - before.end.x, before.position.y), before.size)
+					check((mirrored[name] as Rect2).is_equal_approx(expected), "left-handed layout mirrors %s without resizing" % name)
+				check(overlay._resting_stick_center.is_equal_approx(Vector2(extent.x - original_stick.x, original_stick.y)), "resting stick mirrors with its activation region")
+				check(overlay._look_hint_rect.is_equal_approx(Rect2(Vector2(extent.x - original_hint.end.x, original_hint.position.y), original_hint.size)), "look hint mirrors while retaining its free row")
+				var move: Vector2 = (mirrored.move as Rect2).get_center()
+				var look: Vector2 = (mirrored.look as Rect2).get_center()
+				var fire: Vector2 = (mirrored.primary as Rect2).get_center()
+				clear_trace()
+				check(overlay.handle_touch(1, move, true) and overlay.handle_touch(2, look, true) and overlay.handle_touch(3, fire, true), "mirrored MOVE/LOOK/FIRE accept three independent fingers")
+				overlay.handle_drag(1, move + Vector2(31, -31), Vector2(-500, 500))
+				overlay.handle_drag(2, look + Vector2(5, -3), Vector2(700, 700))
+				await settle_input()
+				check(overlay.movement_axis.x > 0.0 and overlay.movement_axis.y < 0.0 and look_events == [Vector2(5, -3)] and Input.is_action_pressed("primary"), "mirrored placement preserves movement signs and independent camera/fire")
+				overlay.release_all()
+				await settle_input()
+				check(overlay.movement_axis == Vector2.ZERO and not Input.is_action_pressed("primary"), "mirrored gesture cleanup remains neutral")
+				overlay.control_scale = scale
+				check(overlay.left_handed, "changing scale keeps left-handed mode")
+				overlay.floating_stick = floating
+				overlay.fire_drag_look = false
+				check(overlay.left_handed, "changing stick/fire settings keeps left-handed mode")
+				overlay.set_touch_preferences(floating, scale, true)
+				check(not overlay.left_handed, "legacy three-argument preferences keep right-handed default")
+		overlay.free()
+		overlay = null
+
+func look_cancellation() -> void:
+	make_overlay(Vector2(960, 540), null, false)
+	for start: Vector2 in [center("look"), center("primary")]:
+		clear_trace()
+		check(overlay.handle_touch(0, start, true) and overlay.handle_drag(0, start + Vector2(4, -2), Vector2.ZERO), "LOOK or fire/LOOK produces motion before normal up")
+		overlay.handle_touch(0, start, false)
+		check(look_events == [Vector2(4, -2)] and look_cancellations == 0, "normal LOOK/fire up retains pending view motion")
+		await settle_input()
+		check(not Input.is_action_pressed("primary"), "normal fire/LOOK up still releases fire")
+		clear_trace()
+		overlay.handle_touch(1, start, true)
+		overlay.handle_drag(1, start + Vector2(3, 1), Vector2.ZERO)
+		overlay.handle_touch(1, start, false, true)
+		check(look_cancellations == 1 and not overlay.handle_drag(1, start, Vector2.ONE), "canceled LOOK/fire owner signals cancellation once and drops its baseline")
+		check(not overlay.handle_touch(1, start, false, true) and look_cancellations == 1, "duplicate cancel cannot cancel a second owner")
+		await settle_input()
+	clear_trace()
+	overlay.handle_touch(2, center("look"), true)
+	overlay.handle_touch(3, center("look"), true)
+	overlay.handle_touch(4, center("jump"), true)
+	overlay.handle_touch(3, center("look"), false, true)
+	overlay.handle_touch(4, center("jump"), false, true)
+	check(look_cancellations == 0, "canceling a blocked LOOK or ordinary action preserves the current LOOK")
+	overlay.handle_drag(2, center("look") + Vector2(2, 1), Vector2.ZERO)
+	check(look_events == [Vector2(2, 1)], "current LOOK survives unrelated cancellation")
+	overlay.handle_touch(2, center("look"), false)
+	overlay.release_all()
+	check(look_cancellations == 1, "release_all cancels pending motion even after its owner normally lifted")
+	overlay.release_all()
+	check(look_cancellations == 2, "empty release_all still invalidates pending view motion")
+	await settle_input()
 	overlay.free()
 	overlay = null
 
@@ -444,6 +567,7 @@ func lifecycle() -> void:
 		await settle_input()
 		check(overlay.movement_axis == Vector2.ZERO and not Input.is_action_pressed("primary"), "%s neutralizes held movement/fire" % transition)
 		check(events_for("primary", false) == 1 and not overlay.handle_drag(1, center("look"), Vector2.ONE), "%s clears ownership with exactly one release" % transition)
+		check(look_cancellations > 0, "%s cancels pending camera motion" % transition)
 		if transition == "disable": check(not overlay.handle_touch(0, center("primary"), true), "disabled overlay cannot acquire a finger")
 		if transition == "menu": check(menu_events == 1, "menu has a dedicated one-shot signal")
 		overlay.set_enabled(true)
@@ -588,7 +712,7 @@ func desktop_pointer() -> void:
 	await mouse_motion(center("look"), Vector2(20, 20), true)
 	await mouse_button(center("primary"), false, true)
 	check(action_events.is_empty() and look_events.is_empty() and overlay.movement_axis == Vector2.ZERO, "touch-emulated mouse cannot duplicate component button/look paths")
-	await mouse_button(Vector2(400, 530), true)
+	await mouse_button(Vector2(200, 530), true)
 	await mouse_motion(center("look"), Vector2(8, 8))
 	check(action_events.is_empty() and look_events.is_empty(), "mouse starting outside advertised controls cannot acquire look by dragging in")
 	await mouse_button(center("look"), false)
@@ -603,6 +727,7 @@ func mouse_preview_policy() -> void:
 	await mouse_motion(look + Vector2(3, 2), Vector2(-900, 900))
 	check(look_events == [Vector2(3, 2)], "desktop preview uses same absolute LOOK owner rule")
 	overlay.set_mouse_preview_enabled(false)
+	check(look_cancellations == 1, "disabling mouse preview cancels its pending LOOK")
 	clear_trace()
 	await mouse_motion(look + Vector2(10, 10), Vector2(7, 8))
 	await mouse_button(fire, true)
@@ -717,7 +842,28 @@ func offline_handoff() -> void:
 	overlay.handle_drag(5, center("look"), Vector2(-400, -400))
 	check(player.rotation.y == yaw and player.head.rotation.x == pitch, "actual controller camera stays still when its LOOK finger is stationary and MOVE changes")
 	overlay.handle_drag(5, center("look") + Vector2(20, 0), Vector2(20, 0))
+	check(player.rotation.y == yaw and player.head.rotation.x == pitch, "touch bridge queues look until the player consumes a frame")
+	player.flush_touch_motion()
 	check(absf(angle_difference(yaw, player.rotation.y)) > 0.001, "touch look reaches actual normalized controller camera transform")
+	yaw = player.rotation.y
+	overlay.handle_drag(5, center("look") + Vector2(22, 0), Vector2.ZERO)
+	overlay.handle_touch(5, center("look"), false)
+	check(player.rotation.y == yaw, "normal LOOK up leaves the last delta queued")
+	player.flush_touch_motion()
+	check(absf(angle_difference(yaw, player.rotation.y)) > 0.001, "normal LOOK up preserves its final delta for frame consumption")
+	yaw = player.rotation.y
+	overlay.handle_touch(5, center("look"), true)
+	overlay.handle_drag(5, center("look") + Vector2(6, 0), Vector2.ZERO)
+	overlay.handle_touch(5, center("look"), false, true)
+	player.flush_touch_motion()
+	check(player.rotation.y == yaw, "canceled LOOK clears pending camera motion through the real controller bridge")
+	overlay.handle_touch(5, center("look"), true)
+	overlay.handle_drag(5, center("look") + Vector2(6, 0), Vector2.ZERO)
+	overlay.handle_touch(5, center("look"), false)
+	overlay.release_all()
+	player.flush_touch_motion()
+	check(player.rotation.y == yaw, "release_all clears pending view motion even after normal LOOK up")
+	check(overlay.handle_touch(0, center("move") + Vector2(31, 0), true) and player.touch_movement.x > 0.0, "permission cleanup starts with a fresh held movement owner")
 	player.controls_enabled = false
 	check(player.touch_movement == Vector2.ZERO and not overlay.handle_drag(0, center("move"), Vector2.ONE) and not Input.is_action_pressed("primary"), "menu gate clears touch movement and component claims")
 	player.controls_enabled = true
@@ -806,6 +952,9 @@ func run() -> void:
 	await ownership()
 	await absolute_multitouch()
 	await floating_and_scaled_layout()
+	await nexquake_layout_and_routing()
+	await mirrored_controls()
+	await look_cancellation()
 	await composite_fire_look()
 	await lifecycle()
 	await transformed_absolute_adapter()

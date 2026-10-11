@@ -13,11 +13,15 @@ toolbar rows. The read-only original block palette sits beside the minimap,
 above the action buttons; select block colors through the Arsenal color picker.
 [ADR0007](decisions/0007-mobile-controls.md) records the initial overlay;
 [ADR0008](decisions/0008-mobile-fps-input.md) records the mobile FPS update.
+[ADR0014](decisions/0014-nexquake-mobile-camera.md) records the selected NexQuake
+camera reference and its implementation; [current evidence](nexquake-mobile-camera.md)
+distinguishes automated/browser checks from physical-phone acceptance.
 
 The update adds separate touch look/ADS gain and inversion, floating/fixed stick,
 fire-and-look and control size, with a reset button. `[input]` stores
 `touch_sensitivity` (0.25–3.0), `touch_ads_sensitivity` (0.25–2.0), `invert_touch`;
-`[ui]` stores `floating_stick`, `touch_control_scale` (0.8–1.4), `fire_drag_look`.
+`[ui]` stores `floating_stick`, `touch_control_scale` (0.8–1.4), `fire_drag_look`,
+`left_handed_touch` (default false).
 Defaults are gain1, ADS gain1, normal Y, floating stick, size1 and fire-and-look on.
 
 ## Contract
@@ -33,9 +37,11 @@ Touch-generated emulated mouse events are consumed while the overlay is active;
 mouse preview is disabled when genuine touch is detected.
 
 The resting joystick has a 160-pixel extent and radius62 at size1. Floating mode
-accepts the left movement zone, starts neutral under the thumb and keeps its base
+accepts the left40% full-height movement zone, starts neutral under the thumb and keeps its base
 fixed for that gesture. Edge-clamped bases retain a grab offset so DOWN is neutral.
-Fixed mode retains the resting activation rectangle. Radial deadzone0.12 is
+Fixed mode retains the resting activation rectangle inside that column. The
+right60% accepts look at full height, with buttons taking priority on DOWN.
+Left-handed mode mirrors zones, buttons and stick. Radial deadzone0.12 is
 remapped once across the remaining0.88; diagonal magnitude stays at most1.
 Negative Y means forward. The controller clamps finite `touch_movement` and combines
 it with keyboard movement through `get_source_movement_axis()`; offline/network
@@ -51,7 +57,12 @@ primary stays an ordinary button. Spectator selection and non-firearm tools reta
 ordinary action behavior. Roles never change mid-gesture; look crossing buttons
 does not press them, and unclaimed drags cannot rotate the camera.
 
-Touch up/cancel releases that finger. `release_all`, disable, viewport resize, application/window focus loss and pause clear every claim, held action and movement vector. Pressing menu releases all controls before emitting `menu_requested`. The player permission gate also releases ownership when controls become disabled; Main/HUD owns menu/chat detection and the auto/on/off preference.
+Touch up/cancel releases that finger. Normal UP retains already queued look;
+cancel clears it. `release_all`, disable, viewport resize, application/window
+focus loss and pause clear every claim, held action, movement vector and pending
+look. Pressing menu releases all controls before emitting `menu_requested`. The
+player permission gate also releases ownership when controls become disabled;
+Main/HUD owns menu/chat detection and the auto/on/off preference.
 
 ## Layout and bridge
 
@@ -59,7 +70,8 @@ Controls respect the size preference and a 56 CSS-pixel Web button floor, derive
 from actual canvas bounds and local canvas size. Native/headless fallback is a
 logical-pixel floor, not a claim about physical display units. The toolbar and
 action grid wrap on narrow canvases; map/palette placement follows actual toolbar
-height. Movement/look areas retain a 52-pixel bottom HUD reserve. Required layouts
+height. Drawn controls retain a 52-pixel bottom HUD reserve; blank movement/look
+areas extend to the canvas edge. Required layouts
 include960×540,854×480,480×854 and raw844×390, plus size0.8/1.4. Root's expanding
 viewport can turn physical844×390 into a taller logical canvas. Geometry checks
 do not establish phone text readability or OS safe-area handling.
@@ -69,8 +81,11 @@ adding Web interop to the drawing loop.
 
 HUD connects actions to `Input.parse_input_event(InputEventAction)`, preserving
 reload, selection and ADS edges. Movement updates `player.touch_movement`; look
-calls `apply_touch_motion(delta, overlay.size)`. Both touch axes normalize by the
-overlay width: at gain1 a 30%-width swipe gives90° before weapon zoom. Touch gain
+calls `queue_touch_motion(delta, overlay.size)`. Both touch axes normalize by the
+overlay width: at gain1 a45%-width swipe gives180° before weapon zoom. The next
+render/physics boundary consumes displacement once, before command sampling.
+Network life changes discard stale queued gestures; orbit refresh retains the
+last sampled camera shake without ticking effects again. Touch gain
 is independent of mouse exponent/sensitivity/inversion, without frame-time gain
 or smoothing. Existing own-view ADS zoom, spectator behavior and pitch bounds
 apply. Menu opens the existing HUD menu; deactivation releases overlay actions
@@ -328,3 +343,92 @@ pinned GodotPrompter revision, rather than assuming catalog availability.
    Android Chrome and iPhone Safari multitouch, both orientations and sustained play;
    desktop mouse preview alone cannot accept the fix. Publish only after authorized work
    reaches the existing release gates. No new build was produced in this research turn.
+
+## Open-source control candidates — 2026-10-11
+
+The user requested examples and pros/cons before implementation. This is source/document
+research against Blockfield HEAD `556c6dce324f1c33817cb182bb50118113195648`, Godot
+`4.7.2.stable.official.ed1daf0bf`, and upstream OpenSpades
+`dcf449c845d509bbde9d79239b32d201c1389961`. No addon was installed or executed.
+
+| Candidate | Evidence and strengths | Blockfield limitations / suggested use |
+| --- | --- | --- |
+| [Built-in VirtualJoystick](https://docs.godotengine.org/en/stable/classes/class_virtualjoystick.html) + [TouchScreenButton](https://docs.godotengine.org/en/stable/classes/class_touchscreenbutton.html) | Open-source engine components, not a downloadable FPS template. Fixed/dynamic/following stick, action mapping, deadzone and theme customization; buttons support simultaneous touches. Existence independently confirmed in [the pinned engine source](https://github.com/godotengine/godot/blob/ed1daf0bf/doc/classes/VirtualJoystick.xml). | First component to compare if simplifying our movement UI. Swipe look, fire-and-look, permissions and focus cleanup still need our router. TouchScreenButton inherits Node2D and lacks Control anchors. Preserve separate movement sources instead of allowing stick release to clear keyboard intent. |
+| [Virtual Joystick DX](https://github.com/Repechul/Virtual-Joystick-DX/blob/master/addons/virtual_joystick_DX/README.md), MIT | Rich third-party candidate: analog/D-pad, three modes, active regions, skins, configurable action triggers. [Asset entry](https://godotengine.org/asset-library/asset/5256) lists v1.1c, 2026-08-05, Godot4.6+ and author testing on4.7; repository README instead states4.3+. | Not a complete FPS swipe controller. [Core source](https://github.com/Repechul/Virtual-Joystick-DX/blob/master/addons/virtual_joystick_DX/vjdx_core_script.gd) uses simple position/scale conversion and global Input.action_press/release; our expanding canvas, action edges and lifecycle need an adapter. Dynamic base follows the finger rather than staying fixed after DOWN as ours does. Documented haptics are disabled on Web. Best third-party reference for configurable stick UX; browser/device compatibility remains untested here. |
+| [MarcoFazio Virtual-Joystick-Godot](https://github.com/MarcoFazioRandom/Virtual-Joystick-Godot), MIT | Small GDScript component with fixed/dynamic/following modes, input actions, deadzone, textures and per-index touch ownership. Asset Library entry lists Godot4.2, v1.6 (2024-08-29). | Movement component only. [Source](https://github.com/MarcoFazioRandom/Virtual-Joystick-Godot/blob/Main/addons/virtual_joystick/virtual_joystick.gd) declares class_name VirtualJoystick, the same name as the pinned engine class: rename/adapt before evaluating on4.7. No integration/parser test was run. Useful simple reference, lower priority than native/DX for this project. |
+| [Action Manager](https://github.com/Saulo-de-Souza/Action-Manager), MIT, Godot4.x | Joystick and TouchScreenButton bridge; held, toggle, long-press, repeat and double-press modes. Useful reference for optional sprint/crouch/ADS interaction preferences. | No FPS swipe camera. Mobile-only joystick visibility checks native Android/iOS names, so that option needs Web-aware adaptation. A second input manager could duplicate our HUD events or change weapon edges; take individual button ideas rather than replacing simulation/controller input. |
+
+Additional references reviewed: [selgesel third-person controller](https://github.com/selgesel/godot4-third-person-controller)
+(MIT, Godot4 touch movement/camera/buttons; third-person physics and pinch zoom are not
+our FPS contract), [HubbleCommand mobile_controls](https://github.com/HubbleCommand/mobile_controls)
+(MIT, pan/rotate/scale; floating stick activated by long press), and
+[GodotTouchInputManager](https://github.com/Federico-Ciuffardi/GodotTouchInputManager)
+(MIT, Godot4 release; global multi-finger gesture classification is unsuitable unmodified
+for independent simultaneous move/look/fire roles).
+
+Recommendation is provisional: keep Blockfield's per-ID absolute-position look and
+fire-and-look ownership, compare native movement components and DX settings/skins,
+and use Action Manager as a button-behavior reference. No architectural replacement
+was accepted. All shortlisted alternatives require exported-browser and real-phone
+multitouch checks; primary README claims and desktop previews do not establish these.
+Research changes only this document and status.md; no parity status, engine, tests,
+export, server or published artifact changed.
+
+Camera-settings follow-up: the user clarified that camera rotation is the selection
+target. Recommend the existing per-pointer swipe-look layer using native touch events;
+DX is the movement-stick reference, not the camera choice. Current HUD already exposes
+"Обзор пальцем"25–300%, "Обзор в прицеле"25–200%, Y inversion and fire-and-look.
+PlayerController normalizes both axes by overlay width; at gain1 a30%-width swipe
+rotates90 degrees before weapon zoom. Independent X/Y gains and optional smoothing
+would be new preferences, not existing features. This clarification changed no code;
+future physical-phone tuning still requires device evidence.
+
+## Expanded camera reference search — 2026-10-11
+
+The user reports that the current camera still feels poor and explicitly asked for
+a refined, concrete reference and a broader search. The prior recommendation to
+retain the existing handler is insufficient evidence of comfort and is superseded
+by this comparative shortlist. Existing automated checks remain valid for their
+recorded behaviors; they do not override this usability report. No defect cause or
+comfortable sensitivity has been established on a physical phone in this turn.
+
+Search expanded beyond Godot addons to released Android FPS clients and playable
+Web FPS projects. Recommended external UX comparisons are
+[Quad Touch](https://play.google.com/store/apps/details?hl=en&id=com.opentouchgaming.quadtouch)
+/ [Delta Touch](https://play.google.com/store/apps/details?hl=en&id=com.opentouchgaming.deltatouch);
+Xash3D FWGS is the clearest open camera implementation reference. These are research
+recommendations, not an accepted replacement architecture or permission to copy assets.
+The public [Psi_Touch submodules](https://github.com/emileb/Psi_Touch/blob/main/.gitmodules)
+connect the touch library to the author's OpenTouch family; this does not establish
+the exact source revision used in current Quad/Delta store binaries.
+
+| Reference | Primary evidence / strengths | Limits for Blockfield |
+| --- | --- | --- |
+| [Open Touch Gaming / Delta Touch](https://opentouchgaming.com/delta-touch/) and [MobileTouchControls](https://github.com/emileb/MobileTouchControls) | Released mobile FPS applications from the library author; configurable touch HUD. Library revision `b2ea201ed29f84848b4256ad97d3e3bb7c85fa90` exposes relative touchpad and joystick outputs in [TouchJoy.cpp](https://github.com/emileb/MobileTouchControls/blob/b2ea201ed29f84848b4256ad97d3e3bb7c85fa90/TouchJoy.cpp), separate look/turn gains, inversion, movement deadzone, precision shooting and layout editing in [UI_TouchDefaultSettings.cpp](https://github.com/emileb/MobileTouchControls/blob/b2ea201ed29f84848b4256ad97d3e3bb7c85fa90/UI_TouchDefaultSettings.cpp). [License.txt](https://github.com/emileb/MobileTouchControls/blob/b2ea201ed29f84848b4256ad97d3e3bb7c85fa90/License.txt) explicitly states GPLv2. | Android/C++/OpenGL, paid applications, no Godot/Web drop-in. Exact equivalence of current app binaries and published library revision is unverified. TouchJoy contains legacy first-motion suppression, large-delta rejection and pointer-swap heuristics; default multitouch mode can replace an active pointer. Study app interaction and relative touchpad output, do not transplant those heuristics as a fix for Godot. |
+| [Xash3D FWGS touch controls](https://github.com/FWGS/xash3d-fwgs/blob/51353ff8d65e58300eeb2bd014867673f1f367c6/Documentation/touch-controls.md) | Independent move/look fingers, separate yaw/pitch gains, optional nonlinear response and precise-look multiplier; editor for button positions/sizes, safe area and saved profiles. [Camera source](https://github.com/FWGS/xash3d-fwgs/blob/51353ff8d65e58300eeb2bd014867673f1f367c6/engine/client/input/in_touch.c#L1844) directly shows owned look displacement and separate axis gain. [Android continuous build](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous), build4209, published2026-10-09. | C engine / Android, not Web/Godot; Half-Life needs the user's own `valve` resources. Touch source GPL-3.0-or-later. Native normalized coordinates and gain values must be adapted to our coordinate contract. Documentation reverses yaw/pitch labels in one comment; source confirms yaw is horizontal, pitch vertical. Continuous release is a prerelease, not a claim of stable-phone acceptance. |
+| [idTech4A++](https://github.com/glKarin/com.n0n3m4.diii4a/releases/tag/v1.1.0harmattan73) | Released Android FPS client, GPLv3, APK release2026-09-30. [Pointer router](https://github.com/glKarin/com.n0n3m4.diii4a/blob/ce49510f3b0c04969eab8ebe8238416e84e4f0bb/Q3E/src/main/java/com/n0n3m4/q3e/Q3EGameButtonHandler.java) keeps target ownership from DOWN to UP/CANCEL; [Button.java](https://github.com/glKarin/com.n0n3m4.diii4a/blob/ce49510f3b0c04969eab8ebe8238416e84e4f0bb/Q3E/src/main/java/com/n0n3m4/q3e/onscreen/Button.java) allows mouse-button drag to keep aiming while firing. In-game HUD editor documented in v71 release. | Requires chosen game resources; Java/C++/Android. Camera sensitivity is partly engine-specific: Doom3 has m_pitch/m_yaw, while Android touch layer sends displacement. Do not conflate gyro X/Y settings with shared touch-axis settings. Useful secondary reference for optional fire-and-look. |
+| [Luanti5.17.0](https://github.com/luanti-org/luanti/releases/tag/5.17.0) | Released Android voxel platform, independent joystick/camera ownership, HUD editor, fixed/floating stick and density-normalized camera sensitivity. [Touch source](https://github.com/luanti-org/luanti/blob/5.17.0/src/gui/touchcontrols.cpp#L559) is LGPL-2.1-or-later. | C++/native, not a FPS template. Compare [buttons_crosshair](https://github.com/luanti-org/luanti/blob/5.17.0/builtin/settingtypes.txt#L377) mode for actions by the reticle; default tap/long-tap interactions do not match our weapons. Best secondary reference for block/tool interaction. |
+| [NexQuake](https://kitty1.quake.nexus/) | Playable browser Quake with [documented touch controls](https://quake.nexus/controls/): left40% movement, right60% swipe look, separate touch sensitivity, inversion/left-handed layout and movable action slots. Public source inspected at `f9fd869074f13f3ad6aad55dca95427f8935027e`; [overlay/editor](https://github.com/0xBrsm/NexQuake/blob/f9fd869074f13f3ad6aad55dca95427f8935027e/client/shell/21-touch-controls.js). Client/server GPL-3.0-only; relay AGPL-3.0-only. | Useful Web comparison; younger project and no proven phone feel here. Root opened ENTER and observed the rendered multiplayer/server menu only. Overlay source is not the camera core; documented analog_speed must not be assumed equivalent to our displacement model. |
+| [Ashworth Station](https://auaggy.github.io/ashworth-station/) | Immediately runnable Web FPS, MIT, [v1.0.0](https://github.com/AUAggy/ashworth-station/releases/tag/v1.0.0), source `132bbbe385986a9acf3c48fa328c67d6f6b5401d`. [Touch handlers](https://github.com/AUAggy/ashworth-station/blob/132bbbe385986a9acf3c48fa328c67d6f6b5401d/index.html#L3608) include floating movement, position-delta look, pointer capture, FIRE drag-look, safe-area CSS and lifecycle cleanup. Root launched DEPLOY and observed rendered gameplay. | No touch-sensitivity slider; FIRE ignores motion below2px per event, and separate LOOK/FIRE pointers may both turn the view. Author-reported playtests and [automated checks](https://github.com/AUAggy/ashworth-station/blob/132bbbe385986a9acf3c48fa328c67d6f6b5401d/docs/TESTING.md) do not establish polished phone aiming. Secondary runnable example, lower priority than released native FPS references. |
+
+### Proposed comparison for Blockfield
+
+- Use relative swipe-look with a stable camera finger, independent horizontal and
+  vertical gain, and an explicitly tuned precision/ADS multiplier. Compare slow
+  target tracking, a90/180-degree turn, and aiming while moving/firing on the same
+  physical device. Existing Blockfield ownership/settings are a starting point;
+  their presence does not establish successful feel or the cause of the complaint.
+- Compare the Open Touch app's configurable layout and Xash3D's touch profiles before
+  choosing baseline values. Keep nonlinear response and smoothing off for the first
+  comparison; copied native sensitivity numbers have incompatible coordinate units.
+- Compare a separate FIRE button and optional fire-and-look without letting a second
+  camera pointer add motion. Prioritize buttons over the underlying look region.
+- Godot-specific Pocket Godot, third-person/gesture controllers and joystick addons
+  remain educational/component references. The search did not find convincing
+  evidence that one is a released, phone-refined FPS camera replacement for Blockfield.
+
+Root and both specialists performed source/document research only. Browser checks
+used a desktop pointer and did not emulate coarse-pointer/multitouch or measure
+camera response on Android/iPhone. Temporary browser tabs were closed; no viewport
+override, app/addon installation, engine/parser/test execution, export or publication
+was performed. Only this research document and status.md changed under root ownership.

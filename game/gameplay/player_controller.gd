@@ -13,6 +13,8 @@ enum CameraMode { INTRO, FIRST_PERSON, THIRD_PERSON, DEATH, FREE, FOLLOW_FIRST_P
 const NETWORK_SESSION = preload("res://network/network_session.gd")
 const NETWORK_CLIENT = preload("res://network/client_replica.gd")
 const SHARED_RULES = preload("res://simulation/player_rules.gd")
+## NexQuake: 180deg over 75% of its 60%-width look zone, at default gain.
+const TOUCH_TURN_PER_WIDTH: float = 400.0 * PI / 180.0
 
 var world: VoxelWorld
 var session: LocalSession
@@ -52,6 +54,7 @@ var controls_enabled: bool = false:
 			_move_press_order.clear()
 			_secondary_held=false
 			touch_movement=Vector2.ZERO
+			clear_touch_motion()
 ## Analog touch intent shares the offline/network movement path with physical keys.
 var touch_movement: Vector2 = Vector2.ZERO:
 	set(value):
@@ -96,6 +99,7 @@ var _camera_pitch: float = 0.0
 var _free_position: Vector3 = Vector3.ZERO
 var _free_velocity: Vector3 = Vector3.ZERO
 var _camera_effects:=SourceCameraEffects.new()
+var _camera_effect_basis: Basis = Basis.IDENTITY
 var camera_radial_blur:=0.0
 var _last_spade_fire_time:=-1.0e20
 var _network_owner: SharedPlayerState
@@ -103,6 +107,7 @@ var _network_epoch := 0
 var _network_generation := -1
 var _network_yaw := 0.0
 var _network_pitch := 0.0
+var _queued_touch_motion: Vector2 = Vector2.ZERO
 
 func stop_audio() -> void:
 	# Stop playback explicitly before scene teardown; the audio server owns a
@@ -198,13 +203,44 @@ func _unhandled_input(event: InputEvent) -> void:
 		_line_start = Vector3i(-1, -1, -1)
 		_block_secondary_held=false
 
+func _process(_delta: float) -> void:
+	if _queued_touch_motion == Vector2.ZERO:
+		return
+	# A render callback can precede the physics adoption of a new network life.
+	# Its queued gesture still belongs to the previously adopted actor/life.
+	if session is NETWORK_SESSION and not _network_touch_owner_current():
+		clear_touch_motion()
+		return
+	if session != null:
+		_sync_camera_mode()
+	# Consume on the first render/physics boundary, without integrating ADS,
+	# camera shake or simulation a second time. Own first-person view follows
+	# head/body rotation; orbit views need their presentation transform refreshed.
+	if flush_touch_motion() and world != null and camera_mode in [CameraMode.THIRD_PERSON, CameraMode.DEATH, CameraMode.FREE, CameraMode.FOLLOW_THIRD_PERSON]:
+		_update_camera_transform()
+		# Reapply the already sampled local rotation effect to the refreshed base.
+		# Sampling here would consume RNG and change FOV/ADS/effect timing twice.
+		camera.basis = camera.basis * _camera_effect_basis
+
+func _network_touch_owner_current() -> bool:
+	var replica := _network_replica()
+	if replica == null or replica.status != "live" or _network_owner == null:
+		return false
+	var owner := replica.get_owner_state()
+	return owner != null and owner.player_id == replica.actor_id and owner.player_id == _network_owner.player_id \
+		and owner.match_epoch == replica.epoch and owner.match_epoch == _network_epoch \
+		and owner.spawn_generation == _network_generation
+
 func _physics_process(delta: float) -> void:
 	if world == null or session == null:
+		clear_touch_motion()
 		return
 	_connect_simulation()
 	if session is NETWORK_SESSION:
 		_network_physics(delta)
 		return
+	_sync_camera_mode()
+	flush_touch_motion()
 	# Player::BoxClipMove uses world-axis corner samples, independent of yaw.
 	shape.rotation.y = -rotation.y
 	_tool_clock = maxf(0.0, _tool_clock - delta)
@@ -353,6 +389,8 @@ func _network_physics(delta: float) -> void:
 	if not owner.is_alive(): owner = replica.prediction.get_confirmed_state()
 	if owner == null: return
 	_network_adopt(owner,replica,delta)
+	_sync_camera_mode()
+	flush_touch_motion()
 	var pending: Dictionary = session.drain_intent()
 	if pending.team >= 0 and not replica.request_team(pending.team): session.select_team(pending.team)
 	if pending.color >= 0 and not replica.request_block_color(pending.color): session.request_block_color(pending.color)
@@ -632,25 +670,55 @@ func apply_mouse_motion(relative: Vector2) -> void:
 	head.rotation.x = clampf(head.rotation.x - delta.y * (-1.0 if invert_mouse else 1.0), -1.55,1.55)
 
 func apply_touch_motion(relative: Vector2, screen_extent: Vector2) -> void:
+	# Immediate compatibility API; HUD events use the frame accumulator below.
+	if not _can_apply_touch_motion(relative, screen_extent):
+		return
+	_apply_touch_look(relative / screen_extent.x)
+
+func queue_touch_motion(relative: Vector2, screen_extent: Vector2) -> void:
+	if not _can_apply_touch_motion(relative, screen_extent):
+		return
+	var normalized: Vector2 = relative / screen_extent.x
+	var pending: Vector2 = _queued_touch_motion + normalized
+	if normalized.is_finite() and pending.is_finite():
+		_queued_touch_motion = pending
+
+func clear_touch_motion() -> void:
+	_queued_touch_motion = Vector2.ZERO
+
+func flush_touch_motion() -> bool:
+	var normalized: Vector2 = _queued_touch_motion
+	clear_touch_motion()
+	if normalized == Vector2.ZERO:
+		return false
+	return _apply_touch_look(normalized)
+
+func _can_apply_touch_motion(relative: Vector2, screen_extent: Vector2) -> bool:
 	if not controls_enabled or session == null or camera_mode == CameraMode.FOLLOW_FIRST_PERSON:
-		return
+		return false
 	if not relative.is_finite() or not screen_extent.is_finite() or screen_extent.x <= 0.0 or screen_extent.y <= 0.0:
-		return
-	# Both arguments are in the overlay's local canvas coordinates. Device pixel
-	# ratio and stretch therefore cancel; a 30%-width swipe gives 90deg at 1x.
-	var delta: Vector2 = relative / screen_extent.x * deg_to_rad(300.0) * touch_sensitivity
+		return false
+	return true
+
+func _apply_touch_look(normalized: Vector2) -> bool:
+	if not controls_enabled or session == null or camera_mode == CameraMode.FOLLOW_FIRST_PERSON:
+		return false
+	# Local delta and width share units, so DPI/stretch cancel. This is angular
+	# displacement, not turn rate: 45%-width swipe gives 180deg at 1x, with no dt.
+	var delta: Vector2 = normalized * TOUCH_TURN_PER_WIDTH * touch_sensitivity
 	if not delta.is_finite():
-		return
+		return false
 	var vertical: float = -1.0 if invert_touch else 1.0
 	if camera_mode in [CameraMode.DEATH, CameraMode.FREE, CameraMode.FOLLOW_THIRD_PERSON]:
 		_camera_yaw -= delta.x
 		_camera_pitch = clampf(_camera_pitch - delta.y * vertical, -PI * 0.45, PI * 0.45)
-		return
+		return true
 	# Own first/third-person views retain the existing weapon zoom reduction.
 	delta /= get_aim_zoom()
 	delta *= pow(touch_ads_sensitivity, _aim_down_state)
 	rotate_y(-delta.x)
 	head.rotation.x = clampf(head.rotation.x - delta.y * vertical, -1.55, 1.55)
+	return true
 
 func _connect_simulation() -> void:
 	if _spectator_view==null:
@@ -705,6 +773,8 @@ func _clear_action_state() -> void:
 	_clear_input_state()
 
 func _clear_input_state() -> void:
+	clear_touch_motion()
+	_camera_effect_basis = Basis.IDENTITY
 	_move_press_order.clear()
 	_move_sequence=0
 	touch_movement=Vector2.ZERO
@@ -1107,7 +1177,8 @@ func _update_camera_effects(delta: float) -> void:
 	var zoom:=get_aim_zoom() if first_person else 1.0
 	motion.merge({"shake_level":shake,"first_person":first_person,"raw_ads":get_camera_aim_down_state(),"tool":get_camera_tool(),"ads_zoom_scale":zoom,"grenade_fast":effects._fast_shake if effects!=null else 0.0,"grenade_slow":effects._slow_shake if effects!=null else 0.0})
 	var sample:=_camera_effects.sample(motion,session.session_time,delta)
-	camera.basis=camera.basis*sample.basis_delta
+	_camera_effect_basis = sample.basis_delta
+	camera.basis=camera.basis*_camera_effect_basis
 	var zoomed_fov:=rad_to_deg(2.0*atan(tan(deg_to_rad(clampf(base_fov,45.0,90.0))*.5)/zoom))
 	camera.fov=SourceCameraEffects.apply_fov_degrees(zoomed_fov,float(sample.fov_scale))
 	camera_radial_blur=float(sample.radial_blur_strength)
