@@ -217,6 +217,18 @@ Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path g
 
 2026-10-10 source/render integration: complete offline code rows are IMPLEMENTED without promoting them to VERIFIED. Contracts/evidence: source-audit.md (source motion128/0, scene146/0 and subsequent tool/selection corrections), assets.md (character/corpse/native weapon/spectator), ui.md (custom metadata/native palette/settings), audio.md (126 routing/parameter checks), voxel.md (AO atlas/spectral/GI/real geometry reflections and fog). Later handoffs above include the completed UI/camera/audio/action paths and normalized float HDR. B01 uses the local-validation/branch-publication replacement in ADR0003 while Actions is externally blocked. Trusted skins/data ZIP and renderer differences are recorded in ADR0004 and extensions.md. Browser evidence applies to the recorded deployed SHA, not newer workspace code.
 
+2026-10-11, W02/W07/U12: terrain-hit optimization on b3e29b38c573 updates
+surviving-hit color attributes in place and budgets staged geometry with atomic
+mesh/collider publication. Minimap uploads follow changed image revisions;
+batched-fragment substeps mirror their hidden nodes once per frame. Native
+RGB4441/0, minimap37/0 and fragment29/0 cover the new contracts; CPU first-hit
+cost and destructive peak slices fall substantially, with14–15% residual median
+aggregate destruction overhead. Three actual-Main Web wall repeats lower p95,
+but rare stalls remain and the shallow Title case does not improve overall.
+No whole-row/device acceptance is implied; rows remain IMPLEMENTED. Commands,
+frozen release and browser limits: [impact evidence](block-impact-performance.md),
+[ADR0015](decisions/0015-budgeted-block-impact-rendering.md).
+
 2026-10-11, U12: repair16f1e70 introduces bounded prewarmed effect pools and one
 fragment MultiMesh draw, retains native emission counts/near-distance grenade
 saturation, culls vibration beyond170 units, and consumes actual elapsed lifetime

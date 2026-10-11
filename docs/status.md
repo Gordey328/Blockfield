@@ -3,43 +3,33 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Active weapon/block impact optimization — 2026-10-11
+## Weapon/block impact optimization — 2026-10-11
 
-User reports stalls while firing into terrain, especially SMG. Baseline source
-`662a288`; Godot `4.7.2.stable.official.ed1daf0bf`, upstream unchanged. Root owns
-integration, docs, build registration, diagnostic export and publication. Specialist
-`impact_world` owns only `game/world/voxel_{world,chunk}.gd`; `impact_rules` owns
-only `game/ui/lab_map.gd` and its new upload fixture; `impact_tests` owns new native
-impact correctness/benchmark and browser Main probe files. Engine runs are serial
-under the coordinator's lease. Baseline archived at `.cache/block-impact-baseline`.
-Existing AoS research and its status insertion are preserved. Initial audit finds
-color-only damage rebuilding full mesh/AO and frame budgets checked only after
-indivisible chunk builds. Agreed contract: targeted color attribute updates,
-bounded staged geometry with atomic publication, cancellation on invalidation,
-retained synchronous `rebuild_now`, and unchanged authority/collapse rules.
-Implementation is integrated. Import, damage31/0, lighting30/0, impact4441/0,
-minimap37/0 and preparation53/0 pass. Old world fixture expected neighbor rebuild
-for a border repaint; updated to the new palette-only contract after its recorded
-failure. RGB0..255 dynamic bytes exactly match full-build RGBA8/AO/UV bytes.
-CPU baseline first-hit mesh median8.65ms lab /6.25ms Title; actual Main Web SMG
-wall72–73 shots/8s,14–18 removals, p95 frames51.7/64.3/73.8ms. One Title run73
-shots/1 removal, p9560.3ms; this shallow-ground case includes protected terrain.
-Failed initial typed-array CPU fixture and zero-shot focus Web attempt are retained.
-Next: paired benchmark/export, frozen full checks and public verification.
-No new acceptance claims yet; [evidence](block-impact-performance.md).
-Second pass: first staged version reduced peak native slices but increased
-aggregate destruction CPU; Web wall p9549.5/64.6/85.2ms did not establish a
-consistent frame improvement. `impact_world` now owns an additional hot-loop
-optimization in Chunk; `impact_rules` owns only batched-fragment substep writes
-in `game/presentation/openspades_effects.gd` and a new regression fixture. The
-earlier Main probe remains byte-identical. Root retains engine/release ownership;
-specialists returned stable files and engine leases after serial validation.
-Final native destruction peaks11.867→4.636ms lab/10.032→4.049ms Title;
-aggregate CPU retains14–15% median overhead after eliminating the initial
-75–95% increase. Import/RGB4441/0/preparation53/0 and fragment29/0 plus
-existing effects32588/0 pass (three headless GPU skips). Frozen full validation
-and final Web comparison/publication follow. These measurements are diagnostic limits,
-not a claimed physical-device FPS result.
+Terrain surviving-hit damage/repaint now updates only cell color attributes,
+retaining mesh/AO/collider; geometry prepares bounded columns/planes and publishes
+the complete current mesh/shape together. Stale jobs cancel on invalidation;
+authority/HP/collapse/network remain unchanged. Minimap skips unchanged uploads;
+hidden batched fragments mirror final node state once per frame.
+Root integrated specialists, scoped files and serial engine runs; all leases
+returned. Separate Steam AoS research files/status insertion are preserved.
+
+Frozen `b3e29b38c5733612a19ebc5529dd5c1d02cacea5`, Godot
+`4.7.2.stable.official.ed1daf0bf`, upstream unchanged: all88 registered native
+behavioral/latency invocations, parser/import, runtime/server-launcher smoke and
+normal Web export pass. New impact4441/0 (all256 RGB raw-byte sweep), minimap37/0,
+fragment29/0; effects32588/0 with three explicit headless GPU skips. Initial cold
+font import failure is retained; unchanged frozen source passes seeded-cache retry.
+
+Native first-hit presentation median9.256→0.026ms lab/7.098→0.030ms Title;
+destructive peak slices11.867→4.636ms/10.032→4.049ms. Aggregate destruction CPU
+retains14–15% median overhead after hot-loop/scheduler repair. Actual-Main Web
+wall repeats73/73/71 shots,14/18/15 removals, p9548.1/55.3/62.1ms versus
+51.7/64.3/73.8ms; rare stalls remain. Shallow Title p9583.7ms versus60.3ms,
+including visual preparation, does not establish overall Title/FPS improvement.
+Normal local/public SMG terrain hits and local Title reload/render exercised.
+Pointer-lock host errors and workload/device limits are explicit in
+[evidence](block-impact-performance.md), with exact commands, logs and hashes.
+Full-port and sustained physical-device performance acceptance remain open.
 
 ## Recover context
 
@@ -64,10 +54,10 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `2d60434b7534ff75c2a1b3863d235b643d0ea0b8`, merged/pushed (iPhone touch repair).
+- Published client source: `b3e29b38c5733612a19ebc5529dd5c1d02cacea5`, pushed (weapon/block impact optimization).
 - NexQuake mobile controls are merged into main through PR1, merge0fd90e75e508.
   All completed optimization commits through922f230 remain intact. Subsequent
-  documentation does not change the checked game bytes. Mobile engine/release and
+  documentation does not change the checked game bytes. Client engine/release and
   specialist leases are returned; the separate Steam AoS research files remain pending.
 
 ## Frozen validation
@@ -146,27 +136,27 @@ the user's chosen deployment scope is Docker/configuration preparation.
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) serves clean
-  source `1c046655fef23dcf46257dc10649d345ec4256d0`.
-  Bundle `83ce7fa206d7f4e602fff2a01dfe0071e32d6b11`, Pages status built/no error.
-  PR1 merged in main as `0fd90e75e508e83adbab410628940ca689d00da0`; game/test/tool
-  bytes match the frozen source. Later documentation commits do not change them.
+  source `b3e29b38c5733612a19ebc5529dd5c1d02cacea5`.
+  Bundle `4827fa214b92b0180a834cad87a6e5922a8db1a6`, Pages built/no error. All game changes are pushed to main;
+  later evidence/documentation commits do not change checked game bytes.
 - Independently downloaded public metadata/HTML/JS/WASM/PCK and both audio worklets
-  match the frozen export. PCK16,202,560bytes SHA256
-  `c098fb35b23d33d771dfc4d669bf117cf6735b5560359fc1d039db88e1573289`;
-  HTML5568bytes SHA256 `60c75e2e53041b707a7e72354d0c5be06e77fd31de09c434b29b9e71d1b18966`.
-  Hash report `.cache/browser/nexquake-public-hashes.json`; normal public screenshot
-  `.cache/browser/nexquake-public-mobile.jpg`. Movement/swipe/fire-drag exercised
-  with100% touch gain; the pre-test public Auto setting was restored.
+  match the frozen export. PCK16214544bytes SHA256
+  `d7204e76ccec9ed7d370741ca9003361ec9e96dfdccb93d76e422ed11fca99b3`;
+  HTML5568bytes SHA256 `f897388cd2eef16578030b29eed220e34ff274ead6777408ede7b154a767e4ac`.
+  Hash report `.cache/browser/block-impact-public-hashes.json`; normal public
+  screenshot `.cache/browser/block-impact-public-smg.jpg`. Menu/SMG selection,
+  entering the lab, drag look and held primary fire exercised. Pointer-lock host
+  errors are retained; no overall Title/physical-device FPS acceptance claimed.
 - Compatible [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
   stays unchanged:29,344,396bytes SHA256
   `76935d2fc59be4d5af6387266714001292a9c11a5adbf1c276a4e0a7799e168b`.
   Network5 / authority5-no-block-regen remain byte-identical; client/server source
-  commits now differ because this release changes mobile presentation/input only.
-  Earlier66e4b5b/22fd630 optimization,4c/57 and31 artifacts retain their historical
-  evidence. See [optimization evidence](optimization-audio-vxl-memory.md).
-- Windows exported-PCK smoke on66e did not execute Linux. No server export/PCK smoke
-  was repeated on1c; its full native server-launcher/network checks passed. Docker,
-  Linux execution and deployed TLS/WSS remain unverified; see [server deployment](server-deployment.md).
+  commits differ because this release changes client presentation only. Previous
+  release evidence remains in subsystem documents and frozen validation above.
+- Windows exported-PCK smoke on66e did not execute Linux. No server export/PCK
+  smoke was repeated onb3e; all88 native checks include server-launcher/network
+  verification. Docker, Linux and deployed TLS/WSS remain unverified;
+  see [server deployment](server-deployment.md).
 
 ## Earlier frozen57 Web evidence
 

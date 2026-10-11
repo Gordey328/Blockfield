@@ -17,12 +17,12 @@ files and its status insertion belong to their original task and are preserved.
 - Coordinator: existing fixture integration, tool registration/export helper,
   architecture/parity/status/decision/evidence, serial engine and release checks.
 
-## Verification in progress
+## Verification record
 
 Native benchmark uses damage-only and geometric edits, real Title terrain and
 repeatable cadence. The browser diagnostic uses actual Main and real weapon
-events; normal browser build is also required. Measurements, failures, commands
-and frozen/published identities will be appended after completion. No new parity
+events; normal browser build is also checked. Measurements, failures, commands
+and frozen/published identities follow below. No new parity
 rows are promoted merely by this optimization.
 
 Initial affected checks: import, existing damage31/0, lighting30/0, preparation53/0,
@@ -89,3 +89,106 @@ RGB4441/0 and preparation53/0 pass on final scheduler. Batched-fragment fixture
 29/0 proves3/6 physics substeps issue one final hidden position write per frame;
 existing effects32588/0 pass with three explicit headless GPU skips.
 Specialist leases are returned; frozen release and final Web comparison follow.
+
+## Final Web comparison
+
+Final exported patched-b is frozen game source `b3e29b38c573`; its Main probe
+SHA256 remains exactly the baseline-c SHA above. Same browser/canvas, no native
+engine running during8s scenarios. Wall repeats73/73/71 shots with14/18/15
+removed cells match baseline removed-cell workloads; the third repeat fires two
+fewer shots. p95 frames48.1/55.3/62.1ms versus51.7/64.3/73.8ms (7/14/16% lower),
+medians32.9/29.8/34.1ms versus27.6/30.7/32.5ms do not improve consistently.
+Maxima183.4/60.7/333ms show that rare stalls remain. Final dirty queues drain
+to0; geometry builds28/30/21 and stale cancellations0/4/8; real GPU
+`attribute_region` uploads480/384/384bytes, minimap2 uploads per run.
+The final cumulative fragment counters give449880 substeps/150262 position
+writes after the three runs; hidden substep setter work is reduced, with all
+source integration steps retained.
+
+Title repeat73 shots/1 removal,169 frames, p50=43.1ms,
+p9583.7ms/max169.8ms versus baseline60.3/72.1ms does **not** establish an overall
+Title frame improvement. It includes progressive visual preparation (29 minimap
+uploads); its workload is shallow protected ground with391 batched fragments
+at finish and136 draw calls. World edits alone issue2 geometry/collider builds,
+one96byte color update and0 stale cancellations. Retained color index~1.45MiB
+across324 active chunks. Final Web results are directional lab evidence only;
+general sustained/device FPS and remaining Title/render/effect costs are open.
+
+Artifacts: `.cache/benchmarks/block-impact-patched-b-web-{wall-1,wall-2,wall-3,title-1}.json`,
+`.cache/block-impact-probe-patched-b/{identity.json,wall.jpg,title.jpg}`. Probe
+console reported four Chromium pointer-lock UnknownErrors and one
+WrongDocumentError; this host limitation is retained, not counted as clean logs.
+All four scenarios report real positive shots/removals and `valid_impacts=true`.
+
+Initial frozen release cold import stopped during font import with nonzero exit
+and no script/error diagnostic. The log is retained as
+`.cache/release-b3e29b38c573/.cache/logs/import-initial-cold-failure.log`.
+Retry preserves the frozen source and seeds the previously checked import cache
+before rerunning import and the complete registered build/export pipeline;
+`.cache/resume_impact_release.py` records the exact retry operation.
+
+## Frozen release checks
+
+Frozen `b3e29b38c5733612a19ebc5529dd5c1d02cacea5` passes all88 registered
+native behavioral/latency invocations, parser/import, runtime smoke,
+server-launcher smoke and normal Web export on Godot
+`4.7.2.stable.official.ed1daf0bf`. World30/0, damage31/0, lighting30/0,
+preparation53/0, impact4441/0, minimap37/0, fragment29/0, effects32588/0
+(three explicit Dummy GPU skips), mobile controls3090/0, actual mobile-look209/0,
+network block-damage42/0 and shaped latency459/0. All logs and frozen game
+bytes are in `.cache/release-b3e29b38c573`; export metadata reports clean source.
+This client presentation change does not require a new dedicated-server binary.
+
+Normal local exported Main was exercised through its Russian arsenal menu:
+SMG selection, entering the lab, drag fallback look, block/weapon hotkeys,
+1.5s held genuine SMG primary input, visibly darkened/destroyed pillar cells,
+and menu re-entry. Screenshot `.cache/browser/block-impact-local-smg.jpg`;
+captured logs `.cache/browser/block-impact-local-logs.json` retain the host
+pointer-lock failure. Normal Title loaded through the menu to completion, rendered
+terrain/minimap/characters and accepted1.2s held SMG input with visible hit debris.
+Capture `.cache/browser/block-impact-local-title.jpg` and final console logs
+`block-impact-local-final-logs.json` (two pointer-lock host errors).
+
+Public Pages bundle `4827fa214b92b0180a834cad87a6e5922a8db1a6` is built/no error,
+serving the exact frozen b3e source. Independent metadata plus all six public
+HTML/JS/WASM/PCK/audio-worklet SHA256 values match local export;
+`.cache/browser/block-impact-public-hashes.json` records sizes/digests. PCK
+16214544bytes, SHA256
+`d7204e76ccec9ed7d370741ca9003361ec9e96dfdccb93d76e422ed11fca99b3`.
+Normal public Russian arsenal/SMG/entry, active touch-layout look drag and1.5s
+held Fire button rendered damage/destruction. Capture
+`.cache/browser/block-impact-public-smg.jpg`; public captured warning/error logs
+are empty (`block-impact-public-logs.json`). Existing touch preference is retained.
+This is desktop browser interaction with touch UI, not a physical-phone test.
+
+## Reproduction and handoff
+
+Use bundled Python, with the pinned executable under `.tools/godot/`:
+
+```powershell
+git archive --format=zip --output=.cache/block-impact-baseline/source.zip 662a288
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tools/export_block_impact_probe.py --source .cache/block-impact-baseline/source --name baseline-c
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tools/export_block_impact_probe.py --name patched-b --import-cache game/.godot
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tools/release_checkpoint.py --revision b3e29b38c5733612a19ebc5529dd5c1d02cacea5
+# Recorded cold-import retry, same frozen source:
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .cache/resume_impact_release.py
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tools/serve.py --port 8897
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' tools/publish_pages.py
+& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .cache/verify_impact_public.py
+```
+
+Diagnostic helper refuses to overwrite a previous run: use fresh names on rerun.
+Extract archived baseline before export. Native benchmark is opt-in:
+Godot `--headless --path <source>/game --script <repo>/tests/world/benchmark_block_impact.gd -- --output=<absolute-json>`.
+Only the test suites, not this benchmark, are registered in normal builds. Serve
+each diagnostic export, use its visible wall/Title buttons, save the visible JSON
+result and do not run another engine/rendered tab during frame measurements.
+
+Changed modules: world Chunk/World, minimap, effects; new world/minimap/fragment
+regressions and CPU/Main browser diagnostics, build registration/export helper,
+fixture contract updates and docs. Source commits cd8ac5e and b3e29b3 are pushed.
+All specialist/file/engine leases returned. Current release is checked/published;
+unresolved sustained device/Title FPS, aggregate destruction overhead and
+indivisible GPU/physics publication remain explicit. Next performance work should
+profile a warmed Title scene and real device, including effect/render/authority
+costs, rather than infer global FPS from headless chunk timing.
