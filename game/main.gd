@@ -352,7 +352,8 @@ func reset_match() -> void:
 		reset_lab()
 		return
 	var request := _begin_vxl_request("Восстановление карты…" if locale == "ru" else "Restoring map…")
-	var error: Error = await world.load_vxl_bytes_incremental(_map_baseline,_map_baseline_name)
+	var budget := _vxl_work_budget()
+	var error: Error = await world.load_vxl_bytes_incremental(_map_baseline,_map_baseline_name,budget.x,budget.y)
 	if not _vxl_request_current(request): return
 	_vxl_notice_caption = ""
 	_finish_map_load(error)
@@ -434,7 +435,8 @@ func load_original_map() -> void:
 	if network_mode: return
 	var request := _begin_vxl_request("Загрузка карты…" if locale == "ru" else "Loading map…")
 	var bytes := FileAccess.get_file_as_bytes("res://assets/openspades/maps/Title.vxl")
-	var error: Error = await world.load_vxl_bytes_incremental(bytes,"Title.vxl")
+	var budget := _vxl_work_budget()
+	var error: Error = await world.load_vxl_bytes_incremental(bytes,"Title.vxl",budget.x,budget.y)
 	if not _vxl_request_current(request): return
 	_vxl_notice_caption = ""
 	if error==OK:
@@ -519,7 +521,8 @@ func _apply_upload(bytes: PackedByteArray,filename: String) -> void:
 	if network_mode and _upload_kind == "map": return
 	if _upload_kind=="map":
 		var request := _begin_vxl_request("Загрузка карты…" if locale == "ru" else "Loading map…")
-		var error: Error = await world.load_vxl_bytes_incremental(bytes,filename)
+		var budget := _vxl_work_budget()
+		var error: Error = await world.load_vxl_bytes_incremental(bytes,filename,budget.x,budget.y)
 		if not _vxl_request_current(request): return
 		_vxl_notice_caption = ""
 		if error==OK:
@@ -606,7 +609,8 @@ func set_skin(id: String) -> void:
 
 func save_map() -> void:
 	var request := _begin_vxl_request("Сохранение карты…" if locale == "ru" else "Saving map…")
-	var bytes: PackedByteArray = await world.encode_vxl_incremental()
+	var budget := _vxl_work_budget()
+	var bytes: PackedByteArray = await world.encode_vxl_incremental(budget.x,budget.y)
 	if not _vxl_request_current(request): return
 	_vxl_notice_caption = ""
 	if bytes.is_empty():
@@ -628,6 +632,11 @@ func _begin_vxl_request(caption: String) -> int:
 	_vxl_notice_caption = caption
 	hud.show_notice(caption)
 	return _vxl_request_id
+
+func _vxl_work_budget() -> Vector2i:
+	# Menus can spend more of a frame on foreground loading; live play keeps
+	# the narrow default budget. Both paths still yield after a bounded batch.
+	return Vector2i(4096,8000) if hud.is_menu_open() else Vector2i(1024,2000)
 
 func _cancel_vxl_request() -> void:
 	_vxl_request_id += 1

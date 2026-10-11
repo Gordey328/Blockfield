@@ -21,8 +21,11 @@ Base materials and scenes keep their existing resource-generation lifecycle.
 Exact Color keys also avoid the old string-format rounding collisions.
 
 Local VXL decode/encode use cooperative jobs. Each advance has a hard1024-column
-cap and a soft2ms clock target checked between complete columns. Decode owns its
-input and private64MiB array; only a completed validated map is adopted. Encoding
+cap and a soft2ms clock target checked between complete columns.
+Main selects4096 columns/soft8ms when an operation begins with the menu open;
+live-play operations retain1024/2ms. The initial2ms-only Web diagnostic stretched
+Title loading to55.55s across877 frames, prompting a measured foreground budget.
+Decode owns its input and private64MiB array; only a completed validated map is adopted. Encoding
 uses `VoxelData.frozen_copy()` before the first yield, representing one coherent
 version despite later live edits. The engine can defer packed-array physical
 copying until a write: logical snapshot bytes are not an allocation measurement.

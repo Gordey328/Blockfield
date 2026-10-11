@@ -32,6 +32,10 @@ func run() -> void:
 	root.add_child(app)
 	await frames(3)
 	app.hud.set_menu_visible(true)
+	check(app._vxl_work_budget() == Vector2i(4096,8000),"menu operations use bounded foreground budget")
+	app.hud.set_menu_visible(false)
+	check(app._vxl_work_budget() == Vector2i(1024,2000),"live gameplay operations retain narrow budget")
+	app.hud.set_menu_visible(true)
 	var previous: VoxelData = app.world.data
 	app.load_original_map()
 	check(app.world.data == previous,"Main retains old authority while decode is private")
