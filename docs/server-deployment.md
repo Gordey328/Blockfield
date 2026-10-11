@@ -2,7 +2,7 @@
 
 The public client remains at https://gordey328.github.io/Blockfield/. A native host/domain has not been selected. No account, VPS, certificate, payment setting or public authoritative service has been created.
 
-The previous [frozen57 development package](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) uses network4/authority4 and automatic block recovery. The new permanent-damage client requires a matching network5/authority5-no-block-regen authority; handshake hashes reject the old package. The matching new package is undergoing validation/publication; current artifact evidence is recorded in [persistent block damage](persistent-block-damage.md).
+The previous [frozen57 development package](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) uses network4/authority4 and automatic block recovery. The new permanent-damage client requires a matching network5/authority5-no-block-regen authority; handshake hashes reject the old package. The matching [frozen4c051639e286 package](https://github.com/Gordey328/Blockfield/releases/tag/godot-4c051639e286) is published and independently downloaded/hash-verified:29,335,660bytes, SHA256 `eb6997de1cd726068fa31acd2ec4a2209138aab4a5b34e86b36805bbdf43241f`. Current evidence is recorded in [persistent block damage](persistent-block-damage.md).
 
 Extract the matching ZIP, copy `deploy/.env.example` to `deploy/.env`, set the domain/options and run the Compose command below; no source build is needed for that package. These are prepared deployment artifacts; Linux/container/public-WSS execution remains unverified. Historical frozen57 ZIP SHA256: `054a6c9dc437cbe7d17541fc4f9428ada190cb410dab356ac833c4e0180d0974` (29,332,846bytes).
 

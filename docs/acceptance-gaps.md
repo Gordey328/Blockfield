@@ -128,4 +128,4 @@ in the source. Permanent HP and darkening replace the original ten-second rule i
 both offline and shared network simulation. This is an accepted gameplay decision,
 not a missing recovery implementation. See [ADR0010](decisions/0010-persistent-block-damage.md).
 Current verification/release evidence is recorded separately from the historical
-2026-10-10 source-fidelity audit below.
+2026-10-10 source-fidelity audit.

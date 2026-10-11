@@ -26,32 +26,27 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `dcee15f0b7bcb4bf15bf70a638935bcd973d49f4`, committed/pushed.
+- Published client source: `4c051639e286b3ea4945c77cfa6d568c36bf39be`, committed/pushed.
 - Subsequent documentation records do not change the published binaries. Specialist
-  handoffs and the mobile release are complete. Current fidelity-repair ownership is
-  recorded below; root now owns the engine/release lease.
+  handoffs, effects repair and this release are complete; all file/engine/release
+  leases have been returned. Details are recorded below.
 
 ## Frozen validation
 
-- Active change (2026-10-11): user requests permanent damage, removing source
-  automatic ten-second regeneration. [ADR0010](decisions/0010-persistent-block-damage.md)
-  replaces that policy. Root owns Main/compatibility/socket+browser tests/docs,
-  integration, sole engine/release lease. Gameplay specialist owns Controller/source
-  fixture; renderer specialist owns MatchSimulation/match fixture; UI specialist
-  owns bounded damaged-baseline MapTransfer/Replica/Runtime and transfer fixture.
-  Mobile/grenade/scoreboard changes remain intact. All three confirmed file ownership;
-  specialists do not run the engine/publish. New client/server identity is network5 /
-  authority5-no-block-regen. Current published dcee15f remains the previous source
-  recovery behavior until the new validated release is published. Specialist handoffs
-  are complete; frozen f0ddb456dbc7 parser/full prefix through client-prediction
-  passed (Controller194/0, MatchSimulation226/0). MapTransfer stopped1171/1 on a
-  source-event fixture missing its mandatory actor ordinal; production unchanged.
-  Fixture repair passed1186/0 on a14b26f; suffix caught a Runtime hit-history clock
-  regression223/1. Root restores the existing current-tick assignment required by
-  HitHistory, independent of HP. Preserve both failures. Effects chat subsequently
-  committed16f1e70; the next frozen release preserves that committed work and reruns
-  the complete suite rather than reusing its older effects results. Next: fresh
-  full parser/checks, Web+server export, interactive/public verification.
+- Permanent block damage (2026-10-11): implemented/published on frozen4c051639e286
+  under [ADR0010](decisions/0010-persistent-block-damage.md). Offline/shared HP and
+  darkening persist; joining/resumed clients receive flags and bounded loading hits.
+  Root integrated specialist files, retained mobile/grenade/scoreboard and committed
+  effects16f1e70. All81 registered checks covered on this same frozen source, including
+  Controller194/0, Match226/0, MapTransfer1186/0, Runtime223/0, actual socket/Main
+  damage42/0, controls2381/0, touch-look144/0 and native latency458/0. Web11/0 and
+  normal local rendering/input/tool/map checks passed. Web/server export/PCK smoke
+  passed; public metadata/HTML/PCK and server ZIP match local hashes. Initial
+  import/controller failures and repeats are retained; this is a recorded validation
+  chain, not an uninterrupted first pass. [Detailed evidence](persistent-block-damage.md).
+  Specialists are complete with no outstanding file ownership; root release lease
+  is returned; public browser and final documentation verification completed. No automatic expiry
+  or public hosted server was introduced; full-port acceptance remains open.
 - Fidelity repairs: recorded frozen0898d6c successful full prefix through mobile-controls;
   dcee15f import/mobile-look144/0/damage31/0; test-only07b3a1b socket-damage32/0;
   dcee15f shaped latency459/0, runtime/server-launcher smoke and Web export. `game/`
@@ -84,19 +79,21 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Published artifacts
 
-- [Pages development build](https://gordey328.github.io/Blockfield/) serves the checked dcee15f export.
-  Bundle `812b31680bd84c06be42ccfed64e9551bc77ceaa`; public metadata confirms clean dcee15f source.
-- Public `index.pck` equals the local export, SHA256:
-  `4ad38a3f478501eff4b166c5c8410e31fc8abb3da5813d07a760da0dac4e099f` (16,170,288bytes).
-  Public HTML also hash-matches; report `.cache/previews/public-fidelity-dcee15f0b7bc.json`.
-  Previous mobile31 publication/hash evidence remains in mobile-controls/history.
-- [Server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740)
-  ZIP publicly downloaded/hash-verified:29,332,846bytes; SHA256:
-  `054a6c9dc437cbe7d17541fc4f9428ada190cb410dab356ac833c4e0180d0974`.
-- Export/PCK smoke did not execute Linux. Docker/container/Linux execution and deployed
-  TLS/WSS remain unverified. See [server deployment](server-deployment.md).
-- Existing57 server remains compatible: production network/simulation files and network-4
-  IDs are byte-identical. This update exports/publishes only the client.
+- [Pages development build](https://gordey328.github.io/Blockfield/) serves the checked
+  clean4c051639e286 export. Bundle `db3932405f3f07217f83b6ca844286af71eed02e`.
+- Public `index.pck` equals the local export:16,180,848bytes, SHA256
+  `10be980d25073beab27914f28c6a709d4fea4fa4f571165d9dc96fa46437f518`.
+  HTML5568bytes SHA256 `ab716cba3f68e75c1c99a2ed48aca9945fccef500a37d29017a826e9ebcb7e5e`.
+  Report `.cache/previews/public-persistent-4c051639e286.json`.
+- Matching [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-4c051639e286)
+  ZIP independently downloaded/hash-verified:29,335,660bytes, SHA256
+  `eb6997de1cd726068fa31acd2ec4a2209138aab4a5b34e86b36805bbdf43241f`.
+  New client/server identities: network5 / authority5-no-block-regen. The old57
+  recovering server is rejected by handshake hashes and is no longer compatible.
+- Export/PCK smoke did not execute Linux. Docker/container/Linux execution and
+  deployed TLS/WSS remain unverified. See [server deployment](server-deployment.md).
+- Historical dcee15f/812b316 and mobile31 evidence remains in fidelity-repairs and
+  mobile-controls/history. Documentation commits after4c do not change binaries.
 
 ## Earlier frozen57 Web evidence
 

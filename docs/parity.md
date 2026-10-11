@@ -135,6 +135,20 @@ Iteration 1 release gate: all iteration-1 and offline portions of `1+2` rows ver
 
 ## Subsystem evidence log
 
+2026-10-11 user-approved W07 replacement: automatic HP/color recovery removed
+under ADR0010. Frozen4c051639e286 retains damage across long idle and respawn;
+joining/reconnecting clients receive a flagged damage baseline plus bounded
+tint-only loading hits. Genuine edits/reset clear the old incarnation. Controller194/0,
+Match226/0, MapTransfer1186/0, Runtime223/0, actual socket/Main damage42/0,
+mesh31/0 and exported Main Web11/0 passed. All81 registered behavioral/latency
+checks are covered on this frozen source through the documented validation chain;
+initial import/controller failures and their successful repeats are preserved.
+Web and matching server exports/PCK smoke passed. Public Pages source4c05163,
+bundle db3932405f3f, metadata/HTML/PCK hash-match; matching server ZIP downloaded
+and verified. W07 stays IMPLEMENTED: this accepts the user's permanent-damage
+replacement and does not claim full W07/port/public-multiplayer acceptance.
+[Evidence and limits](persistent-block-damage.md).
+
 2026-10-10 authorized three-gap repair: W07 cosmetic mask uses exact source integer
 RGB halving without changing VXL/minimap/occupancy/collision/journal; offline and
 confirmed network adapters own recovery and edit/reset cleanup (ADR0009). World
