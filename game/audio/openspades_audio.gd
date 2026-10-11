@@ -5,6 +5,7 @@ extends Node
 ## mono/stereo voices so disabling panning does not change loudness.
 
 const MAX_VOICES := 128
+const MAX_AMBIENCE_CACHE: int = 128
 const ENVIRONMENT := preload("res://audio/audio_environment.gd")
 const WEAPONS := ["Rifle","SMG","Shotgun"]
 const LOCAL_ORIGIN := Vector3(.4,-.3,.5) # OpenAL listener-relative axes.
@@ -43,6 +44,39 @@ var _limiter: AudioEffectHardLimiter
 var _last_parameters: Dictionary = {}
 var _environment_frame: int = -1
 var _route_cursor: int = 0
+## Skin ambience is deterministic at an exact eye and terrain version. Cache
+## only versioned VoxelData; never approximate listener positions or source rays.
+var ambience_cache_enabled: bool = true:
+	set(value):
+		if ambience_cache_enabled == value:return
+		ambience_cache_enabled = value
+		clear_ambience_cache()
+var _ambience_cache: Dictionary[Vector3, Dictionary] = {}
+var _ambience_order: Array[Vector3] = []
+var _ambience_world_id: int = 0
+var _ambience_data_id: int = 0
+var _ambience_epoch: int = -1
+var _ambience_sequence: int = -1
+var _ambience_generation: int = -1
+var _workload_timing: bool = false
+var _ambience_calls: int = 0
+var _ambience_hits: int = 0
+var _ambience_misses: int = 0
+var _ambience_bypasses: int = 0
+var _ambience_rays: int = 0
+var _ambience_usec: int = 0
+var _ground_rays: int = 0
+var _ground_usec: int = 0
+var _dry_players_created: int = 0
+var _wet_players_created: int = 0
+var _spatial_players_created: int = 0
+var _players_released: int = 0
+var _active_players: int = 0
+var _peak_active_players: int = 0
+var _player_create_usec: int = 0
+var _player_release_usec: int = 0
+var _voice_update_calls: int = 0
+var _voice_update_usec: int = 0
 
 func setup(voxel_world: VoxelWorld,listener: Camera3D) -> void:
 	stop()
@@ -84,7 +118,19 @@ static func ambience_from_samples(distances: Array,opposite_hits: Array) -> Dict
 	return {"size":size,"room":reflections*feedback*clampf((size-.1)*4.0,0,1)*(1.0-size*.3)}
 
 func compute_ambience(origin: Vector3) -> Dictionary:
-	if not environmental or world==null:return {"room":0.0,"size":0.0}
+	var started: int = Time.get_ticks_usec() if _workload_timing else 0
+	_ambience_calls += 1
+	if not environmental or not is_instance_valid(world):
+		clear_ambience_cache()
+		_ambience_bypasses += 1
+		return _finish_ambience({"room":0.0,"size":0.0}, started)
+	var cacheable: bool = _prepare_ambience_cache(origin)
+	if cacheable and _ambience_cache.has(origin):
+		_ambience_hits += 1
+		# Every caller owns its scalar result, including cache hits.
+		return _finish_ambience(_ambience_cache[origin].duplicate(), started)
+	if cacheable:_ambience_misses += 1
+	else:_ambience_bypasses += 1
 	var distances: Array[float]=[]
 	var feedback: Array[bool]=[]
 	for source in AMBIENCE_DIRECTIONS:
@@ -94,10 +140,52 @@ func compute_ambience(origin: Vector3) -> Dictionary:
 		# the top of a Godot voxel, rather than the voxel's lower y corner.
 		distances.append(origin.distance_to(Vector3(hit.cell)+Vector3.UP) if hit.hit else 80.0)
 		feedback.append(bool(_acoustic_ray(origin,-direction,40.0).hit) if hit.hit else false)
-	return ambience_from_samples(distances,feedback)
+	var result: Dictionary = ambience_from_samples(distances,feedback)
+	if cacheable:
+		if _ambience_order.size() >= MAX_AMBIENCE_CACHE:
+			_ambience_cache.erase(_ambience_order.pop_front())
+		_ambience_order.append(origin)
+		_ambience_cache[origin] = result.duplicate()
+	return _finish_ambience(result, started)
+
+func _finish_ambience(result: Dictionary, started: int) -> Dictionary:
+	if _workload_timing:_ambience_usec += Time.get_ticks_usec() - started
+	return result
+
+func _prepare_ambience_cache(origin: Vector3) -> bool:
+	if not ambience_cache_enabled or not origin.is_finite() or not (world.data is VoxelData):
+		clear_ambience_cache()
+		return false
+	var data: VoxelData = world.data
+	var world_id: int = world.get_instance_id()
+	var data_id: int = data.get_instance_id()
+	var generation: int = OpenSpadesExtensions.get_generation()
+	if world_id != _ambience_world_id or data_id != _ambience_data_id or data.epoch != _ambience_epoch or data.map_sequence != _ambience_sequence or generation != _ambience_generation:
+		clear_ambience_cache()
+		_ambience_world_id = world_id
+		_ambience_data_id = data_id
+		_ambience_epoch = data.epoch
+		_ambience_sequence = data.map_sequence
+		_ambience_generation = generation
+	return true
+
+func clear_ambience_cache() -> void:
+	_ambience_cache.clear()
+	_ambience_order.clear()
+	_ambience_world_id = 0
+	_ambience_data_id = 0
+	_ambience_epoch = -1
+	_ambience_sequence = -1
+	_ambience_generation = -1
+
+func reload_resources() -> void:
+	# Main can call this explicitly; generation checks also catch pack reloads.
+	clear_ambience_cache()
+	_stereo.clear()
 
 func _acoustic_ray(origin: Vector3,direction: Vector3,distance: float) -> Dictionary:
-	if world.data.has_method("cast_source_ray_legacy"):
+	_ambience_rays += 1
+	if world.data != null and world.data.has_method("cast_source_ray_legacy"):
 		return world.data.cast_source_ray_legacy(origin,direction,distance)
 	return world.cast_voxel(origin,direction,distance)
 
@@ -151,7 +239,10 @@ func explosion(point: Vector3,underwater: bool) -> void:
 	for layer in explosion_layers(underwater,_random.randi_range(1,2)):
 		var origin:=point
 		if str(layer.path).ends_with("Debris") and world!=null:
+			var started: int = Time.get_ticks_usec() if _workload_timing else 0
+			_ground_rays += 1
 			var ground:=world.cast_voxel(point,Vector3.DOWN,8.0)
+			if _workload_timing:_ground_usec += Time.get_ticks_usec() - started
 			if ground.hit:origin=Vector3(ground.cell)+Vector3(0,.8,0)
 		play_spatial(layer.path,origin,layer.gain,layer.reference)
 
@@ -222,6 +313,7 @@ func _start_voice(stream: AudioStream, path: String, gain: float, point: Vector3
 	return voice
 
 func _new_player(stream: AudioStream, spatial: bool, local: bool, point: Vector3, reference_distance: float, wet: bool = false) -> Node:
+	var started: int = Time.get_ticks_usec() if _workload_timing else 0
 	if spatial:
 		var player:=AudioStreamPlayer3D.new()
 		player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
@@ -238,13 +330,23 @@ func _new_player(stream: AudioStream, spatial: bool, local: bool, point: Vector3
 		else:
 			add_child(player)
 			player.global_position=point
+		_record_player_created(wet, spatial, started)
 		return player
 	else:
 		var player:=AudioStreamPlayer.new()
 		player.playback_type=AudioServer.PLAYBACK_TYPE_STREAM
 		player.stream=stream
 		add_child(player)
+		_record_player_created(wet, spatial, started)
 		return player
+
+func _record_player_created(wet: bool, spatial: bool, started: int) -> void:
+	if wet:_wet_players_created += 1
+	else:_dry_players_created += 1
+	if spatial:_spatial_players_created += 1
+	_active_players += 1
+	_peak_active_players = maxi(_peak_active_players, _active_players)
+	if _workload_timing:_player_create_usec += Time.get_ticks_usec() - started
 
 func _update_gain(voice: Node) -> void:
 	var raw: float=voice.get_meta("gain",1.0)
@@ -265,12 +367,15 @@ func _process(_delta: float) -> void:
 	if _owned_buses.is_empty():return
 	_begin_environment_turn()
 	_apply_room_parameters()
+	var started: int = Time.get_ticks_usec() if _workload_timing else 0
 	# Rotate obstruction refresh priority so a full voice pool cannot starve
 	# newer origins indefinitely when the ray/time budget is exhausted.
 	for offset: int in range(_voices.size()):
 		var voice: Node=_voices[(_route_cursor+offset)%_voices.size()]
 		_update_routes(voice)
 		_update_gain(voice)
+		_voice_update_calls += 1
+	if _workload_timing:_voice_update_usec += Time.get_ticks_usec() - started
 	_route_cursor=(_route_cursor+1)%maxi(1,_voices.size())
 	_environment.finish_turn()
 	# Master is a separate user output setting, applied after this owned bus.
@@ -278,17 +383,26 @@ func _process(_delta: float) -> void:
 	_limiter.ceiling_db=-.3-maxf(0.0,AudioServer.get_bus_volume_db(0))
 
 func _release(voice: Node) -> void:
+	var started: int = Time.get_ticks_usec() if _workload_timing else 0
 	_voices.erase(voice)
 	for copy: Node in voice.get_meta("copies",[]):
 		copy.stop()
 		copy.stream=null
 		copy.queue_free()
+		_record_player_released()
 	voice.set_meta("copies",[])
 	voice.stop()
 	voice.stream=null
 	voice.queue_free()
+	_record_player_released()
+	if _workload_timing:_player_release_usec += Time.get_ticks_usec() - started
+
+func _record_player_released() -> void:
+	_players_released += 1
+	_active_players -= 1
 
 func stop() -> void:
+	clear_ambience_cache()
 	AudioServer.lock()
 	for voice in _voices.duplicate():_release(voice)
 	_stereo.clear()
@@ -314,6 +428,7 @@ func get_output_bus() -> StringName:
 func reset_environment() -> void:
 	## Explicit lifecycle hook for an in-place map replacement with the same
 	## epoch/sequence. Ordinary block edits only invalidate obstruction answers.
+	clear_ambience_cache()
 	_environment.set_query(world.data if is_instance_valid(world) else null)
 	_environment_frame=-1
 	_last_parameters.clear()
@@ -333,7 +448,47 @@ func debug_environment() -> Dictionary:
 	state.source_gain=source_gain
 	state.output_send=_output_send
 	state.backend="Godot stream; Freeverb + separate early/late delays + high shelves + hard limiter"
+	state.workload = debug_workload()
 	return state
+
+func set_workload_timing_enabled(enabled: bool) -> void:
+	_workload_timing = enabled
+	_environment.workload_timing_enabled = enabled
+
+func reset_workload_counters() -> void:
+	_ambience_calls = 0
+	_ambience_hits = 0
+	_ambience_misses = 0
+	_ambience_bypasses = 0
+	_ambience_rays = 0
+	_ambience_usec = 0
+	_ground_rays = 0
+	_ground_usec = 0
+	_dry_players_created = 0
+	_wet_players_created = 0
+	_spatial_players_created = 0
+	_players_released = 0
+	_peak_active_players = _active_players
+	_player_create_usec = 0
+	_player_release_usec = 0
+	_voice_update_calls = 0
+	_voice_update_usec = 0
+	_environment.reset_workload_counters()
+
+func debug_workload() -> Dictionary:
+	# Scalar snapshot: callers cannot mutate counters or cache values.
+	return {"timing_enabled": _workload_timing, "ambience_cache_enabled": ambience_cache_enabled,
+		"ambience_cache_capacity": MAX_AMBIENCE_CACHE, "ambience_cache_entries": _ambience_cache.size(),
+		"ambience_calls": _ambience_calls, "ambience_cache_hits": _ambience_hits, "ambience_cache_misses": _ambience_misses,
+		"ambience_bypasses": _ambience_bypasses, "ambience_rays": _ambience_rays, "ambience_usec": _ambience_usec,
+		"ground_rays": _ground_rays, "ground_usec": _ground_usec, "environment_rays": _environment.total_rays,
+		"room_rays": _environment.total_room_rays, "obstruction_rays": _environment.total_obstruction_rays,
+		"environment_trace_usec": _environment.total_trace_usec, "audio_rays_total": _ambience_rays + _ground_rays + _environment.total_rays,
+		"dry_players_created": _dry_players_created, "wet_players_created": _wet_players_created,
+		"spatial_players_created": _spatial_players_created, "players_released": _players_released,
+		"active_players": _active_players, "peak_active_players": _peak_active_players,
+		"player_create_usec": _player_create_usec, "player_release_usec": _player_release_usec,
+		"voice_update_calls": _voice_update_calls, "voice_update_usec": _voice_update_usec}
 
 func _bus(key: String, send: StringName) -> void:
 	var name: StringName=StringName("OpenSpades_%d_%s"%[get_instance_id(),key])
@@ -430,6 +585,7 @@ func _update_routes(voice: Node) -> void:
 			copy.stop()
 			copy.stream=null
 			copy.queue_free()
+			_record_player_released()
 		copies.clear()
 	elif eligible and copies.is_empty():
 		added=true

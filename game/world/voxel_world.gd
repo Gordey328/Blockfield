@@ -12,6 +12,7 @@ signal falling_cluster_finished(position: Vector3, block_count: int, reason: Str
 const CHUNK_SIZE := 16
 const DIRECTIONS: Array[Vector3i] = [Vector3i.DOWN, Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK, Vector3i.UP]
 const VOXEL_DATA = preload("res://world/voxel_data.gd")
+const VXL_JOBS = preload("res://world/vxl_reader.gd")
 const CHUNK_SCRIPT = preload("res://world/voxel_chunk.gd")
 const FALLING_CLUSTER = preload("res://world/falling_cluster.gd")
 const WATER_SHADER = preload("res://world/water.gdshader")
@@ -95,11 +96,17 @@ var _topdown_revision := 0
 var _topdown_progressive := false
 var _preparation_turn := false
 var _topdown_initial_turn := false
+var _vxl_operation_token: int = 0
+var _vxl_active_job: RefCounted
+var _vxl_job_stats: Dictionary = {"active": false, "kind": "", "progress": 0.0, "error": OK, "cancelled": false}
 
 func _ready() -> void:
 	_ensure_material()
 	if _blocks.is_empty():
 		generate_lab()
+
+func _exit_tree() -> void:
+	cancel_vxl_jobs()
 
 func _process(_delta: float) -> void:
 	var rebuilt := 0
@@ -415,6 +422,7 @@ func clear_world(size: Vector3i) -> void:
 	_clear_world_visuals()
 
 func _clear_world_visuals() -> void:
+	cancel_vxl_jobs()
 	_damaged_blocks.clear()
 	_irradiance = null
 	if _material != null:
@@ -481,6 +489,7 @@ func load_vxl(path: String, deferred_visuals: bool = false) -> Error:
 	return load_vxl_bytes(file.get_buffer(file.get_length()), path.get_file().get_basename(), deferred_visuals)
 
 func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL", deferred_visuals: bool = false) -> Error:
+	cancel_vxl_jobs()
 	var error: Error = data.load_vxl_bytes(bytes, data.epoch + 1)
 	if error != OK:
 		push_warning("VXL import failed: %s" % data.last_error)
@@ -520,6 +529,119 @@ func _prepare_loaded_map(title: String, deferred_visuals: bool = false) -> void:
 
 func encode_vxl() -> PackedByteArray:
 	return data.encode_vxl()
+
+## Only one local VXL load/save may run. Authority and network installation keep
+## their synchronous interfaces; no private partially decoded map is published.
+func cancel_vxl_jobs() -> void:
+	_vxl_operation_token += 1
+	if _vxl_active_job != null:
+		_vxl_active_job.call("cancel")
+		_vxl_job_stats["active"] = false
+		_vxl_job_stats["done"] = true
+		_vxl_job_stats["error"] = ERR_SKIP
+		_vxl_job_stats["cancelled"] = true
+		_vxl_job_stats["retained_input_bytes"] = 0
+		_vxl_job_stats["retained_work_bytes"] = 0
+		_vxl_job_stats["retained_snapshot_bytes"] = 0
+		_vxl_job_stats["retained_output_bytes"] = 0
+	_vxl_active_job = null
+
+func get_vxl_job_stats() -> Dictionary:
+	return _vxl_job_stats.duplicate()
+
+func _vxl_operation_current(token: int, original: VOXEL_DATA, original_epoch: int) -> bool:
+	return token == _vxl_operation_token and data == original and data.epoch == original_epoch and is_inside_tree()
+
+func _finish_vxl_job(token: int, value: Error) -> void:
+	if token != _vxl_operation_token:
+		return
+	_vxl_active_job = null
+	_vxl_job_stats["active"] = false
+	_vxl_job_stats["done"] = true
+	_vxl_job_stats["error"] = value
+	_vxl_job_stats["cancelled"] = value == ERR_SKIP
+
+func load_vxl_bytes_incremental(bytes: PackedByteArray, title: String = "Imported VXL", max_columns: int = 1024, max_usec: int = 2000) -> Error:
+	cancel_vxl_jobs()
+	if not is_inside_tree():
+		return ERR_UNCONFIGURED
+	if max_columns <= 0 or max_usec <= 0:
+		return ERR_INVALID_PARAMETER
+	if data.read_only:
+		return ERR_UNAUTHORIZED
+	if not VOXEL_DATA._u32(data.epoch + 1, true):
+		return ERR_INVALID_PARAMETER
+	var token: int = _vxl_operation_token
+	var original: VOXEL_DATA = data
+	var original_epoch: int = data.epoch
+	var tree: SceneTree = get_tree()
+	var job: VXL_JOBS.DecodeJob = VXL_JOBS.begin_decode(bytes)
+	_vxl_active_job = job
+	_vxl_job_stats = job.advance(0, 0)
+	_vxl_job_stats["active"] = true
+	_vxl_job_stats["kind"] = "load"
+	_vxl_job_stats["cancelled"] = false
+	while not job.done:
+		if not _vxl_operation_current(token, original, original_epoch):
+			job.cancel()
+			_finish_vxl_job(token, ERR_SKIP)
+			return ERR_SKIP
+		_vxl_job_stats = job.advance(max_columns, max_usec)
+		_vxl_job_stats["active"] = not job.done
+		_vxl_job_stats["kind"] = "load"
+		_vxl_job_stats["cancelled"] = false
+		if not job.done:
+			await tree.process_frame
+	if not _vxl_operation_current(token, original, original_epoch):
+		job.cancel()
+		_finish_vxl_job(token, ERR_SKIP)
+		return ERR_SKIP
+	if job.error != OK:
+		original.last_error = job.message
+		_finish_vxl_job(token, job.error)
+		return job.error
+	# Decoder has checked every span/color. Assignment adopts its private packed
+	# array, with no second 64 MiB copy or whole-map color-validation scan.
+	var installed: VOXEL_DATA = VOXEL_DATA.new()
+	installed.dimensions = job.result_data.size
+	installed.blocks = job.result_data.blocks
+	installed.epoch = original_epoch + 1
+	installed.water_level = original.water_level
+	installed.wade_origin_level = original.wade_origin_level
+	_finish_vxl_job(token, OK)
+	return set_map_data(installed, title, true)
+
+func encode_vxl_incremental(max_columns: int = 1024, max_usec: int = 2000) -> PackedByteArray:
+	cancel_vxl_jobs()
+	if not is_inside_tree() or max_columns <= 0 or max_usec <= 0:
+		return PackedByteArray()
+	var token: int = _vxl_operation_token
+	var original: VOXEL_DATA = data
+	var original_epoch: int = data.epoch
+	var tree: SceneTree = get_tree()
+	var job: VXL_JOBS.EncodeJob = VXL_JOBS.begin_encode(data)
+	_vxl_active_job = job
+	_vxl_job_stats = job.advance(0, 0)
+	_vxl_job_stats["active"] = not job.done
+	_vxl_job_stats["kind"] = "save"
+	_vxl_job_stats["cancelled"] = false
+	while not job.done:
+		if not _vxl_operation_current(token, original, original_epoch):
+			job.cancel()
+			_finish_vxl_job(token, ERR_SKIP)
+			return PackedByteArray()
+		_vxl_job_stats = job.advance(max_columns, max_usec)
+		_vxl_job_stats["active"] = not job.done
+		_vxl_job_stats["kind"] = "save"
+		_vxl_job_stats["cancelled"] = false
+		if not job.done:
+			await tree.process_frame
+	if not _vxl_operation_current(token, original, original_epoch):
+		job.cancel()
+		_finish_vxl_job(token, ERR_SKIP)
+		return PackedByteArray()
+	_finish_vxl_job(token, job.error)
+	return job.result_bytes
 
 func save_vxl(path: String) -> Error:
 	var bytes := encode_vxl()

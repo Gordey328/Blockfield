@@ -40,6 +40,14 @@ Main persists panning, weapon ambience, native `s_gain` and `s_eax`, and separat
 Master volume. Turning panning off retains distance gain. `cg_environmentalAudio`
 selects gun ambience layers; `s_eax` controls obstruction and room DSP independently.
 
+Gun ambience now retains at most128 exact origins for the current World/Data,
+epoch, map sequence and resource generation. Results are independently owned;
+edits/reset/reload invalidate them, without approximating rays. `debug_workload()`
+includes cumulative gun/ground/room/obstruction rays and player creation/release;
+`set_workload_timing_enabled(true)` opts into timers. The existing per-turn room
+budget stays separate. [Optimization evidence](optimization-audio-vxl-memory.md)
+records stationary/moving/editing measurements and the decision to defer pooling.
+
 ## Verification and remaining work
 
 `tests/audio/test_audio.gd`: **128 checks, 0 failures**, `.cache/logs/test-audio.log`.

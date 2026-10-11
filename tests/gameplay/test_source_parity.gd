@@ -634,7 +634,7 @@ func test_match_reset() -> bool:
 	session.begin_grenade_cook()
 	session.update(.5)
 	session.release_grenade()
-	app.reset_match()
+	await app.reset_match()
 	await frames(3)
 	check(world.get_block(restored_cell) == original and world.map_name == "Acceptance.vxl", "reset_match restores uploaded VXL baseline rather than returning to lab map")
 	check(session.team_scores == [0,0] and session.winning_team == -1 and session.ctf_flags.all(func(flag: Dictionary): return bool(flag.at_base) and int(flag.carrier) == -1), "reset_match clears CTF score/carrier/winner state")
@@ -646,6 +646,6 @@ func test_match_reset() -> bool:
 	session.territories[1].capturing_team = 0
 	session.territories[1].contested = true
 	session.winning_team = 1
-	app.reset_match()
+	await app.reset_match()
 	check(session.mode == "tc" and session.territories.all(func(territory: Dictionary): return int(territory.owner) == 2 and float(territory.progress) == 0 and int(territory.capturing_team) == -1 and not bool(territory.contested)), "reset_match preserves chosen mode and clears neutral/contested TC state")
 	return true

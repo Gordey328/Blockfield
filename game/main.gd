@@ -60,6 +60,9 @@ var _export_menu_was_open:=false
 var _export_pending:=false
 var _map_baseline := PackedByteArray()
 var _map_baseline_name := ""
+var _vxl_request_id: int = 0
+var _vxl_notice_caption: String = ""
+var _vxl_notice_percent: int = -1
 var focus_control := LabFocus.new()
 var console_service:=preload("res://ui/lab_console.gd").new()
 var _corpses: Array[OpenSpadesCorpse]=[]
@@ -164,6 +167,7 @@ func _physics_process(_delta: float) -> void:
 	if network_mode and network_client != null: _poll_network()
 
 func _process(delta: float) -> void:
+	_update_vxl_progress()
 	if network_mode: _poll_network()
 	session.update(delta)
 	if network_mode: _network_update_views()
@@ -326,6 +330,7 @@ func _surface_position(x: float,z: float) -> Vector3:
 
 func reset_lab() -> void:
 	if network_mode: return
+	_cancel_vxl_request()
 	clear_corpses()
 	_map_baseline=PackedByteArray()
 	_map_baseline_name=""
@@ -346,8 +351,12 @@ func reset_match() -> void:
 	if _map_baseline.is_empty():
 		reset_lab()
 		return
-	_finish_map_load(world.load_vxl_bytes(_map_baseline,_map_baseline_name,true))
-	hud.show_notice("Map and match reset")
+	var request := _begin_vxl_request("Восстановление карты…" if locale == "ru" else "Restoring map…")
+	var error: Error = await world.load_vxl_bytes_incremental(_map_baseline,_map_baseline_name)
+	if not _vxl_request_current(request): return
+	_vxl_notice_caption = ""
+	_finish_map_load(error)
+	if error == OK: hud.show_notice("Map and match reset")
 
 func spawn_tracer(start: Vector3, end: Vector3) -> void:
 	var visual:=MeshInstance3D.new()
@@ -423,15 +432,18 @@ func _play_spatial(path: String,point: Vector3) -> void:
 
 func load_original_map() -> void:
 	if network_mode: return
-	hud.show_notice("Loading original OpenSpades map…")
-	await get_tree().process_frame
-	var error:=world.load_vxl("res://assets/openspades/maps/Title.vxl",true)
+	var request := _begin_vxl_request("Загрузка карты…" if locale == "ru" else "Loading map…")
+	var bytes := FileAccess.get_file_as_bytes("res://assets/openspades/maps/Title.vxl")
+	var error: Error = await world.load_vxl_bytes_incremental(bytes,"Title.vxl")
+	if not _vxl_request_current(request): return
+	_vxl_notice_caption = ""
 	if error==OK:
-		_map_baseline=FileAccess.get_file_as_bytes("res://assets/openspades/maps/Title.vxl")
+		_map_baseline=bytes
 		_map_baseline_name="Title.vxl"
 	_finish_map_load(error)
 
 func _finish_map_load(error: Error) -> void:
+	if error == ERR_SKIP: return
 	if error==OK:
 		clear_corpses()
 		for grenade in _grenade_nodes.values():
@@ -506,7 +518,10 @@ func _apply_upload(bytes: PackedByteArray,filename: String) -> void:
 	_upload_pending=false
 	if network_mode and _upload_kind == "map": return
 	if _upload_kind=="map":
-		var error:=world.load_vxl_bytes(bytes,filename,true)
+		var request := _begin_vxl_request("Загрузка карты…" if locale == "ru" else "Loading map…")
+		var error: Error = await world.load_vxl_bytes_incremental(bytes,filename)
+		if not _vxl_request_current(request): return
+		_vxl_notice_caption = ""
 		if error==OK:
 			_map_baseline=bytes.duplicate()
 			_map_baseline_name=filename
@@ -547,6 +562,7 @@ func _refresh_resource_overrides() -> void:
 	player.refresh_resources()
 	for target in _target_nodes:target.refresh_resources()
 	effects.reload_resources()
+	audio.reload_resources()
 	if post_effects!=null:post_effects.reload_resources()
 	if hdr_scene!=null and hdr_scene.exposure!=null:hdr_scene.exposure.set_bloom_dust_texture(OpenSpadesExtensions.texture("res://assets/openspades/images/Textures/LensDustTexture.png"))
 	if hud.has_method("reload_resources"):hud.reload_resources()
@@ -589,10 +605,12 @@ func set_skin(id: String) -> void:
 	save_settings()
 
 func save_map() -> void:
-	hud.show_notice("Encoding VXL map…")
-	await get_tree().process_frame
-	var bytes: PackedByteArray=world.encode_vxl()
+	var request := _begin_vxl_request("Сохранение карты…" if locale == "ru" else "Saving map…")
+	var bytes: PackedByteArray = await world.encode_vxl_incremental()
+	if not _vxl_request_current(request): return
+	_vxl_notice_caption = ""
 	if bytes.is_empty():
+		if int(world.get_vxl_job_stats().get("error",OK)) == ERR_SKIP: return
 		hud.show_alert("Map encoding failed","error")
 		return
 	if OS.has_feature("web"):
@@ -604,6 +622,29 @@ func save_map() -> void:
 			return
 		file.store_buffer(bytes)
 	hud.show_notice("VXL map ready" if OS.has_feature("web") else "VXL map saved")
+
+func _begin_vxl_request(caption: String) -> int:
+	_cancel_vxl_request()
+	_vxl_notice_caption = caption
+	hud.show_notice(caption)
+	return _vxl_request_id
+
+func _cancel_vxl_request() -> void:
+	_vxl_request_id += 1
+	_vxl_notice_caption = ""
+	_vxl_notice_percent = -1
+	if is_instance_valid(world): world.cancel_vxl_jobs()
+
+func _vxl_request_current(request: int) -> bool:
+	return is_inside_tree() and request == _vxl_request_id
+
+func _update_vxl_progress() -> void:
+	if _vxl_notice_caption.is_empty() or not is_instance_valid(world): return
+	var stats: Dictionary = world.get_vxl_job_stats()
+	var percent := clampi(int(float(stats.get("progress",0.0))*100.0),0,100)
+	if percent == _vxl_notice_percent: return
+	_vxl_notice_percent = percent
+	hud.show_notice("%s %d%%" % [_vxl_notice_caption,percent])
 
 func _show_web_export(bytes: PackedByteArray,filename: String,mime: String) -> void:
 	if _export_pending:return
@@ -920,6 +961,7 @@ func stop_audio() -> void:
 	if player!=null:player.stop_audio()
 
 func _exit_tree() -> void:
+	_cancel_vxl_request()
 	if network_client != null: network_client.close()
 	stop_audio()
 	if OS.has_feature("web"):JavaScriptBridge.eval("delete window.BlockfieldFileReceiver; if(window.BlockfieldExports)window.BlockfieldExports.clear();")

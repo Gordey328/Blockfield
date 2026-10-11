@@ -116,6 +116,44 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
+- Optimization item4 implementation (2026-10-11): user authorized the summary's
+  audio, VXL loading/saving and memory scope. Specialists returned all file leases;
+  coordinator owns integration/docs, including ADR0013, and engine/export/release.
+  Bounded exact-origin audio cache, complete workload counters, exact-color tint
+  LRU and cancellable private VXL jobs are integrated. Main guards progress,
+  baseline and download completion. Sync network interfaces/rules are unchanged.
+  Initial import, audio128/0, environment70/0, audio optimization46/0, tint1555/0,
+  VXL jobs53/0 then final padding62/0, actual Main VXL12/0, source parity194/0,
+  PCM134/0+81/0, source input35/0 and offline lifecycle19/0 passed. Stationary
+  audio rays5640->47 (moving unchanged); measured player allocation cost defers
+  pooling. Slow intermediate lab padding was measured, then refined. Evidence:
+  [optimization item4](optimization-audio-vxl-memory.md), [ADR0013](decisions/0013-audio-vxl-memory.md).
+  Concurrent mobile records/files remain under their separate ownership; release
+  will freeze only optimization files. Next: final COW/column benchmarks, exported
+  browser responsiveness/cancel/save, frozen registered suites and publication.
+
+- Optimization planning (2026-10-11): completed a read-only three-specialist audit
+  of World, simulation/network and presentation/audio/UI, plus coordinator
+  Main/config/export review. [Optimization plan](optimization-plan.md) prioritizes
+  controlled current Web/device baselines, repeated client work, indivisible chunk
+  rebuilding, audio/shot work, VXL/memory, collapse/streaming and server history.
+  Historical measurements and current code candidates are explicitly distinguished;
+  existing effects pools, prepared publication and progressive visual preparation
+  are retained. HEAD `556c6dce324f1c33817cb182bb50118113195648` has no `game/`
+  diff against published4c051639e286. Read-only `rg`/file/evidence inspection,
+  `git -c safe.directory=C:/Users/Gordey/Documents/ChatGPT/Blockfield status --short`,
+  `git ... diff --stat 4c051639e286 HEAD -- game` and engine `--version` completed;
+  version is `4.7.2.stable.official.ed1daf0bf`. This turn owns only
+  `docs/optimization-plan.md`, this planning entry and the obsolete synchronous
+  preparation summary in `docs/voxel.md`; concurrent mobile research records
+  remain under their existing ownership. Documentation `git diff --check` passed
+  (exit0); all9 local plan links resolve. Specialist reviews corrected minimap
+  dirty/revision wording, the ambience source path and event-burst mean wording.
+  No new import, behavioral tests, benchmarks, browser checks or exports
+  are claimed by this planning turn. Specialists supplied read-only analysis and
+  returned all leases. Next action: stage1 controlled baseline before selecting
+  the first measured optimization; iteration/parity acceptance remains unchanged.
+
 - Previous mobile-control checkpoint96 returned specialist/engine leases to root;
   its evidence is retained below separately from the current31 release.
   New `game/ui/mobile_controls.gd` and `tests/ui/test_mobile_controls.gd` exercise real

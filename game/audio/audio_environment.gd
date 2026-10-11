@@ -22,6 +22,13 @@ var room_age: float = 0.0
 var last_turn_rays: int = 0
 var last_turn_usec: int = 0
 var budget_exhausted: bool = false
+## Cheap lifetime counters include all room/obstruction rays, even across resets.
+## Timing is opt-in because timers themselves affect the render-turn budget.
+var workload_timing_enabled: bool = false
+var total_rays: int = 0
+var total_room_rays: int = 0
+var total_obstruction_rays: int = 0
+var total_trace_usec: int = 0
 var _random: RandomNumberGenerator = RandomNumberGenerator.new()
 var _cache: Dictionary = {}
 var _last_room_time: float = -INF
@@ -58,6 +65,12 @@ func set_query(value: Variant) -> void:
 func seed_random(value: int) -> void:
 	_random.seed = value
 
+func reset_workload_counters() -> void:
+	total_rays = 0
+	total_room_rays = 0
+	total_obstruction_rays = 0
+	total_trace_usec = 0
+
 func begin_turn(now_seconds: float, ray_limit: int = MAX_RAYS_PER_TURN, usec_limit: int = MAX_QUERY_USEC) -> void:
 	_now = now_seconds
 	_turn_start = Time.get_ticks_usec()
@@ -93,11 +106,22 @@ func _can_ray() -> bool:
 		return false
 	return true
 
-func _trace(origin: Vector3, direction: Vector3, distance: float) -> Dictionary:
+func _trace(origin: Vector3, direction: Vector3, distance: float, room_sample: bool = false) -> Dictionary:
+	var started: int = Time.get_ticks_usec() if workload_timing_enabled else 0
 	last_turn_rays += 1
+	total_rays += 1
+	if room_sample:
+		total_room_rays += 1
+	else:
+		total_obstruction_rays += 1
+	var answer: Dictionary
 	if query.has_method("cast_source_ray_legacy"):
-		return query.cast_source_ray_legacy(origin, direction, distance)
-	return query.cast_voxel(origin, direction, distance)
+		answer = query.cast_source_ray_legacy(origin, direction, distance)
+	else:
+		answer = query.cast_voxel(origin, direction, distance)
+	if workload_timing_enabled:
+		total_trace_usec += Time.get_ticks_usec() - started
+	return answer
 
 func sample_room(eye: Vector3) -> void:
 	if query == null:
@@ -118,7 +142,7 @@ func sample_room(eye: Vector3) -> void:
 		if source_direction.length_squared() < .000000000001:
 			source_direction = Vector3.RIGHT
 		var direction: Vector3 = Vector3(source_direction.x, -source_direction.z, source_direction.y).normalized()
-		var forward: Dictionary = _trace(eye, direction, ROOM_DISTANCE)
+		var forward: Dictionary = _trace(eye, direction, ROOM_DISTANCE, true)
 		if not bool(forward.get("valid",true)):
 			continue
 		var distance: float = ROOM_DISTANCE * 2.0
@@ -126,7 +150,7 @@ func sample_room(eye: Vector3) -> void:
 		if bool(forward.hit):
 			# W maps the native integer z corner to the top of a Godot voxel.
 			distance = eye.distance_to(Vector3(forward.cell) + Vector3.UP)
-			var opposite: Dictionary = _trace(eye, -direction, ROOM_DISTANCE)
+			var opposite: Dictionary = _trace(eye, -direction, ROOM_DISTANCE, true)
 			if not bool(opposite.get("valid",true)):
 				continue
 			opposite_hit = bool(opposite.hit)
@@ -228,4 +252,6 @@ func trace_obstruction(eye: Vector3, origin: Vector3, budgeted: bool = false) ->
 func debug_state() -> Dictionary:
 	return {"parameters": parameters.duplicate(true), "history_position": history_position, "room_age": room_age,
 		"rays": last_turn_rays, "query_usec": last_turn_usec, "budget_exhausted": budget_exhausted,
-		"cache_entries": _cache.size(), "obstruction_refresh": OBSTRUCTION_REFRESH, "obstruction_horizon": OBSTRUCTION_HORIZON}
+		"cache_entries": _cache.size(), "obstruction_refresh": OBSTRUCTION_REFRESH, "obstruction_horizon": OBSTRUCTION_HORIZON,
+		"total_rays": total_rays, "total_room_rays": total_room_rays, "total_obstruction_rays": total_obstruction_rays,
+		"total_trace_usec": total_trace_usec, "workload_timing_enabled": workload_timing_enabled}
