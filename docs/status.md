@@ -25,7 +25,10 @@ epsilon preserving support/overlap checks. Final scene at1222ticks has all five
 bots moving and attempting fire, 10cover/10flank decisions and score3:4.
 Commands/results and limits are retained in [offline TDM evidence](offline-tdm.md).
 Coordinator now owns the serial engine/release lease; frozen full regression,
-export and real browser acceptance are pending. Existing
+export and real browser acceptance are pending. First freeze f888fe92a68e passes
+earlier suites but stops on a pre-existing SilentAudio override signature that
+missed ADR0019's optional blast-falloff argument. Root updates only that fixture
+signature and repeats the frozen build; the failed archive/log is preserved. Existing
 optimization-plan/Steam research edits are preserved. No original parity row is
 promoted by this checkpoint. Next: diagnose behavior, then freeze and verify the
 playable Web build before publication.

@@ -53,6 +53,12 @@ source-motion floor-boundary climb (`tdm-final-session.log`,
 0.01-unit surface epsilon while preserving support and actor-overlap validation;
 the same 81 assertions pass (`tdm-session-spawn-fixed.log`).
 
+The first frozen full build (`f888fe92a68e7d14308381ae74b443513ba4e678`)
+passed the earlier suites, then exposed a stale pre-existing SilentAudio fixture
+override after ADR0019 added the optional blast-falloff argument. The override in
+`tests/audio/test_audio_optimization.gd` now matches the production signature;
+application audio behavior is unchanged. The failed archive/log is preserved.
+
 Reproduce with bundled Python `tools/build.py --export`; it registers AI,
 session and actual-scene fixtures and the existing regression suite. The scene
 fixture runs at `--fixed-fps 60` and verifies normal controller input, accepted

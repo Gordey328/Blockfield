@@ -19,7 +19,7 @@ class UnversionedWorld extends VoxelWorld:
 		return {"hit": false, "valid": true, "cell": Vector3i.ZERO}
 
 class SilentAudio extends OpenSpadesAudio:
-	func _play(_path: String, _gain: float, _point: Vector3, _local: bool, _reference_distance: float) -> Node:
+	func _play(_path: String, _gain: float, _point: Vector3, _local: bool, _reference_distance: float, _blast_falloff: bool = false) -> Node:
 		return null
 
 func _initialize() -> void:
