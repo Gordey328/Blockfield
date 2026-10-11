@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Active warmed Title / aggregate CPU optimization — 2026-10-11
+## Published warmed Title / aggregate CPU optimization — 2026-10-11
 
 User requests continuing the impact work: remove remaining Title shooting stalls
 and reduce aggregate CPU. Baseline0d69907d05922316185333594e7a5ead29820c9b
@@ -29,8 +29,8 @@ from original Opus,7,442,462 PCM bytes, exact48k/channel/EOSframes, finite/overf
 reproducible99 hashes. Rules owns Extensions bounded cache/override precedence and
 new imported-PCM fixture; both leases returned. Root owns audio wet-change fixture
 and89th suite registration. Diagnostics has the serial engine lease for import,
-PCM/environment checks and new G paired exports. Browser/FPS acceptance is pending:
-first f Web baseline appears to have suspended audio, retained separately.
+PCM/environment checks and new G paired exports. First f Web baseline had
+suspended audio and remains separate from the activated G evidence below.
 Exact commands, fixture failures and limits: [Title evidence](title-impact-performance.md).
 PCM523/0 and environment76/0 pass; all specialist leases returned. Three paired
 gesture-activated actual-Main browser runs remove24 Title cells each, baseline
@@ -45,9 +45,22 @@ Frozen19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a now passes import/parser, all89
 native behavioral/latency invocations, runtime/server-launcher smoke and normal
 Web export; source_dirty=false, Godot4.7.2.stable.official.ed1daf0bf, same upstream.
 Normal local Web SMG/Title terrain destruction, magazine depletion/reload and
-F7/Verification fresh statistics are exercised. Only host pointer-lock errors
-remain; visible drag fallback works. Next: Pages publication, public hashes/input,
-final milestone documentation; all specialist/release engine leases are returned.
+F7/Verification fresh statistics are exercised; host pointer-lock errors remain
+and visible drag fallback works. Public source19c4d51c73db, Pages bundle
+836f49c0a54310024686a8e91af9c63a37e55853 reports built/no error. Independently
+downloaded metadata and all six export files match the frozen normal Web export.
+Normal public Title/SMG held touch fire, permanent cliff opening,30→0 magazine,
+reload30/90 and fresh Verification Title.vxl/324chunks/SMG are exercised; the
+public console has only engine startup messages, no warnings/errors. Screenshots
+and public hash report are linked in the Title evidence. Main Actions38129657978
+never starts the build because of the account billing lock; deploy skipped.
+Pages internal deployment38129671799 succeeds; this is not Linux CI acceptance.
+All specialist/release engine leases are returned and the five owned HTTP helpers
+are stopped. Files changed: World/Chunk, Effects, Audio, Extensions, HUD, curated
+PCM assets/converter, fixtures/build/release helpers and the subsystem/ADR docs.
+Reproducible frozen command and exact logs/results are in the evidence document.
+Next performance acceptance: sustained physical-device Title profiling and rare
+remaining peaks; iteration/full-port/listening/Linux deployment acceptance stay open.
 
 ## Weapon/block impact optimization — 2026-10-11
 
@@ -103,7 +116,7 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `b3e29b38c5733612a19ebc5529dd5c1d02cacea5`, pushed (weapon/block impact optimization).
+- Published client source: `19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a`, pushed (warmed Title impact/aggregate CPU optimization).
 - NexQuake mobile controls are merged into main through PR1, merge0fd90e75e508.
   All completed optimization commits through922f230 remain intact. Subsequent
   documentation does not change the checked game bytes. Client engine/release and
@@ -185,17 +198,20 @@ the user's chosen deployment scope is Docker/configuration preparation.
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) serves clean
-  source `b3e29b38c5733612a19ebc5529dd5c1d02cacea5`.
-  Bundle `4827fa214b92b0180a834cad87a6e5922a8db1a6`, Pages built/no error. All game changes are pushed to main;
+  source `19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a`.
+  Bundle `836f49c0a54310024686a8e91af9c63a37e55853`, Pages built/no error. All game changes are pushed to main;
   later evidence/documentation commits do not change checked game bytes.
 - Independently downloaded public metadata/HTML/JS/WASM/PCK and both audio worklets
-  match the frozen export. PCK16214544bytes SHA256
-  `d7204e76ccec9ed7d370741ca9003361ec9e96dfdccb93d76e422ed11fca99b3`;
-  HTML5568bytes SHA256 `f897388cd2eef16578030b29eed220e34ff274ead6777408ede7b154a767e4ac`.
-  Hash report `.cache/browser/block-impact-public-hashes.json`; normal public
-  screenshot `.cache/browser/block-impact-public-smg.jpg`. Menu/SMG selection,
-  entering the lab, drag look and held primary fire exercised. Pointer-lock host
-  errors are retained; no overall Title/physical-device FPS acceptance claimed.
+  match the frozen export. PCK23750832bytes SHA256
+  `4348f30f216c79d3471f1832e9d3ff94e4d47a4a8977eb8a7d94b157081d50d1`;
+  HTML5568bytes SHA256 `ac19141accd11dcc54d50adae9aa82726b74be56922b1bc8a91cd5134912a612`.
+  Hash report `.cache/benchmarks/title-public-verification.json`; normal public
+  screenshot `.cache/previews/title-normal-public.png`. Title load/SMG selection,
+  held touch fire, cliff destruction,30→0 magazine/reload30/90 and current
+  Verification map/profile exercised. Public startup has no warnings/errors;
+  local pointer-lock limits and rare measured peaks remain explicit. Three paired
+  warmed actual-Main Web runs establish the recorded improvement, not zero stalls
+  everywhere or sustained physical-device FPS acceptance.
 - Compatible [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
   stays unchanged:29,344,396bytes SHA256
   `76935d2fc59be4d5af6387266714001292a9c11a5adbf1c276a4e0a7799e168b`.
@@ -203,7 +219,7 @@ the user's chosen deployment scope is Docker/configuration preparation.
   commits differ because this release changes client presentation only. Previous
   release evidence remains in subsystem documents and frozen validation above.
 - Windows exported-PCK smoke on66e did not execute Linux. No server export/PCK
-  smoke was repeated onb3e; all88 native checks include server-launcher/network
+  smoke was repeated on19c4d51; all89 native checks include server-launcher/network
   verification. Docker, Linux and deployed TLS/WSS remain unverified;
   see [server deployment](server-deployment.md).
 

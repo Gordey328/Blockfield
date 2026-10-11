@@ -345,4 +345,52 @@ fresh Title.vxl/324chunks/SMG/profile0.75. Screenshots
 UnknownError entries and no engine script/parser/resource warning. Mouse fallback
 is visibly surfaced and used; capture/physical-device/listening acceptance is not
 implied. Exact imported samples and active Web mixer release counts remain the
-audio evidence. Public metadata/hashes and normal public interaction follow.
+audio evidence. Normal public verification is recorded below.
+
+## Published normal Web verification
+
+The frozen clean19c4d51c73db export is published at
+[GitHub Pages](https://gordey328.github.io/Blockfield/?impact=19c4d51c73db).
+Bundle836f49c0a54310024686a8e91af9c63a37e55853 reports built/no error;
+Pages internal workflow38129671799 succeeds. Publication command:
+
+```powershell
+python tools/publish_pages.py
+python .cache/verify_title_pages.py
+```
+
+Publication log `.cache/logs/title-pages-publication.log`; independently
+downloaded public metadata and all six files exactly match `build/web` and the
+frozen export. Hash report `.cache/benchmarks/title-public-verification.json`:
+
+| File | Bytes | SHA256 |
+| --- | --- | --- |
+| index.html | 5568 | ac19141accd11dcc54d50adae9aa82726b74be56922b1bc8a91cd5134912a612 |
+| index.js | 279815 | 33c94cb3175f3333b82e2a3be5e8e86f77986f0aa2042b1631f6367a4e5bb6ba |
+| index.wasm | 39514754 | fc74679e3b97f76878947fcd4fbe1268cbfa6188182a2e33bbc3f5dc9bfa57d0 |
+| index.pck | 23750832 | 4348f30f216c79d3471f1832e9d3ff94e4d47a4a8977eb8a7d94b157081d50d1 |
+| index.audio.worklet.js | 7298 | 5b476a9c9ce642c0ee4256436d1bc31d9c38f868aca0f9a8e2a57c18d2dec2a3 |
+| index.audio.position.worklet.js | 2973 | be33985bc7160d6bf9646f259cd86b259cd67b02ccb297ee5c44f8ac84327bc8 |
+
+Normal public game has no diagnostic scene/overlay. Russian Arsenal selects SMG,
+unlimited ammunition is disabled for an observable test, World menu loads original
+Title.vxl, then Play enters the rendered map/minimap. This615x476 viewport shows
+touch controls: a canvas hold only activates the look surface and does not fire;
+holding the actual visible Fire button fires continuously. Magazine30→4→0,
+colored fragments and a persistent cliff opening are visible. The visible Reload
+button restores30/90. Verification shows Title.vxl,324chunks, SMG/profile0.75.
+Screenshots `.cache/previews/title-normal-public{,-empty,-verification}.png`;
+console `.cache/logs/title-normal-public-console.json` has only three Godot/
+Compatibility/Emscripten startup messages, no engine warnings or errors. The tab
+is left on the published game. This is rendering/input validation, not another
+timing run or physical-device/listening acceptance.
+
+Current main Actions38129657978 at documentation commitd41293d never starts its
+build: the check annotation explicitly reports an account billing lock, and deploy
+is skipped. `.cache/benchmarks/title-actions-validation.json` retains the fresh
+jobs/annotations. No account/billing setting is changed. A successful Pages
+internal deployment and the local frozen89-check release do not establish Linux
+CI acceptance. Final documentation changes do not alter checked production bytes.
+All engine leases are returned; the five owned temporary HTTP servers on
+8901/8903/8905/8907/8911 are stopped. Remaining performance acceptance concerns
+rare63.9ms frames on this host and sustained original-map physical-device runs.

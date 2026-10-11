@@ -220,11 +220,16 @@ Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path g
 2026-10-11, W02/W07/U11/U12: continued warmed Title optimization batches unchanged
 world units without per-column packed ownership overhead, skips identity particle
 work/hidden statistics scans and predecodes49 original Opus clips to source-native
-PCM16. PCM523/0, environment76/0 and fragment34/0 pass. Three gesture-activated
+PCM16. PCM523/0, environment76/0 and deterministic fragment44/0 pass; frozen
+19c4d51c73db repeats all89 registered native behavioral/latency invocations,
+parser/import and normal Web export. Three gesture-activated
 actual-Main browser pairs remove24 original Title cells each: baseline shoot
 p95103.1/114.1/119.8ms, candidate46.6/46.7/45.9ms; mean instrumented script CPU
 per shot−9.1%, idle CPU/realsecond−20.3%. Mixer/GPU/host and rare63.9ms frames are
-explicit. Full-row status stays IMPLEMENTED. Frozen normal release evidence and
+explicit. Normal clean source19c4d51c73db is published as Pages bundle836f49c0;
+public metadata/six-file hashes, Title/SMG terrain destruction, magazine/reload
+and Verification render/input pass without public engine warnings/errors.
+Full-row status stays IMPLEMENTED. Frozen normal release evidence and
 exact commands/artifacts belong in [Title evidence](title-impact-performance.md)
 and [ADR0016](decisions/0016-impact-cpu-batching.md).
 
