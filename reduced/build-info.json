@@ -1,0 +1,13 @@
+{
+  "engine": "4.7.2",
+  "iteration": 1,
+  "status": "development",
+  "upstream": "dcf449c845d509bbde9d79239b32d201c1389961",
+  "source_commit": "3d1199cb0251f1cfe9c13cbd66a553264a34c1e5",
+  "source_dirty": false,
+  "web_template": {
+    "kind": "reduced",
+    "sha256": "a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922",
+    "profile_sha256": "17ac32fffba5b52fe9becd7c9e4313d79c3d53d6cd9e0c9d894a9aebcf5726c1"
+  }
+}
