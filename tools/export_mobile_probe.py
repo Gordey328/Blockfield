@@ -17,7 +17,7 @@ PREVIEW_HTML = """<!doctype html>
 <title>Blockfield isolated mobile input probe</title>
 <style>body{margin:12px;background:#07121c;color:#dfedf5;font:14px system-ui}button{padding:10px;margin:0 8px 10px 0}iframe{display:block;border:1px solid #456;background:#101e29}pre{white-space:pre-wrap;max-width:1000px;max-height:420px;overflow:auto;padding:10px;background:#101e29}h1{font-size:20px;margin:4px 0 10px}</style>
 <h1>Actual Godot Web mobile input probe</h1>
-<p>Use Run mobile checks inside the game. Synthetic desktop events do not prove physical-phone comfort.</p>
+<p>Use Run DOM touch checks inside the game. Authored browser events cross the JS/WASM boundary; physical-phone comfort remains untested.</p>
 <button data-size="844,390">Landscape844x390</button>
 <button data-size="390,844">Portrait390x844</button>
 <button data-size="1280,720">Desktop1280x720</button>

@@ -145,16 +145,17 @@ func get_hit_regions() -> Dictionary:
 	return _regions.duplicate()
 
 ## These two public methods use local logical pixels, exactly as _input does
-## after converting viewport coordinates. Negative touch indices are invalid.
+## after converting viewport coordinates. Web Touch.identifier is signed32;
+## normalize native IDs separately from internal negative mouse/empty markers.
 func handle_touch(index: int, position: Vector2, pressed: bool, canceled: bool = false) -> bool:
-	if index < 0 or not position.is_finite():
+	if index < -2147483648 or index > 2147483647 or not position.is_finite():
 		return false
-	return _handle_pointer(index, position, pressed, canceled, true)
+	return _handle_pointer(index & 0xffffffff, position, pressed, canceled, true)
 
 func handle_drag(index: int, position: Vector2, relative: Vector2) -> bool:
-	if index < 0 or not position.is_finite() or not relative.is_finite():
+	if index < -2147483648 or index > 2147483647 or not position.is_finite() or not relative.is_finite():
 		return false
-	return _drag_pointer(index, position, relative)
+	return _drag_pointer(index & 0xffffffff, position, relative)
 
 func _input(event: InputEvent) -> void:
 	_sync_active()

@@ -1,10 +1,11 @@
 extends Node
-## Test-only genuine Main/HUD/Player Web scene. Synthetic events exercise Godot's
-## _input routing; they do not establish physical-phone multitouch or comfort.
+## Test-only genuine Main/HUD/Player Web scene. Authored DOM TouchEvents cross
+## Godot's JS/WASM boundary; they do not establish physical-phone comfort.
 const MAIN: PackedScene = preload("res://scenes/main.tscn")
 const TURN: float = 400.0 * PI / 180.0
 const EPS: float = 0.00006
 const TOUCH_BASE: int = 20
+const DOM_IDS: Array[int] = [-1, -2, -2147483648, 2147483647, 0]
 
 class PanelInputGuard extends Node:
 
@@ -94,7 +95,7 @@ func _ready() -> void:
 	while not app.player.can_use_tool() and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
 	is_ready = app.player.can_use_tool()
-	phase = "Ready — synthetic desktop checks" if is_ready else "Weapon readiness timed out"
+	phase = "Ready — DOM touch checks" if is_ready else "Weapon readiness timed out"
 	run_button.disabled = not is_ready
 	_publish("ready" if is_ready else "failed")
 	print("MOBILE WEB: genuine Main ready; physical phone untested: ", is_ready)
@@ -121,7 +122,7 @@ func _create_panel() -> void:
 	title.text = "MOBILE INPUT — ACTUAL GODOT WEB"
 	column.add_child(title)
 	run_button = Button.new()
-	run_button.text = "Run mobile checks"
+	run_button.text = "Run DOM touch checks"
 	run_button.custom_minimum_size = Vector2(316, 42)
 	run_button.focus_mode = Control.FOCUS_NONE
 	run_button.disabled = true
@@ -165,7 +166,7 @@ func _process(_delta: float) -> void:
 	if status == null:
 		return
 	status.text = phase + "\n%d checks / %d failures\n" % [assertions, failures] \
-		+ "Synthetic touch through _input; physical phone untested.\n" \
+		+ "Signed DOM touch IDs; physical phone untested.\n" \
 		+ "Actual rendered gameplay; left40% / right60%."
 
 func _publish(state: String) -> void:
@@ -173,7 +174,8 @@ func _publish(state: String) -> void:
 		return
 	var report: Dictionary = {
 		"status": state, "phase": phase, "checks": assertions, "failures": failures,
-		"physical_phone_tested": false, "events": "Input.parse_input_event ScreenTouch/ScreenDrag",
+		"physical_phone_tested": false, "events": "DOM TouchEvent → Godot JS i32 → WASM ScreenTouch/ScreenDrag",
+		"touch_identifiers": DOM_IDS,
 		"canvas": {"width": mobile.size.x, "height": mobile.size.y}, "results": rows,
 	}
 	# DOM storage permits read-only browser inspection without reaching engine
@@ -218,6 +220,9 @@ func _neutral() -> void:
 	_reset_pose()
 
 func _touch(index: int, position: Vector2, pressed: bool, canceled: bool = false) -> void:
+	if OS.has_feature("web"):
+		_dom_touch("touchcancel" if canceled else ("touchstart" if pressed else "touchend"), DOM_IDS[index], position)
+		return
 	var event: InputEventScreenTouch = InputEventScreenTouch.new()
 	event.index = TOUCH_BASE + index
 	# parse_input_event expects window/screen coordinates; Window subsequently
@@ -233,6 +238,9 @@ func _touch(index: int, position: Vector2, pressed: bool, canceled: bool = false
 	injecting = false
 
 func _drag(index: int, position: Vector2, wrong_relative: Vector2 = Vector2(9999, -7777)) -> void:
+	if OS.has_feature("web"):
+		_dom_touch("touchmove", DOM_IDS[index], position)
+		return
 	var event: InputEventScreenDrag = InputEventScreenDrag.new()
 	event.index = TOUCH_BASE + index
 	var to_screen: Transform2D = mobile.get_viewport().get_screen_transform() * mobile.get_global_transform_with_canvas()
@@ -241,6 +249,22 @@ func _drag(index: int, position: Vector2, wrong_relative: Vector2 = Vector2(9999
 	event.window_id = get_window().get_window_id()
 	injecting = true
 	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+	injecting = false
+
+func _dom_touch(kind: String, identifier: int, position: Vector2) -> void:
+	var to_screen: Transform2D = mobile.get_viewport().get_screen_transform() * mobile.get_global_transform_with_canvas()
+	var screen_position: Vector2 = to_screen * position
+	var script: String = "(() => {const c=document.getElementById('canvas'),r=c.getBoundingClientRect();" \
+		+ "const id=" + str(identifier) + ",kind=" + JSON.stringify(kind) + ";" \
+		+ "const t=new Touch({identifier:id,target:c,clientX:r.left+" + str(screen_position.x) + "*r.width/c.width," \
+		+ "clientY:r.top+" + str(screen_position.y) + "*r.height/c.height});" \
+		+ "const active=window.__blockfieldDOMTouches??=new Map();" \
+		+ "if(kind==='touchend'||kind==='touchcancel')active.delete(id);else active.set(id,t);" \
+		+ "c.dispatchEvent(new TouchEvent(kind,{changedTouches:[t],touches:[...active.values()]," \
+		+ "targetTouches:[...active.values()],bubbles:true,cancelable:true}));})();"
+	injecting = true
+	JavaScriptBridge.eval(script, true)
 	Input.flush_buffered_events()
 	injecting = false
 
@@ -323,7 +347,7 @@ func _run_checks() -> void:
 	_touch(1, look + delta, false)
 	app.player.flush_touch_motion()
 	_check(_yaw_is(-PI * 0.5) and absf(app.player.head.rotation.x + TURN * 0.025) < EPS,
-		"Owned position defeats corrupt relative; normal UP keeps pending90deg turn",
+		"Owned position produces90deg turn across native browser input; normal UP keeps it",
 		{"yaw_degrees": rad_to_deg(app.player.rotation.y), "pitch_degrees": rad_to_deg(app.player.head.rotation.x)})
 	_check(not app.player.flush_touch_motion(), "A queued swipe is consumed exactly once")
 	_touch(0, move, false)
@@ -343,7 +367,17 @@ func _run_checks() -> void:
 	_touch(1, look, true)
 	_drag(1, look + Vector2(90, 0))
 	_touch(1, look, false, true)
-	_check(not app.player.flush_touch_motion() and _yaw_is(0.0), "Canceled look clears pending camera motion")
+	if OS.has_feature("web"):
+		# Pinned Godot maps DOM touchcancel to ordinary END. Verify that it
+		# releases the claim; native canceled=true separately tests queue clearing.
+		var pending_yaw: float = app.player.rotation.y
+		app.player.clear_touch_motion()
+		_drag(1, look + Vector2(120, 0))
+		_check(not app.player.flush_touch_motion() and app.player.rotation.y == pending_yaw,
+			"DOM touchcancel releases its signed-ID owner; subsequent MOVE is ignored")
+		_neutral()
+	else:
+		_check(not app.player.flush_touch_motion() and _yaw_is(0.0), "Canceled look clears pending camera motion")
 	_touch(0, move, true)
 	_drag(0, move + Vector2(0, -65))
 	_touch(1, look, true)
@@ -418,6 +452,6 @@ func _run_checks() -> void:
 	mobile.release_all()
 	busy = false
 	run_button.disabled = false
-	phase = "PASS — synthetic touch checks" if failures == 0 else "FAIL — inspect DOM results"
+	phase = "PASS — DOM touch checks" if failures == 0 else "FAIL — inspect DOM results"
 	_publish("passed" if failures == 0 else "failed")
 	print("MOBILE WEB: ", assertions, " checks / ", failures, " failures; physical phone untested")

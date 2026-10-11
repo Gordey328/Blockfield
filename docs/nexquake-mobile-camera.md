@@ -187,3 +187,65 @@ pending status insertion and left its helper/documents untouched. That insertion
 remains pending under its owning chat rather than being committed into this release.
 All own diagnostic/normal/public browser tabs and preview servers8877/8878 closed;
 other chats' tabs/processes were retained. Engine/release leases are returned.
+
+## iPhone combat input failure — 2026-10-11
+
+The user reports that Chrome on iPhone accepts main-menu taps but every combat
+control is dead. The prior positive-ID `Input.parse_input_event` probe and desktop
+preview did not cover native browser identifiers. The production public touch
+handlers rejected all negative indices. WebKit's iOS identifier generator seeds
+an unsigned32 counter with `arc4random()`, and DOM Touch/Godot Web carry signed32
+identifiers. High-bit IDs therefore hit that rejection. This is a proved input
+compatibility defect and a concrete explanation of the report; matching the
+individual phone still requires the user's retry.
+
+Primary source chain:
+
+- [WebKit random identifier seed](https://github.com/WebKit/WebKit/blob/5366911032cc8110a316535db51be0c961f9a708/Source/WebKit/UIProcess/ios/WKTouchEventsGestureRecognizer.mm#L67).
+- [Signed DOM Touch IDL](https://github.com/WebKit/WebKit/blob/5366911032cc8110a316535db51be0c961f9a708/Source/WebCore/dom/Touch.idl#L40).
+- [Pinned Godot JS i32 write](https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/platform/web/js/libs/library_godot_input.js#L593)
+  and [ScreenTouch index assignment](https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/platform/web/display_server_web.cpp#L713).
+
+The fix accepts signed32 IDs and maps each to its unsigned32 value in a Godot64-bit
+integer before owner lookup. Real IDs `-1/-2` cannot collide with internal mouse
+and no-owner markers. Finite-coordinate validation and immutable gesture roles
+remain intact. Only MobileControls changes in production; HUD, PlayerController,
+authority, world, audio and all completed optimization work retain their bytes.
+The browser fixture now dispatches DOM TouchEvents with IDs `-1`, `-2`, INT_MIN,
+INT_MAX and0 through the actual JS/WASM boundary. Engine-native cancellation and
+DOM cancellation are distinguished because pinned Godot maps DOM cancel to UP.
+
+Frozen source2d60434b7534ff75c2a1b3863d235b643d0ea0b8 passed parser/import,
+controls3090/0, actual Main mobile-look209/0, UI284/0, source-input35/0,
+network-controller514/0, camera-target-rays11/0, runtime smoke and normal Web
+export on pinned Godot4.7.2. This is focused validation of the one production
+file changed since26bdf7d, with all85-check baseline evidence retained; it is
+not a claim that all85 suites reran on this fix. Frozen logs:
+`.cache/release-2d60434b7534/.cache/logs/`.
+
+The same DOM fixture failed15/5 on the prior game bytes (movement0/shots0)
+and passed15/0 on the fixed bytes at844x390 and390x844. Landscape movement
+3.732885/two genuine shots; portrait3.732935/two shots. Owned swipe yaw is
+-90deg/pitch-10deg in both. Input script hashes match the frozen normal source.
+Reports/screenshots: `.cache/browser/iphone-dom-{red,landscape,portrait}.*`.
+The probe captured the same unattributed MutationObserver exception without a
+source URL as the prior diagnostic; no Godot script errors were captured. This
+exception is recorded without attribution, and does not negate the completed
+assertions. Normal public rendering/input is checked separately after publication.
+Native RED3090/13 log: `.cache/logs/nexquake-signed-touch-red.log`.
+
+Reproduce the focused native checks with the pinned executable:
+`Godot_v4.7.2-stable_win64_console.exe --headless --path <frozen>/game
+--fixed-fps 60 --script <frozen>/tests/ui/test_mobile_controls.gd`, substituting
+`tests/integration/test_mobile_look.gd`, `tests/ui/test_ui.gd`,
+`tests/integration/test_source_input.gd`, `tests/network/test_network_controller.gd`
+and `tests/gameplay/test_camera_target_rays.gd` for the remaining fixtures.
+Import uses `--editor --import --quit`, runtime uses `--quit-after 120`, export
+uses `--export-release Web <output>/index.html`. Freeze with `git archive` of
+2d60434 first. `tools/export_mobile_probe.py --source <frozen> --name <unique>
+--godot <absolute executable> --import-cache <frozen>/game/.godot` creates the
+separate DOM diagnostic; serve its build/web and use the visible run/size buttons.
+
+Native-fixture specialist and read-only upstream reviewer have returned their
+leases. Root owns only integration/publication; concurrent AoS research remains
+untouched. Physical iPhone retry remains pending.
