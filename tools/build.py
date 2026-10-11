@@ -1,6 +1,7 @@
 """Reproducible Godot validation and web export (Python 3 standard library)."""
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import platform
@@ -101,9 +102,10 @@ def main():
     suites += [('audio-optimization','tests/audio/test_audio_optimization.gd'),('vxl-jobs','tests/world/test_vxl_jobs.gd'),('model-cache-bounds','tests/presentation/test_model_cache_bounds.gd'),('vxl-main','tests/integration/test_vxl_main.gd')]
     suites += [('tdm-bots','tests/ai/test_tdm_bots.gd'),('offline-tdm','tests/session/test_offline_tdm.gd'),('offline-tdm-scene','tests/integration/test_offline_tdm_scene.gd')]
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
+    suites += [('blockfield-map','tests/world/test_blockfield_map.gd'),('native-map-main','tests/integration/test_native_map_main.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
     run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
                 '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)
@@ -123,7 +125,16 @@ def export_web():
     finally:
         preset.write_bytes(original)
     (folder/'.nojekyll').write_text('')
-    (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961',**source_state(),**template_metadata},indent=2)+'\n',encoding='utf-8')
+    maps=[]
+    map_source=ROOT/'game'/'assets'/'maps'
+    if map_source.is_dir():
+        (folder/'maps').mkdir(parents=True,exist_ok=True)
+        for path in sorted(map_source.iterdir()):
+            if path.is_file() and path.suffix.lower() in ('.bfmap','.md'):
+                shutil.copy2(path,folder/'maps'/path.name)
+                if path.suffix.lower()=='.bfmap':
+                    maps.append({'path':'maps/'+path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
+    (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961','bundled_maps':maps,**source_state(),**template_metadata},indent=2)+'\n',encoding='utf-8')
     shutil.copy2(ROOT/'LICENSE',folder/'LICENSE.txt')
     shutil.copytree(ROOT/'game'/'assets'/'openspades'/'licenses',folder/'notices',dirs_exist_ok=True)
     shutil.copytree(ROOT/'licenses',folder/'notices'/'engine',dirs_exist_ok=True)

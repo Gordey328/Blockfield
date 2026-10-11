@@ -3,6 +3,7 @@ extends Node3D
 @export var offline_tdm_mode: bool = false
 const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
 const TDM_ARENA = preload("res://ai/tdm_arena.gd")
+const BLOCKFIELD_MAP = preload("res://world/blockfield_map.gd")
 const NETWORK_CLIENT = preload("res://network/client_replica.gd")
 const NETWORK_SESSION = preload("res://network/network_session.gd")
 var network_client: NETWORK_CLIENT
@@ -65,6 +66,7 @@ var _export_transfer_request: int = -1
 var _export_transfer_stats: Dictionary = {}
 var _map_baseline := PackedByteArray()
 var _map_baseline_name := ""
+var _map_metadata: Dictionary = {}
 var _vxl_request_id: int = 0
 var _vxl_notice_caption: String = ""
 var _vxl_notice_percent: int = -1
@@ -249,6 +251,9 @@ func _spawn_targets() -> void:
 		target.queue_free()
 	_target_nodes.clear()
 	session.targets.clear()
+	# Imported maps have their own playable layout. Add lab soldiers explicitly
+	# instead of placing the test-ground roster inside arbitrary buildings.
+	if not _map_metadata.is_empty(): return
 	for i in 6:
 		var point:=Vector3(35.0+i*5.0,4.0,48.0 if i<3 else 35.0)
 		if world.dimensions.x>96:
@@ -355,6 +360,8 @@ func reset_lab() -> void:
 	clear_corpses()
 	_map_baseline=PackedByteArray()
 	_map_baseline_name=""
+	_map_metadata.clear()
+	world.set_water_enabled(_map_water_enabled())
 	if effects!=null:effects.clear()
 	for grenade in _grenade_nodes.values():
 		if is_instance_valid(grenade):grenade.queue_free()
@@ -376,8 +383,7 @@ func reset_match() -> void:
 		reset_lab()
 		return
 	var request := _begin_vxl_request("Восстановление карты…" if locale == "ru" else "Restoring map…")
-	var budget := _vxl_work_budget()
-	var error: Error = await world.load_vxl_bytes_incremental(_map_baseline,_map_baseline_name,budget.x,budget.y)
+	var error: Error = await _load_map_bytes(_map_baseline,_map_baseline_name,request)
 	if not _vxl_request_current(request): return
 	_vxl_notice_caption = ""
 	_finish_map_load(error)
@@ -466,7 +472,54 @@ func load_original_map() -> void:
 	if error==OK:
 		_map_baseline=bytes
 		_map_baseline_name="Title.vxl"
+		_map_metadata.clear()
+		world.set_water_enabled(_map_water_enabled())
 	_finish_map_load(error)
+
+func _load_map_bytes(bytes: PackedByteArray, title: String, request: int) -> Error:
+	if bytes.slice(0,4).get_string_from_ascii() != BLOCKFIELD_MAP.MAGIC and not title.to_lower().ends_with(".bfmap"):
+		var budget: Vector2i = _vxl_work_budget()
+		var error: Error = await world.load_vxl_bytes_incremental(bytes,title,budget.x,budget.y)
+		if error == OK:
+			_map_metadata.clear()
+			world.set_water_enabled(_map_water_enabled())
+		return error
+	# Publish the loading notice before the bounded native decode. Adoption is
+	# atomic and a reset or newer request can cancel this foreground operation.
+	await get_tree().process_frame
+	if not _vxl_request_current(request): return ERR_SKIP
+	var decoded: Dictionary = BLOCKFIELD_MAP.load_bytes(bytes,world.data.epoch+1)
+	if decoded.error != OK: return decoded.error
+	var metadata: Dictionary = decoded.metadata
+	var spawn_values: Array = metadata.spawn
+	var spawn: Vector3 = Vector3(float(spawn_values[0]),float(spawn_values[1]),float(spawn_values[2]))
+	var error: Error = world.set_map_data(decoded.data,str(metadata.title),true,spawn)
+	if error == OK:
+		_map_metadata = metadata
+		world.set_water_enabled(_map_water_enabled())
+	return error
+
+func _map_water_enabled() -> bool:
+	return bool(graphics_options.water) and _map_metadata.get("water_enabled",true) != false
+
+func get_local_map_paths() -> Array[String]:
+	var paths: Array[String] = []
+	var names: Dictionary = {}
+	for directory: String in ["res://assets/maps","res://assets/local_maps"]:
+		var folder: DirAccess = DirAccess.open(directory)
+		if folder == null: continue
+		for filename: String in folder.get_files():
+			var key: String = filename.to_lower()
+			if key.ends_with(".bfmap") and not names.has(key):
+				names[key] = true
+				paths.append(directory+"/"+filename)
+	paths.sort()
+	return paths
+
+func load_local_map(path: String) -> void:
+	if network_mode or offline_tdm_mode or _upload_pending or not get_local_map_paths().has(path): return
+	_upload_kind = "map"
+	await _apply_upload(FileAccess.get_file_as_bytes(path),path.get_file())
 
 func _finish_map_load(error: Error) -> void:
 	if error == ERR_SKIP: return
@@ -479,6 +532,10 @@ func _finish_map_load(error: Error) -> void:
 		flashlight_on=false
 		session.reset_lab()
 		player.respawn_at(world.get_spawn_position())
+		var yaw_value: Variant = _map_metadata.get("yaw_radians")
+		if typeof(yaw_value) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(yaw_value)):
+			player.rotation.y = float(yaw_value)
+			player.head.rotation.x = 0.0
 		_spawn_targets()
 		_setup_objectives()
 		hud.show_notice("Map loaded: %s" % _map_baseline_name)
@@ -500,7 +557,7 @@ func _choose_upload(kind: String) -> void:
 		var window:=JavaScriptBridge.get_interface("window")
 		window.BlockfieldFileReceiver=_upload_callback
 		var maximum:=32*1024*1024 if kind=="pack" else 80*1024*1024
-		var extension:=".zip" if kind=="pack" else ".vxl"
+		var extension:=".zip" if kind=="pack" else ".vxl,.bfmap"
 		# Only this fixed application code is evaluated; selected file contents
 		# stay binary data and are passed to the validated format loader.
 		JavaScriptBridge.eval("""
@@ -521,7 +578,7 @@ func _choose_upload(kind: String) -> void:
 		var dialog:=FileDialog.new()
 		dialog.access=FileDialog.ACCESS_FILESYSTEM
 		dialog.file_mode=FileDialog.FILE_MODE_OPEN_FILE
-		dialog.filters=PackedStringArray(["*.zip ; Blockfield resource pack"] if kind=="pack" else ["*.vxl ; VXL voxel map"])
+		dialog.filters=PackedStringArray(["*.zip ; Blockfield resource pack"] if kind=="pack" else ["*.vxl ; VXL voxel map","*.bfmap ; Blockfield voxel map"])
 		add_child(dialog)
 		dialog.file_selected.connect(func(path: String):
 			_apply_upload(FileAccess.get_file_as_bytes(path),path.get_file())
@@ -542,11 +599,10 @@ func _receive_upload(arguments: Array) -> void:
 
 func _apply_upload(bytes: PackedByteArray,filename: String) -> void:
 	_upload_pending=false
-	if network_mode and _upload_kind == "map": return
+	if (network_mode or offline_tdm_mode) and _upload_kind == "map": return
 	if _upload_kind=="map":
 		var request := _begin_vxl_request("Загрузка карты…" if locale == "ru" else "Loading map…")
-		var budget := _vxl_work_budget()
-		var error: Error = await world.load_vxl_bytes_incremental(bytes,filename,budget.x,budget.y)
+		var error: Error = await _load_map_bytes(bytes,filename,request)
 		if not _vxl_request_current(request): return
 		_vxl_notice_caption = ""
 		if error==OK:
@@ -633,23 +689,51 @@ func set_skin(id: String) -> void:
 
 func save_map() -> void:
 	var request := _begin_vxl_request("Сохранение карты…" if locale == "ru" else "Saving map…")
-	var budget := _vxl_work_budget()
-	var bytes: PackedByteArray = await world.encode_vxl_incremental(budget.x,budget.y)
+	var bytes: PackedByteArray
+	var filename: String = "blockfield-map.vxl"
+	if _map_metadata.is_empty():
+		var budget: Vector2i = _vxl_work_budget()
+		bytes = await world.encode_vxl_incremental(budget.x,budget.y)
+	else:
+		await get_tree().process_frame
+		if not _vxl_request_current(request): return
+		bytes = BLOCKFIELD_MAP.encode(world.data,_native_save_metadata())
+		filename = "blockfield-map.bfmap"
 	if not _vxl_request_current(request): return
 	_vxl_notice_caption = ""
 	if bytes.is_empty():
-		if int(world.get_vxl_job_stats().get("error",OK)) == ERR_SKIP: return
+		if filename.ends_with(".vxl") and int(world.get_vxl_job_stats().get("error",OK)) == ERR_SKIP: return
 		hud.show_alert("Map encoding failed","error")
 		return
 	if OS.has_feature("web"):
-		if not await _show_web_export_incremental(bytes,"blockfield-map.vxl","application/octet-stream",request): return
+		if not await _show_web_export_incremental(bytes,filename,"application/octet-stream",request): return
 	else:
-		var file:=FileAccess.open("user://blockfield-map.vxl",FileAccess.WRITE)
+		var file:=FileAccess.open("user://"+filename,FileAccess.WRITE)
 		if file==null:
 			hud.show_alert("Map save failed","error")
 			return
 		file.store_buffer(bytes)
-	hud.show_notice("VXL map ready" if OS.has_feature("web") else "VXL map saved")
+	hud.show_notice("Map ready: "+filename if OS.has_feature("web") else "Map saved: "+filename)
+
+func _native_save_metadata() -> Dictionary:
+	var document: Dictionary = _map_metadata.duplicate(true)
+	var candidates: Array = [document.get("spawn"),[player.global_position.x,player.global_position.y,player.global_position.z]]
+	var teams: Variant = document.get("team_spawns")
+	if teams is Dictionary:
+		for roster: Variant in teams.values():
+			if roster is Array: candidates.append_array(roster.slice(0,64))
+			if candidates.size() >= 130: break
+	for values: Variant in candidates:
+		if not values is Array or values.size() != 3: continue
+		var valid_numbers: bool = true
+		for value: Variant in values:
+			if typeof(value) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(value)): valid_numbers = false
+		if not valid_numbers: continue
+		var feet: Vector3 = Vector3(float(values[0]),float(values[1]),float(values[2]))
+		if BLOCKFIELD_MAP.is_valid_spawn(world.data,feet):
+			document.spawn = values.duplicate()
+			break
+	return document
 
 func _begin_vxl_request(caption: String) -> int:
 	_cancel_vxl_request()
@@ -887,7 +971,7 @@ func _apply_graphics() -> void:
 	world.set_water_reflections_enabled(bool(graphics_options.water_reflections))
 	if not bool(graphics_options.ragdolls):clear_corpses()
 	if world.has_method("set_draw_distance"):graphics_options.draw_distance=world.set_draw_distance(float(graphics_options.draw_distance))
-	world.set_water_enabled(bool(graphics_options.water))
+	world.set_water_enabled(_map_water_enabled())
 	# Native sunLightDirection=(0,-1,-1); map axes convert this to (0,1,-1).
 	$Sun.rotation_degrees=Vector3(-45,180,0)
 	$Sun.shadow_enabled=bool(graphics_options.shadows)

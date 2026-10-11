@@ -13,7 +13,8 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--port',type=int,default=8060)
+    parser.add_argument('--directory',type=Path)
     args=parser.parse_args()
-    root=Path(__file__).resolve().parents[1]/'build'/'web'
+    root=args.directory.resolve() if args.directory else Path(__file__).resolve().parents[1]/'build'/'web'
     print(f'Serving {root} at http://127.0.0.1:{args.port}',flush=True)
     ThreadingHTTPServer(('127.0.0.1',args.port),partial(Handler,directory=str(root))).serve_forever()

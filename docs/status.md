@@ -3,6 +3,22 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Combined Mirage/effects Pages release — 2026-10-11 (in progress)
+
+The user explicitly requests waiting for the concurrent effects chat to finish,
+combining its accepted changes with Mirage and publishing the result to Pages.
+Root owns bundled-map catalog/export/provenance, actual Main integration fixture,
+ADR0026, frozen combined checks, browser verification and serial publication.
+The effects task completed its turn and public verification; runtime1b02c64 and
+evidence b7d7496 are committed/pushed. Combined integration starts from that source.
+Mirage's validated native package is copied unchanged to game/assets/maps; ignored
+local maps and raw/Blender source stay excluded. See
+[ADR0026](decisions/0026-bundled-map-publication.md). No unrelated Steam/optimization
+files are staged. Godot4.7.2.stable.official.ed1daf0bf and OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned.
+Next: completed effects handoff, committed combined source, full frozen checks/
+normal Web export, local/public Mirage interaction and matching public hashes.
+
 ## Fixed50 noncolliding effects — 2026-10-11 (published development build)
 
 User authorizes a hard50 decorative particle pool and removal of particle
@@ -49,6 +65,74 @@ release. Public startup, forward movement and SMG Fire pass; visible head75 dama
 confirms firing with retained mobile controls. All specialist handoffs are complete;
 temporary probe tabs/HTTP helper are closed before turn end. Next acceptance:
 target-device/whole-game CPU/GPU and broader port parity, with no FPS claim here.
+
+## Local Mirage conversion — 2026-10-11 (verified local conversion)
+
+User supplies C:/Users/Gordey/Downloads/csgo_mirage and requests Blender first,
+then Blockfield blocks. Root owns bootstrap_blender.py, Main/HUD/World optional
+spawn, export/build registration, native Main integration fixture and ADR0024/docs.
+Specialist goldsrc_decoder owns only tools/map_import/goldsrc.py and its Python
+fixture; blender_pipeline owns only its scene/voxel/helper tools; native_map_loader
+owns only BlockfieldMap and its Godot fixture. Contracts agreed before parallel
+edits; root owns shared config and serial Godot integration. Baseline remains
+26ea9883bdef9a7436bece87e36239857651dc8e, Godot4.7.2.ed1daf0bf, upstream
+dcf449c845d509bbde9d79239b32d201c1389961. Portable Blender4.5.14LTS official ZIP
+SHA256 b9533d2397ac1984db4466fb23a7a4649391cca93f6e84209f9bcc60d071c8b9 verified.
+Actual input is GoldSrc BSP30; hash13ded0fee37ae9e9ccb2c50d798fe7c008503edba3a7f41cbb54ea012386b2b8.
+Extractor returns176models/12,242BSPfaces plus all301placed props/64MDLfiles,
+281textures/materials and646entities, with no missing model/texture resources.
+Binary/real-data Python9/9 pass;15sprites/58decals and animation/lightmap/script
+behavior remain explicit omissions. Valve format ref b1b5cf5892918535619b2937bb927e46cb097ba1.
+Final saved Blender scene has472meshes,129,796polygons/281packed images. A separate
+Blender process reopens it and converts at28units/block to171×61×165 without height
+cropping:298,384 solid cells,6,884,460 raw bytes,327,461-byte native package.
+All40 original team spawns pass full0.9×2.7 standing clearance/four-corner support;
+32,232 safe standing cells found. QA removed technical overlays and unbounded BSP
+exterior fill using visible structural envelopes, retaining original room air.
+Native package loader95/0 includes the final actual map; Main21/0 and VXLMain15/0
+pass. Actual Compatibility GPU6/0 verifies input movement/rifle terrain destruction/
+reset and captures both first-person and whole-map renders. Final exported Web8091
+loads/walks/fires; spade digs, new blocks are placed, and map reset restores spawn/
+view/baseline. Real browser screenshots are retained. Blender/source renders checked.
+Shared workspace effects were temporarily incomplete during unrelated parallel
+edits; final checks/export use HEAD plus this task's explicit hashed overlay in
+.cache/mirage-inspection. All specialist handoffs complete and engine leases returned.
+Outputs live outside Git under Downloads/csgo_mirage_converted; final blend SHA256
+d3d86443f0ec58c45147dee3cf04a8d7d0cf31e5a5deaa69f92c49a19123e208, map SHA256
+08b69203a2dde4d276053647312dbcdd5bf20f0730203ee24c4c293934e35d3a. Default export
+excludes local map assets; isolated build/mirage-web is served at127.0.0.1:8091.
+Native save chooses another supported feet position if the original spawn floor
+is edited; dry-map metadata/water preference restored. Scripts/doors/animations,
+all-route connectivity and Mirage bot navigation remain explicit limitations.
+No public publication or parity promotion. Commands, logs, artifacts and limits:
+[conversion evidence](mirage-conversion.md), [ADR0024](decisions/0024-local-map-conversion.md).
+Final sanity:16 frozen/workspace overlay hashes, three map copies/Blender hash,
+live HTTP metadata, restored presets, Python compile9 and whitespace checks pass.
+Requested conversion and local verification complete. Optional next work: walk
+every route, simplify thin decoration and author Mirage navigation/gameplay metadata.
+
+## Blender map conversion research — 2026-10-11
+
+User requests options for downloading Blender scenes and creating Blockfield block
+maps from them. Root owns only new [pipeline proposal](blender-map-pipeline.md) and
+this insertion. Read-only specialists `blender_voxel_research` and
+`blender_map_sources` own no files or engine leases; their evidence is integrated.
+Inspected HEAD26ea9883bdef9a7436bece87e36239857651dc8e and existing workspace edits.
+Godot remains4.7.2.stable.official.ed1daf0bf; reference OpenSpades remains
+dcf449c845d509bbde9d79239b32d201c1389961. Current packed cells support compact
+dimensions up to512×64×512; VXL import always retains64MiB cells and reconstructs
+hidden interior with earth color. Current TDM navigation has one stand level per
+horizontal column. Recommend offline evaluated geometry/color extraction plus
+explicit SOLID/SHELL/CARVE/IGNORE labels, compact full-color data/gameplay metadata
+and optional VXL compatibility export. This is advisory, not an adopted ADR or
+implemented importer. Primary Blender/Godot and asset listings/licenses checked;
+no files downloaded and no actual source scene converted. Commands: Get-Content,
+rg, git status/rev-parse and primary web research. `git diff --check -- docs/status.md`
+passes; new-file `git diff --no-index --check -- NUL docs/blender-map-pipeline.md`
+reports no whitespace diagnostics (exit1 for an added file). No engine/import/gameplay/browser/export/publication run or parity
+promotion. Existing optimization-plan/status/Steam investigation edits preserved.
+Next proposed action: a small authored room/door/stairs/interior-color fixture,
+then one cropped source scene and exported-browser movement/destruction checks.
 
 ## Runtime cost assessment — 2026-10-11
 
@@ -323,6 +407,82 @@ the normal build/web checkout fast-forwards to the same bundle. Avoid replacing
 it with an older client build. Two read-only specialists and all engine/release
 leases are returned; owned HTTP helpers are stopped before turn end. Next:
 user/device feel acceptance; broader parity, performance and listening remain open.
+
+## Web build file-size inventory — 2026-10-11
+
+User requests the twenty largest files. Coordinator reads current local
+`build/web`, source `4a522ceca4edb7b007397331403915a24e689bc6`, Godot
+`4.7.2.stable.official.ed1daf0bf`, upstream unchanged. The PCK v4 directory has
+1258 entries; every payload MD5 and the complete directory boundary check pass.
+Ranking combines export files and individual PCK payloads, excluding `.git`
+and counting the PCK contents instead of the outer container. Source names are
+resolved from exported `.import` descriptors; sizes are exported payload bytes.
+WASM39514754bytes, Unifont5343042bytes, Title2106956bytes; PCK23750832bytes.
+Reproduce: `& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .cache/build_file_sizes.py`.
+Report `.cache/build-size-ranking.json`; helper is ignored under `.cache`.
+Follow-up font/audio size advisory: original bitmap Unifont has57085 glyphs
+and one4096x4096 atlas; import already enables lossless compression. The49
+curated PCM sounds deliberately avoid per-play Vorbis startup cost, as recorded
+in Title performance evidence. Read-only gzip9 experiment on their WAV sources:
+7444618→3720772bytes, all49 exact decompress round trips pass. Existing matching
+Ogg derivatives total731895bytes but are lossy derivatives, not PCM-identical.
+This measures source-file storage size only, not an implemented export or new
+browser/CPU result. Proposed compact lossless storage with loading-time expansion
+can retain gameplay PCM; QOA remains an alternative requiring listening/CPU checks.
+Reproduce: `& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .cache/font_audio_size_audit.py`.
+Report `.cache/font-audio-size-audit.json`; no font/audio import settings change.
+Further read-only index breakdown on the independently refreshed local export
+`d8e5ddb09d0ff63917d3312a758a2f9f4c584430` (no export run by this audit):
+WASM39514754bytes is byte-identical
+to installed official `web_nothreads_release.zip!/godot.wasm`. Code section
+34491944bytes, data4718879bytes, other sections/header303931bytes; no custom
+debug/name sections occur. PCK groups including import/remap metadata: PCM7469042,
+fonts5376794, images2972614, Ogg2877323, Title2106956, locales964091,
+models614590, other1239583bytes; container overhead130923bytes. PCK23751916bytes,
+game GDC scripts total817195bytes. No per-engine-subsystem sizes are inferred from
+stripped sections. Reproduce:
+`& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .cache/index_size_breakdown.py`.
+Report `.cache/index-size-breakdown.json`; no compression/build change is applied.
+Standard-template necessity follow-up: user recalls another5MB Godot export but
+does not remember whether this is raw or downloaded size. Read-only source audit
+finds actual3D physics, UI including RichTextLabel/ItemList/ColorPicker/FileDialog,
+WebSocket, ZIPReader, runtime GLTFDocument, RegEx and JavaScriptBridge dependencies.
+No current2D-physics/CSG/GridMap/video/ENet/WebRTC/UPnP usage is found; these are
+custom-template candidates, not an accepted disable list. Original translations
+include Japanese/Korean/Chinese, and dynamic ZIP/skins remain within accepted scope.
+Pinned Web source already disables Vulkan and raycast module, optimizes for size
+and enables LTO; no new savings are claimed for those existing settings.
+Current WASM39514754bytes compresses to10054758bytes at gzip9, exact round trip
+passes. Public HEAD with Accept-Encoding gzip/br returns Content-Encoding gzip,
+Content-Length10248949, HTTP200: disk size is distinct from compressed delivery.
+Reproduce: `& 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .cache/wasm_template_audit.py`.
+Report `.cache/wasm-template-audit.json`; original one-shot reports are
+`.cache/wasm-compression-size.json` and `.cache/wasm-public-head.json`.
+No custom template compile, runtime/browser acceptance or5MB target claim.
+Only this status entry and ignored audit files change; no engine lease,
+gameplay/import/browser/export/publication run or parity promotion. Existing
+optimization advisory, startup release and Steam research work remain separately owned.
+
+## Further optimization advisory — 2026-10-11
+
+User asks for more optimization ideas. Read-only coordinator audit at HEAD
+`4a522ceca4edb7b007397331403915a24e689bc6`, with two specialists owning no files
+and no engine lease, checks remaining client repetition, collapse/streaming and
+snapshot memory against the completed warmed Title/PCM work. Candidate ordering
+and evidence limits are recorded in [optimization plan](optimization-plan.md):
+one built-in pose application, disabled-flare work gate, shot-scoped hit volumes,
+packed collapse traversal, paged snapshot COW, bounded streaming retention,
+GPU-dependent 3D scaling and custom Web template delivery. Only snapshot first-write
+cost is already measured in the cited prior native fixture; proposed savings have
+no new benchmark. Pinned Godot `4.7.2.stable.official.ed1daf0bf` and upstream
+`dcf449c845d509bbde9d79239b32d201c1389961` are unchanged. This turn edits only
+docs/optimization-plan.md and this entry; startup download/release and Steam AoS
+research work are preserved. Commands: Get-Content, rg, git status/rev-parse,
+primary Godot documentation browsing and documentation git diff --check.
+No engine/import/gameplay/browser/export/publication run or parity promotion.
+Specialists return read-only handoffs; no leases remain. Next suggested work:
+measure and remove redundant pose/disabled-effect/shot geometry work, then choose
+collapse or COW changes by scenario-specific evidence.
 
 ## All-item held primary camera look — 2026-10-11
 
@@ -632,6 +792,37 @@ the user's chosen deployment scope is Docker/configuration preparation.
   or saved downloads.
 
 ## Acceptance and next work
+
+- Steam Ace of Spades comparison (2026-10-11): user requested research of their
+  installed game and specifically Universal Modder. Located Steam app224540,
+  build889629, under `C:/Program Files (x86)/Steam/steamapps/common/aceofspades`.
+  Installed mod-any-game/game-recon/reverse-engineering from Universal Modder0.2.0,
+  pinned550651675153070cce68066e07c3c8f95df86d08. `python -m um scan <install> --json`
+  indexed4651 files, unknown native/x86; local static PE/PYZ records establish
+  Python2.7/pyglet/native aoslib, not the OpenSpades C++/AngelScript runtime.
+  Root owns only `tools/inspect_aos_install.py`, `docs/aos-steam/{MODDING_PLAN,MODLOG}.md`
+  and this insertion. Two read-only specialists returned source/resource handoffs
+  without file/engine leases; existing mobile/optimization work is retained.
+  Bounded resource audit: VXL40 exact EOF, coloredZ79..239,39 maps512² column counts
+  and LunarBase250000 (500² is inference); KV6736, dense interior extension382;
+  AOS244 with243 stride36 and1 stride32. Actual existing importer accepts354,
+  rejects373 count mismatches and9 depth>64. SHA256 matches27 retail KV6 against
+  38 reference entries (34 resources+4 weak fallbacks). Classic shotgun declares
+  12 pellets; Classic SMG fields differ from0.75. Static fields are not runtime
+  measurements. Source pin remainsdcf449c845d509bbde9d79239b32d201c1389961.
+  Reproduction: bundled Python `tools/inspect_aos_install.py <install> --resources
+  --openspades .cache/openspades --pack .cache/assets/OpenSpadesDevPackage-r33.zip`;
+  module diagnostic flags and installer commands in [research log](aos-steam/MODLOG.md).
+  Resource run and repeated affected comparison passed; final JSON assertions,
+  Python py_compile, local doc links and scoped git diff --check passed. Initial
+  installer/JSON/PE/34-versus38 diagnostic issues are recorded. `godot --version`
+  reports4.7.2.stable.official.ed1daf0bf only; no game/parser/import/export or original
+  Steam gameplay run. No resources were copied into game or published, no parity
+  status changed. [Comparison and route](aos-steam/MODDING_PLAN.md) distinguish
+  exact heritage from unverified engine naming, map semantics, native physics,
+  modern tint/animation and retail wire/services. Next: one-map/model/prefab local
+  viewer and controlled real-game traces if expanding this research; Blockfield
+  accepted scope remains OpenSpadesv0.1.3. All research specialist leases returned.
 
 - NexQuake mobile integration (2026-10-11): the user requested checking the other
   chat, merging into main and updating Pages while preserving all its changes.

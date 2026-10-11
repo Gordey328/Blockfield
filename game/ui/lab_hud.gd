@@ -607,8 +607,12 @@ func _build_world(column: VBoxContainer) -> void:
 	column.add_child(_button("Сбросить испытательный полигон",main.reset_lab))
 	if main.has_method("reset_match"):column.add_child(_ui_button("Сбросить карту и матч","Reset current map and match",main.reset_match))
 	column.add_child(_button("Загрузить оригинальную карту OpenSpades",main.load_original_map))
-	column.add_child(_button("Сохранить изменённую карту .vxl",main.save_map))
-	if main.has_method("load_map_file"):column.add_child(_ui_button("Загрузить карту .vxl","Load a .vxl map",main.load_map_file))
+	column.add_child(_ui_button("Сохранить изменённую карту","Save edited map",main.save_map))
+	if main.has_method("load_map_file"):column.add_child(_ui_button("Загрузить карту (.vxl / .bfmap)","Load a map (.vxl / .bfmap)",main.load_map_file))
+	if main.has_method("get_local_map_paths"):
+		for path: String in main.get_local_map_paths():
+			var map_path: String = path
+			column.add_child(_ui_button("Открыть "+path.get_file().get_basename(),"Open "+path.get_file().get_basename(),func():main.load_local_map(map_path)))
 	if main.has_method("import_resource_pack"):column.add_child(_ui_button("Загрузить пакет ресурсов (.zip)","Load a resource pack (.zip)",main.import_resource_pack))
 	if main.has_method("clear_resource_packs"):column.add_child(_ui_button("Сбросить пакеты ресурсов","Clear resource packs",main.clear_resource_packs))
 	column.add_child(_label("Локальные правила матча",16))

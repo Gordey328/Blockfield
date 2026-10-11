@@ -536,19 +536,23 @@ func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL", defe
 	_prepare_loaded_map(title, deferred_visuals)
 	return OK
 
-func set_map_data(validated: VOXEL_DATA, title: String = "Network map", deferred_visuals: bool = false) -> Error:
+func set_map_data(validated: VOXEL_DATA, title: String = "Network map", deferred_visuals: bool = false, validated_spawn: Vector3 = Vector3.INF) -> Error:
 	# This adopts an already validated, uniquely coordinated writable model.
 	# No palette scan/copy: the receiver validated colors before this handoff.
 	if validated == null or validated.read_only or not VOXEL_DATA.valid_dimensions(validated.dimensions) or validated.blocks.size() != validated.dimensions.x * validated.dimensions.y * validated.dimensions.z:
 		return ERR_INVALID_DATA
 	if not VOXEL_DATA._u32(validated.epoch, true) or not VOXEL_DATA._u32(validated.map_sequence) or not VOXEL_DATA._u32(validated.last_tick) or not is_finite(validated.water_level) or not is_finite(validated.wade_origin_level):
 		return ERR_INVALID_DATA
+	# A map importer validates standing clearance/support before supplying this
+	# optional feet position. The world retains it for respawn and streaming.
+	if validated_spawn != Vector3.INF and (not validated_spawn.is_finite() or not validated.is_in_bounds(Vector3i(validated_spawn.floor()))):
+		return ERR_INVALID_DATA
 	data = validated
 	_clear_world_visuals()
-	_prepare_loaded_map(title, deferred_visuals)
+	_prepare_loaded_map(title, deferred_visuals, validated_spawn)
 	return OK
 
-func _prepare_loaded_map(title: String, deferred_visuals: bool = false) -> void:
+func _prepare_loaded_map(title: String, deferred_visuals: bool = false, validated_spawn: Vector3 = Vector3.INF) -> void:
 	map_name = title
 	_streaming = true
 	var center_x := dimensions.x / 2
@@ -559,6 +563,8 @@ func _prepare_loaded_map(title: String, deferred_visuals: bool = false) -> void:
 			surface_y = y + 1
 			break
 	_spawn = Vector3(center_x + 0.5, surface_y + 1.0, center_z + 0.5)
+	if validated_spawn != Vector3.INF:
+		_spawn = validated_spawn
 	_create_water(deferred_visuals)
 	set_view_position(_spawn)
 	if not deferred_visuals:
