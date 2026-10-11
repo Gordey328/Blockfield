@@ -27,9 +27,14 @@ ally, foreground wall and fast8-degree swipe retain full gain. Normal Web inspec
 finds two CSS defects: integer canvas rounding hides controls on568×320, and default
 captions clip at1280×720. Root fixes the minimum-edge tolerance and CSS-scaled type/
 icon margins; touch_ui adds four real CSS/logical-size regression cases. Import and
-controls9678/0 pass. Other template, optimization and Steam work is preserved.
+controls9678/0 pass. Frozen9f15dfe005a5db5627b52723e206c60f17a8d943 passes
+affected controls/UI/combat/look/aim and both smokes/export;1280×720 captions fit.
+Its outer568×320 browser view reports canvas567×319, exposing a further1px canvas
+edge loss; root corrects tolerance to2px and touch_ui adds these exact landscape/
+portrait cases. First actual probe finishes39/0 (the planned42 count was incorrect).
+Other template, optimization and Steam work is preserved.
 Next: freeze the CSS fixes, run affected UI/input checks and export, then repeat
-actual normal Web/42 DOM-touch checks in portrait, landscape and320px-edge layouts,
+actual normal Web/39 DOM-touch checks in portrait, landscape and320px-edge layouts,
 and publish the verified development build.
 
 ## Modern combat UI — 2026-10-11 (verified development release)

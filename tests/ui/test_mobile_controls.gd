@@ -473,8 +473,10 @@ func css_viewport_geometry() -> void:
 	# expanded-viewport rounding that previously hid controls at320CSS pixels.
 	var cases: Array[Dictionary] = [
 		{"css": Vector2(568, 320), "logical": Vector2(854, 480)},
+		{"css": Vector2(567, 319), "logical": Vector2(854, 480)},
 		{"css": Vector2(569, 320), "logical": Vector2(854, 480)},
 		{"css": Vector2(320, 568), "logical": Vector2(480, 854)},
+		{"css": Vector2(319, 567), "logical": Vector2(480, 854)},
 		{"css": Vector2(1280, 720), "logical": Vector2(854, 480)},
 	]
 	var previous_locale: String = TranslationServer.get_locale()

@@ -424,8 +424,8 @@ func _ensure_layout() -> void:
 	var button_floor: float = _logical_button_floor()
 	var css_unit: float = button_floor / MIN_CSS_BUTTON_SIZE
 	_css_unit = css_unit
-	# Integer canvas dimensions can lose <1 CSS pixel on an expanded320px edge.
-	if size.x < 319.0 * css_unit or size.y < 319.0 * css_unit:
+	# A320px outer viewport can lose1px at the canvas edge and <1px when expanded.
+	if size.x < 318.0 * css_unit or size.y < 318.0 * css_unit:
 		return
 	# Measure CSS scale only when laying out, keeping Web interop out of _draw.
 	var font_floor: int = ceili(button_floor * MIN_CSS_LABEL_SIZE / MIN_CSS_BUTTON_SIZE)
