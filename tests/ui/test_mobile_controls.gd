@@ -32,6 +32,12 @@ var simulation: MATCH
 var client: CLIENT
 var started := {}
 
+class CSSPreview extends MOBILE:
+
+	var css_scale: float = 1.0
+	func _logical_button_floor() -> float:
+		return MIN_CSS_BUTTON_SIZE / css_scale
+
 class MinimalLab extends Node3D:
 
 	var network_client: CLIENT
@@ -92,8 +98,13 @@ func _bridge_look_canceled() -> void:
 	look_cancellations += 1
 	if is_instance_valid(player): player.clear_touch_motion()
 
-func make_overlay(size: Vector2, bound_player: PLAYER = null, fixed_legacy: bool = true) -> void:
-	overlay = MOBILE.new()
+func make_overlay(size: Vector2, bound_player: PLAYER = null, fixed_legacy: bool = true, css_preview_scale: float = 0.0) -> void:
+	if css_preview_scale > 0.0:
+		var preview := CSSPreview.new()
+		preview.css_scale = css_preview_scale
+		overlay = preview
+	else:
+		overlay = MOBILE.new()
 	root.add_child(overlay)
 	overlay.setup(bound_player, null)
 	overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -456,6 +467,54 @@ func thumb_hierarchy() -> void:
 					check(overlay._hit_region(Vector2(extent.x * 0.7, extent.y * 0.5), true) == "look", "middle right canvas stays clear for natural camera drag")
 		overlay.free()
 		overlay = null
+
+func css_viewport_geometry() -> void:
+	# Use the browser's uniform minimum axis scale, including the integer
+	# expanded-viewport rounding that previously hid controls at320CSS pixels.
+	var cases: Array[Dictionary] = [
+		{"css": Vector2(568, 320), "logical": Vector2(854, 480)},
+		{"css": Vector2(569, 320), "logical": Vector2(854, 480)},
+		{"css": Vector2(320, 568), "logical": Vector2(480, 854)},
+		{"css": Vector2(1280, 720), "logical": Vector2(854, 480)},
+	]
+	var previous_locale: String = TranslationServer.get_locale()
+	var font: Font = CombatTheme.font()
+	for dimensions: Dictionary in cases:
+		var css: Vector2 = dimensions["css"]
+		var logical: Vector2 = dimensions["logical"]
+		var css_scale: float = minf(css.x / logical.x, css.y / logical.y)
+		make_overlay(logical, null, false, css_scale)
+		var actions: Dictionary[String, Rect2] = overlay.get_action_rects()
+		check(actions.size() == BUTTONS.size(), "CSS %s exposes all13 actions at expanded logical %s" % [css, logical])
+		check(is_equal_approx(overlay._css_unit * css_scale, 1.0), "CSS preview exercises production scale conversion")
+		if actions.size() != BUTTONS.size():
+			overlay.free()
+			overlay = null
+			continue
+		for name: String in BUTTONS:
+			var rectangle: Rect2 = actions[name]
+			check(rectangle.size.x * css_scale >= 56.0 - 0.001 and rectangle.size.y * css_scale >= 56.0 - 0.001, "CSS %s target %s keeps the physical56px floor" % [css, name])
+			check(Rect2(Vector2.ZERO, logical).encloses(rectangle), "CSS %s target %s remains within expanded canvas" % [css, name])
+			check(overlay._hit_region(rectangle.get_center(), true) == name, "CSS %s target %s remains independently routable" % [css, name])
+			for other: String in BUTTONS:
+				if name < other: check(not rectangle.intersects(actions[other]), "CSS %s target pair %s/%s stays separated" % [css, name, other])
+		var label_size: int = mini(overlay._button_font_size, overlay._hint_font_size)
+		var physical_label_size: float = label_size * css_scale
+		var physical_hint_size: float = overlay._hint_font_size * css_scale
+		check(physical_label_size >= 12.0 and physical_label_size <= 16.0, "CSS %s rendered captions keep the default12–16px type scale" % css)
+		check(physical_hint_size >= 12.0 and physical_hint_size <= 16.0, "CSS %s movement/look hints keep the default12–16px type scale" % css)
+		for locale: String in ["ru", "en"]:
+			TranslationServer.set_locale(locale)
+			for tool: int in [LOCAL.Tool.SPADE, LOCAL.Tool.BLOCK, LOCAL.Tool.WEAPON, LOCAL.Tool.GRENADE]:
+				overlay._displayed_tool = tool
+				for name: String in BUTTONS:
+					var caption: String = overlay._label(name)
+					var available_width: float = actions[name].size.x - 4.0 * overlay._css_unit
+					var caption_width: float = font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1.0, label_size).x
+					check(caption_width <= available_width + 0.01, "CSS %s %s caption %s fits without clipping for tool%d: %.2f/%.2f logical" % [css, locale, name, tool, caption_width, available_width])
+		overlay.free()
+		overlay = null
+	TranslationServer.set_locale(previous_locale)
 
 func mirrored_controls() -> void:
 	for extent: Vector2 in [Vector2(960, 540), Vector2(480, 854)]:
@@ -1065,6 +1124,7 @@ func run() -> void:
 	await floating_and_scaled_layout()
 	await nexquake_layout_and_routing()
 	thumb_hierarchy()
+	css_viewport_geometry()
 	await mirrored_controls()
 	await look_cancellation()
 	await composite_fire_look()

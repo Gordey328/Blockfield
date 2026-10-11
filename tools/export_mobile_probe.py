@@ -20,6 +20,7 @@ PREVIEW_HTML = """<!doctype html>
 <p>Use Run DOM touch checks inside the game. Authored browser events cross the JS/WASM boundary; physical-phone comfort remains untested.</p>
 <button data-size="844,390">Landscape844x390</button>
 <button data-size="390,844">Portrait390x844</button>
+<button data-size="568,320">Small568x320</button>
 <button data-size="1280,720">Desktop1280x720</button>
 <span id="preview-size">Iframe844x390</span>
 <iframe id="game" title="Actual Blockfield mobile test scene" src="index.html" width="844" height="390" allow="autoplay; fullscreen; gamepad"></iframe>

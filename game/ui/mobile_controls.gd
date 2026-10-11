@@ -80,6 +80,7 @@ var _held_style: StyleBoxFlat
 var _font: Font
 var _displayed_tool: int = -1
 var _layout_height: float = 0.0
+var _css_unit: float = 1.0
 
 func setup(player: BlockfieldPlayer, hud: LabHUD) -> void:
 	release_all()
@@ -422,12 +423,14 @@ func _ensure_layout() -> void:
 	_layout_height = 0.0
 	var button_floor: float = _logical_button_floor()
 	var css_unit: float = button_floor / MIN_CSS_BUTTON_SIZE
-	if size.x < 320.0 * css_unit or size.y < 320.0 * css_unit:
+	_css_unit = css_unit
+	# Integer canvas dimensions can lose <1 CSS pixel on an expanded320px edge.
+	if size.x < 319.0 * css_unit or size.y < 319.0 * css_unit:
 		return
 	# Measure CSS scale only when laying out, keeping Web interop out of _draw.
 	var font_floor: int = ceili(button_floor * MIN_CSS_LABEL_SIZE / MIN_CSS_BUTTON_SIZE)
-	_button_font_size = maxi(clampi(roundi(15.0 * _control_scale), 12, 21), font_floor)
-	_hint_font_size = maxi(13, font_floor)
+	_button_font_size = maxi(ceili(15.0 * _control_scale * css_unit), font_floor)
+	_hint_font_size = maxi(ceili(13.0 * css_unit), font_floor)
 	var margin: float = MARGIN * css_unit
 	var gap: float = GAP * css_unit
 	var top_band: Dictionary[String, float] = _layout_top_band(css_unit, margin, gap, button_floor)
@@ -641,10 +644,10 @@ func _draw_action(rect: Rect2, action: String, held: bool) -> void:
 			draw_line(Vector2(center.x - rect.size.x * 0.15, rect.end.y - 5.0), Vector2(center.x + rect.size.x * 0.15, rect.end.y - 5.0), color, 2.0, true)
 	var label_size: int = mini(_button_font_size, _hint_font_size)
 	var label_height: float = _font.get_height(label_size)
-	var icon_extent: float = minf(rect.size.x * 0.42, maxf(16.0, rect.size.y - label_height - 14.0))
+	var icon_extent: float = minf(rect.size.x * 0.42, maxf(16.0 * _css_unit, rect.size.y - label_height - 14.0 * _css_unit))
 	var icon_center: Vector2 = Vector2(rect.get_center().x, rect.position.y + (rect.size.y - label_height) * 0.42)
 	CombatTheme.draw_icon(self, action, Rect2(icon_center - Vector2.ONE * icon_extent * 0.5, Vector2.ONE * icon_extent), color)
-	var label_rect: Rect2 = Rect2(Vector2(rect.position.x + 2.0, rect.end.y - label_height - 11.0), Vector2(rect.size.x - 4.0, label_height))
+	var label_rect: Rect2 = Rect2(Vector2(rect.position.x + 2.0 * _css_unit, rect.end.y - label_height - 11.0 * _css_unit), Vector2(rect.size.x - 4.0 * _css_unit, label_height))
 	_draw_label(label_rect, _label(action), label_size, color)
 	if is_tool:
 		var number_rect: Rect2 = Rect2(rect.position + Vector2(4.0, 3.0), Vector2(label_height, label_height))

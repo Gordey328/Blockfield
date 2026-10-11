@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Mobile UX and aim friction — 2026-10-11 (native verified, browser pending)
+## Mobile UX and aim friction — 2026-10-11 (browser fixes verified, final export pending)
 
 User requests asymmetric mobile UX and slight enemy aim stickiness. Root owns
 TouchAimAssist, Player integration, Main/settings/HUD clearance, build registration,
@@ -20,9 +20,17 @@ minimap clearance, touch-specific reload copy and compact mobile event feed.
 The first aim fixture's inferred WeakRef parse warning was corrected with explicit
 typing; no production parse errors. Native Compatibility produces11 actual-scene
 captures under .cache/previews/mobile-ux; portrait/landscape, max scale, mirror and
-TDM readouts checked. Browser checks and frozen development publication pending. Other template,
-optimization and Steam work is preserved. Next: freeze/export all suites and check
-actual normal Web plus42 DOM-touch probe assertions, then publish development build.
+TDM readouts checked. Frozen0f582d74679cd8dc1a60a7777cfabddadc6344ae passes
+all94 test runs (93 Godot fixtures plus latency458/0), parser/import, both runtime
+smokes and reduced-template Web export. Actual Web fine-touch enemy gain is0.82;
+ally, foreground wall and fast8-degree swipe retain full gain. Normal Web inspection
+finds two CSS defects: integer canvas rounding hides controls on568×320, and default
+captions clip at1280×720. Root fixes the minimum-edge tolerance and CSS-scaled type/
+icon margins; touch_ui adds four real CSS/logical-size regression cases. Import and
+controls9678/0 pass. Other template, optimization and Steam work is preserved.
+Next: freeze the CSS fixes, run affected UI/input checks and export, then repeat
+actual normal Web/42 DOM-touch checks in portrait, landscape and320px-edge layouts,
+and publish the verified development build.
 
 ## Modern combat UI — 2026-10-11 (verified development release)
 
