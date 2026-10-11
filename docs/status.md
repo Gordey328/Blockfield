@@ -30,6 +30,9 @@ Normal local/public SMG terrain hits and local Title reload/render exercised.
 Pointer-lock host errors and workload/device limits are explicit in
 [evidence](block-impact-performance.md), with exact commands, logs and hashes.
 Full-port and sustained physical-device performance acceptance remain open.
+Main Actions build38123984500 never started: account billing lock; deploy skipped.
+Legacy branch Pages4827fa is successfully built/hash-verified. Linux CI acceptance
+is not implied by the local88-check release.
 
 ## Recover context
 

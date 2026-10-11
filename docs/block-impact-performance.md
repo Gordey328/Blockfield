@@ -161,6 +161,12 @@ held Fire button rendered damage/destruction. Capture
 are empty (`block-impact-public-logs.json`). Existing touch preference is retained.
 This is desktop browser interaction with touch UI, not a physical-phone test.
 
+Main Actions run38123984500 (aaf2444) did not execute its build runner:
+GitHub check annotation reports the account locked by a billing issue; deploy
+is skipped. This is not a Linux CI pass or a code-test failure. Legacy branch
+Pages run38123753781 succeeds for4827fa, independently checked above. Existing
+manual frozen local validation/publication remains the release evidence.
+
 ## Reproduction and handoff
 
 Use bundled Python, with the pinned executable under `.tools/godot/`:
