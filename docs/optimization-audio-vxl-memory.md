@@ -103,3 +103,52 @@ and uses actual Main with visible load/save/cancel/input controls and wall-clock
 frame sampling, including completion-tail frames. Test scripts remain outside
 the normal production entry point. Its frame timings are diagnostic, not a
 controlled120-second rendering-performance baseline.
+
+## Exported Main diagnostics
+
+Initial sourceafbd05a game scripts, actual Godot Web Main,1280x720 visible IAB:
+Title loading completed55.5547s across877 UI frames;2 input clicks were handled
+while private decode ran. Batch setup49.5ms; frame p95=73.7ms/max94.9ms. Saving
+was cancelled by reset after1 input click; ERR_SKIP45 and all retained temporary
+bytes0, with no download. Reset itself remained expensive (max537.9ms), outside
+the VXL column budget. Cache A/B32 queries in the lab: rays1152->36,
+ambience CPU84.5ms->2.8ms with31 hits/1miss.
+
+This prompted Main's foreground budget4096 columns/soft8ms for operations
+begun with the menu open; live-play starts retain1024/2ms. Frozen source
+`eef2225a1dc3bb9dbf2bf80975a3c32ffdf527f4` exported separately under
+`.cache/optimization-probe-item4-budget-eef2225/`, preserving production files.
+Title loading completed16.4946s across193 UI frames and handled2 clicks;
+setup87ms, frame p95=111.4ms/max146.1ms. These single diagnostic runs show the
+latency/foreground-work tradeoff and working callbacks, not comparable sustained
+rendering FPS or a universal loading speedup. Initial native benchmark overlap
+and uncontrolled IAB frame scheduling prevent controlled performance claims.
+
+Machine: Windows10Pro10.0.19045, Intel Core i5-10400H2.60GHz, Intel UHD Graphics;
+Codex IAB backend, default1280x720 canvas, visible tab. Browser version/DPR and
+process/GPU memory were not available through the read-only browser scope.
+Web MEMORY_STATIC returned0 and is treated as unavailable. Console logs and
+screenshots: `.cache/previews/optimization-item4/first-web-log.json`,
+`first-audio.jpg`, `budget-load.jpg`. Browser operations used actual Buttons,
+not direct JavaScript simulation calls. A first tab-create call timed out after
+30s but the tab existed and was reused; an attempted navigator read was outside
+the supported read-only scope, then console logs supplied the diagnostic data.
+
+The eef2225 diagnostic completed actual Title save in123.1939s/1492 UI frames,
+handling2 input clicks, but final synchronous browser staging produced a1901.2ms
+frame gap (p95=96ms). Download:2,106,956bytes, SHA256
+`6c4cf5de1992b9be2973614aee20b0015122e1244a3df1c2ff43f689e7d6d741`.
+Pinned native decode+unchanged synchronous encode confirmed this download is
+byte-identical to the established encoder, not merely decodable. The raw Title
+file differs because the canonical encoder normalizes unused header colors.
+Evidence: `budget-save.jpg`, `budget-web-log-final.json` and
+`.cache/logs/optimization4-downloaded-vxl.log`.
+
+This final pause prompted cooperative Main browser staging: at most two16KiB
+chunks per batch, soft2ms checked after each complete chunk, with cancellation
+and progress notices. JS abort releases pending buffers and object URLs while
+preserving pointer capture callbacks; retired dialog close events cannot cancel
+a replacement. Node v24.19.0 `node --test tests/browser/test_exports.mjs` passes
+3/3 tests using production JS, real Blob bytes and URL lifecycle. Final Blob
+creation is timed separately and remains synchronous. Browser verification of
+this follow-up is pending; the earlier save is not its performance evidence.

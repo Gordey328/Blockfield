@@ -23,7 +23,7 @@ func _ready() -> void:
 	panel.position = Vector2(10,80)
 	panel.custom_minimum_size = Vector2(350,280)
 	layer.add_child(panel)
-	for item: Array in [["Load original map",load_map],["Save coherent VXL",save_map],["Reset / cancel",reset_map],["Input responsiveness",touch_button],["Ambience cached / uncached",audio_compare]]:
+	for item: Array in [["Load original map",load_map],["Save coherent VXL",save_map],["Reset / cancel",reset_map],["Input responsiveness",touch_button],["Ambience cached / uncached",audio_compare],["Stage original VXL download",stage_download]]:
 		var button := Button.new()
 		button.text = item[0]
 		button.pressed.connect(item[1])
@@ -60,6 +60,14 @@ func reset_map() -> void:
 	app.reset_lab()
 	if not operation.is_empty(): finish(operation_id)
 
+func stage_download() -> void:
+	var token: int = begin("stage")
+	var request: int = app._begin_vxl_request("Preparing download…")
+	app._vxl_notice_caption = ""
+	var bytes := FileAccess.get_file_as_bytes("res://assets/openspades/maps/Title.vxl")
+	await app._show_web_export_incremental(bytes,"original-title.vxl","application/octet-stream",request)
+	finish(token)
+
 func touch_button() -> void:
 	input_clicks += 1
 	report.text = "Input processed while %s: %d clicks" % [operation,input_clicks]
@@ -85,6 +93,7 @@ func finish(token: int) -> void:
 	result = {"operation":operation,"operation_id":token,"wall_seconds":float(Time.get_ticks_usec()-start_usec)/1000000,
 		"operation_completion_seconds":float(completion_usec)/1000000,"tail_frame_signals":3,
 		"ui_frames":callbacks,"input_clicks":input_clicks,"job":app.world.get_vxl_job_stats(),
+		"transfer":app._export_transfer_stats.duplicate(),
 		"map":app.world.map_name,"memory_static":Performance.get_monitor(Performance.MEMORY_STATIC),
 		"p50_frame_ms":frame_ms[int((frame_ms.size()-1)*.5)] if not frame_ms.is_empty() else 0,
 		"p95_frame_ms":frame_ms[int((frame_ms.size()-1)*.95)] if not frame_ms.is_empty() else 0,

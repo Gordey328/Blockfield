@@ -43,8 +43,15 @@ synchronous test/authority APIs remain available without partially visible maps.
 Exact origins give little reuse while moving. Sequence-wide invalidation is
 conservative even for edits outside the acoustic area; it keeps correctness simple.
 Tint limits bound retained cache references, not all active mesh memory.
+Web VXL staging yields between batches of at most two16KiB base64 chunks with
+a soft2ms target; a new VXL request or scene exit aborts its pending JS buffers.
+The visible download link preserves a real user gesture. PNG/JSON retain the
+existing synchronous path, with a visible busy notice when another export owns
+the dialog. JS retires each dialog independently so its queued close event cannot
+clean up a newer export; abort preserves the input pointer callback.
+
 Decode allocation, copy-on-write on a live edit, map adoption, chunk rebuilds and
-browser export transfer remain indivisible operations outside the column budget.
+final browser Blob creation remain indivisible operations outside the budgets.
 Cooperative processing can increase total wall time while keeping input callbacks
 available. Full load/save latency and memory need browser evidence.
 

@@ -118,19 +118,24 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 - Optimization item4 implementation (2026-10-11): user authorized the summary's
   audio, VXL loading/saving and memory scope. Specialists returned all file leases;
-  coordinator owns integration/docs, including ADR0013, and engine/export/release.
-  Bounded exact-origin audio cache, complete workload counters, exact-color tint
-  LRU and cancellable private VXL jobs are integrated. Main guards progress,
-  baseline and download completion. Sync network interfaces/rules are unchanged.
-  Initial import, audio128/0, environment70/0, audio optimization46/0, tint1555/0,
-  VXL jobs53/0 then final padding62/0, actual Main VXL12/0, source parity194/0,
-  PCM134/0+81/0, source input35/0 and offline lifecycle19/0 passed. Stationary
-  audio rays5640->47 (moving unchanged); measured player allocation cost defers
-  pooling. Slow intermediate lab padding was measured, then refined. Evidence:
-  [optimization item4](optimization-audio-vxl-memory.md), [ADR0013](decisions/0013-audio-vxl-memory.md).
-  Concurrent mobile records/files remain under their separate ownership; release
-  will freeze only optimization files. Next: final COW/column benchmarks, exported
-  browser responsiveness/cancel/save, frozen registered suites and publication.
+  coordinator owns integration/docs, ADR0013 and engine/export/release. Bounded
+  exact-origin audio cache, complete workload counters, exact-color tint LRU and
+  cancellable private VXL jobs are integrated. Main guards progress, baseline and
+  downloads. Sync network interfaces/rules are unchanged. Parser/import, audio128/0,
+  environment70/0, audio optimization46/0, tint1555/0, VXL jobs62/0, actual Main
+  lifecycle15/0, source parity194/0, PCM134/0+81/0, source input35/0 and offline
+  lifecycle19/0 passed. Native benchmarks: audio142/0, memory/COW77/0;
+  stationary audio rays5640->47 (moving unchanged), tint caches capped256 each.
+  COW first live edit still costs13-15ms and64MiB. Voice allocation measurements
+  defer pooling. Slow intermediate lab padding was refined and exact bytes checked.
+  Actual exported Main load/cancel/input/audio passed; Title save downloaded exact
+  synchronous-encoder bytes, but exposed1.9s final browser staging. Follow-up now
+  yields bounded16KiB staging chunks and safely aborts pending JS; production JS
+  lifecycle3/3 and final parser/Main15/0 pass. Full browser follow-up pending.
+  Evidence: [optimization item4](optimization-audio-vxl-memory.md),
+  [ADR0013](decisions/0013-audio-vxl-memory.md). Concurrent mobile records/files
+  remain separately owned and are excluded from the frozen optimization source.
+  Next: browser staging/cancel/download and PCM, frozen85 checks and publication.
 
 - Optimization planning (2026-10-11): completed a read-only three-specialist audit
   of World, simulation/network and presentation/audio/UI, plus coordinator
