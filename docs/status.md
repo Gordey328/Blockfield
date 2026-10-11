@@ -211,24 +211,6 @@ the user's chosen deployment scope is Docker/configuration preparation.
   then select camera response/layout changes from that evidence. No new architecture
   or parity acceptance is claimed.
 
-- Previous mobile-control checkpoint96 returned specialist/engine leases to root;
-  its evidence is retained below separately from the current31 release.
-  New `game/ui/mobile_controls.gd` and `tests/ui/test_mobile_controls.gd` exercise real
-  touch ownership and source/network handoff; native component suite808/0 on Godot4.7.2.
-  Root owns HUD/controller/settings/scale integration and publication. Landscape844×390
-  and portrait390×844 exported-browser views were inspected; initial anchored HUD and
-  portrait minimap/palette overlaps are corrected. Final Main/HUD regression270/0 passed,
-  including preference/mode lifecycle, action bridges, chat/focus cleanup and desktop
-  input restoration. Frozen96 is published/hash-verified. Recorded browser previews
-  did not exercise physical-phone multitouch. See [mobile contract](mobile-controls.md).
-  Actual public844×390/390×844 preview exercised stick/look/fire/Jump/reload/block
-  selection, readable footer and palette/map separation. Mode On survived reload;
-  Auto restored desktop presentation. Screenshot/report under
-  `.cache/previews/public-mobile-96c36cdc740d.*`, portrait JPEG alongside it.
-  Temporary test servers/tabs stopped; viewport override reset. Root owns the
-  clean source and finished publication; no specialist or engine lease remains.
-
-
 - Optimization planning (2026-10-11): completed a read-only three-specialist audit
   of World, simulation/network and presentation/audio/UI, plus coordinator
   Main/config/export review. [Optimization plan](optimization-plan.md) prioritizes
