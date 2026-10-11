@@ -20,6 +20,42 @@ isolated frozen Web interaction/export/publication are pending.
 [Contract](decisions/0019-grenade-feedback-range.md),
 [evidence](grenade-feedback.md). Next: validate and integrate the latest source.
 
+## All-item held primary camera look — 2026-10-11
+
+User requests camera turning with held Fire for every weapon. All three firearms
+already share this gesture; root removes only MobileControls' firearm-only gate,
+extending it to spade/block/grenade. Root owns `game/ui/mobile_controls.gd`, the
+mobile component/Main/browser fixtures, mobile docs, ADR0018 and this status block.
+No subagents or shared engine/build lease is used. Validation/export
+uses an isolated frozen copy under `.cache/all-tool-look-*`; existing grenade
+effects/audio work, optimization notes and AoS research remain separately owned.
+Frozen source6d61ea9cc26037e3c26553fdfed677dde3cfdc45, Godot4.7.2.stable.official.ed1daf0bf,
+upstream unchanged: import/parser, MobileControls3099/0, actual Main look225/0,
+UI284/0, source-input35/0, source-parity194/0, network-controller511/0,
+camera-target-rays11/0, grenade17/0, runtime and normal export pass in isolated
+userdata. Baseline overlay3099/3 reproduces the three excluded
+tools; initial Main225/1 was a fixture's silent direct selection, repaired by
+normal selection callbacks. Failed logs are retained. Actual-Main exported DOM
+touch27/0 at844x390 and27/0 at390x844 verifies all six held-primary yaw/pitch/UP
+paths, lifecycle/mirroring and actual movement/shots. Normal local rifle/spade/
+block/grenade fire drag and grenade throw pass; both captured browser warning/error
+lists are empty. Physical phone and full parity remain open. [Evidence/commands](mobile-controls.md#all-item-primary-look--2026-10-11).
+Own helper publication was stopped during Git history fetch; no own Pages write
+occurred. The integrated d8e5ddb grenade release owns publication and contains
+byte-identical checked MobileControls. Logs/manifest and ignored diagnostic scripts
+are under `.cache/all-tool-look-*`; portrait JSON/JPEG and ordinary local JPEG are
+saved under `.cache/previews/all-tool-look-*`. No parity rows promoted.
+Integrated public source d8e5ddb09d0ff63917d3312a758a2f9f4c584430,
+bundle2f786bedd3e1c33c41010f382b05b7b37e476ff0, Pages built/no error. Independent
+metadata/all six file hashes match that frozen export, and public MobileControls
+matches checked6d exactly. Ordinary public spade/block/grenade Fire drags turn
+yaw/pitch; captured browser warning/error list is empty. Public JSON/JPEG are saved.
+Input-owned files are complete and all own engine/file leases are returned; own
+HTTP helper and temporary browser tabs are stopped. Changed files: MobileControls,
+three mobile fixtures, ADR0008/0018, mobile controls/parity docs and this status
+block. No remaining input task action; physical-device feel remains an acceptance
+limit. Other grenade/performance/research ownership remains separate.
+
 ## Startup download megabytes — 2026-10-11
 
 User asks to show downloaded MB on the startup screen. Root owns only the new
