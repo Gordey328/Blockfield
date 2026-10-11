@@ -99,6 +99,7 @@ def main():
     suites += [('network-block-damage','tests/network/test_network_block_damage.gd')]
     suites += [('audio-optimization','tests/audio/test_audio_optimization.gd'),('vxl-jobs','tests/world/test_vxl_jobs.gd'),('model-cache-bounds','tests/presentation/test_model_cache_bounds.gd'),('vxl-main','tests/integration/test_vxl_main.gd')]
     suites += [('tdm-bots','tests/ai/test_tdm_bots.gd'),('offline-tdm','tests/session/test_offline_tdm.gd'),('offline-tdm-scene','tests/integration/test_offline_tdm_scene.gd')]
+    suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
     for name,path in suites:
         path=ROOT/path
         if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','offline-tdm-scene') else [])+['--script',str(path)],timeout=300)
@@ -120,6 +121,9 @@ def export_web():
     shutil.copy2(ROOT/'LICENSE',folder/'LICENSE.txt')
     shutil.copytree(ROOT/'game'/'assets'/'openspades'/'licenses',folder/'notices',dirs_exist_ok=True)
     shutil.copytree(ROOT/'licenses',folder/'notices'/'engine',dirs_exist_ok=True)
+    if (ROOT/'game'/'assets'/'fonts'/'OFL.txt').exists():
+        (folder/'notices'/'fonts').mkdir(parents=True,exist_ok=True)
+        shutil.copy2(ROOT/'game'/'assets'/'fonts'/'OFL.txt',folder/'notices'/'fonts'/'Inter-OFL.txt')
     print(f'Web build: {folder}',flush=True)
 
 if __name__=='__main__':main()

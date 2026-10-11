@@ -24,6 +24,7 @@ var _alert_age:=0.0
 var _hit: TextureRect
 var _scoreboard: LabScoreboard
 var _map: LabMap
+var _map_frame: Panel
 var _large_map: LabMap
 var _chat: LabChat
 var _status_effects: LabStatusEffects
@@ -84,6 +85,7 @@ var _hud_brand: Label
 const NETWORK_MENU=preload("res://ui/network_menu.gd")
 const OFFLINE_TDM=preload("res://gameplay/offline_tdm_session.gd")
 var _tdm_score: Label
+var _combat_readout: CombatReadout
 var _tdm_menu_status: Label
 var _tdm_resume: Button
 var _team_metadata_cache: Array = []
@@ -167,16 +169,25 @@ func _create_hud() -> void:
 	_hud=Control.new()
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var combat_theme := Theme.new()
+	combat_theme.default_font=CombatTheme.font()
+	_hud.theme=combat_theme
 	_root.add_child(_hud)
 	_status_effects=LabStatusEffects.new()
 	_status_effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_status_effects.setup(session,player)
 	_hud.add_child(_status_effects)
+	_combat_readout=CombatReadout.new()
+	_combat_readout.session=session
+	_combat_readout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hud.add_child(_combat_readout)
 	var top: Label
 	if _is_offline_tdm(): top=_ui_label("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE",18)
 	elif _is_network(): top=_ui_label("BLOCKFIELD  /  МУЛЬТИПЛЕЕР","BLOCKFIELD  /  MULTIPLAYER",18)
 	else: top=_label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
 	_hud_brand=top
+	top.add_theme_font_size_override("font_size",12)
+	top.add_theme_color_override("font_color",CombatTheme.MUTED)
 	top.position=Vector2(26,20)
 	_hud.add_child(top)
 	_mode=_label("",13,Color("abc0c6"))
@@ -184,6 +195,7 @@ func _create_hud() -> void:
 	_hud.add_child(_mode)
 	if _is_offline_tdm():
 		_tdm_score=_label("",22,Color("e4eddf"))
+		_tdm_score.self_modulate.a=0.0
 		_tdm_score.add_theme_color_override("font_outline_color",Color("111819"))
 		_tdm_score.add_theme_constant_override("outline_size",4)
 		_tdm_score.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -194,22 +206,26 @@ func _create_hud() -> void:
 		_tdm_score.offset_bottom=50
 		_hud.add_child(_tdm_score)
 	_stats=_label("",21)
+	_stats.self_modulate.a=0.0
 	_stats.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_stats.position=Vector2(28,-84)
 	_hud.add_child(_stats)
 	_weapon_icon=LabAmmoStrip.new()
+	_weapon_icon.self_modulate.a=0.0
 	_weapon_icon.session=session
 	_weapon_icon.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_weapon_icon.position=Vector2(-280,-140)
 	_weapon_icon.size=Vector2(252,50)
 	_hud.add_child(_weapon_icon)
 	_ammo=_label("",32)
+	_ammo.self_modulate.a=0.0
 	_ammo.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	_ammo.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_ammo.position=Vector2(-380,-90)
 	_ammo.size=Vector2(352,60)
 	_hud.add_child(_ammo)
 	_weapon_status=_label("",16,Color("f1dbab"))
+	_weapon_status.self_modulate.a=0.0
 	_weapon_status.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	_weapon_status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_weapon_status.position=Vector2(-420,-30)
@@ -251,6 +267,11 @@ func _create_hud() -> void:
 	_build_status.size=Vector2(520,30)
 	_build_status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	_hud.add_child(_build_status)
+	_map_frame=Panel.new()
+	_map_frame.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_map_frame.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	_map_frame.add_theme_stylebox_override("panel",CombatTheme.panel())
+	_hud.add_child(_map_frame)
 	_map=LabMap.new()
 	_map.anchor_left=1
 	_map.anchor_right=1
@@ -270,7 +291,7 @@ func _create_hud() -> void:
 	_scoreboard.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_scoreboard.position=Vector2(-330,-205)
 	_scoreboard.size=Vector2(660,410)
-	_scoreboard.add_theme_stylebox_override("panel",_style(Color(0.06,0.1,0.13,0.95),Color("536f7a")))
+	_scoreboard.add_theme_stylebox_override("panel",CombatTheme.panel())
 	_scoreboard.setup(main,session)
 	_scoreboard.visible=false
 	_root.add_child(_scoreboard)
@@ -303,6 +324,14 @@ func _create_hud() -> void:
 	_build_cursor=LabBuildCursor.new()
 	_build_cursor.setup(player)
 	add_child(_build_cursor)
+	_apply_combat_fonts(_hud)
+
+func _apply_combat_fonts(node: Node) -> void:
+	if node is Label: node.add_theme_font_override("font",CombatTheme.font())
+	elif node is RichTextLabel:
+		for role: String in ["normal_font","bold_font","italics_font","bold_italics_font","mono_font"]:
+			node.add_theme_font_override(role,CombatTheme.font())
+	for child: Node in node.get_children(): _apply_combat_fonts(child)
 
 func _create_menu() -> void:
 	_menu=Control.new()
@@ -428,6 +457,7 @@ func _update_tdm_status() -> void:
 	var score_text: String="%d : %d   ·   %d:%02d"%[session.team_scores[0],session.team_scores[1],seconds/60,seconds%60]
 	if _tdm_score != null:
 		_tdm_score.text=score_text
+		_combat_readout.score_text=score_text
 		if uses_mobile_controls() and mobile_controls != null:
 			# The toolbar can occupy one or two rows and honors control scaling.
 			var regions: Dictionary=mobile_controls.get_hit_regions()
@@ -437,6 +467,7 @@ func _update_tdm_status() -> void:
 				below_toolbar=maxf(below_toolbar,region.end.y+8.0)
 			_tdm_score.offset_top=below_toolbar
 			_tdm_score.offset_bottom=below_toolbar+28.0
+		_combat_readout.score_y=_tdm_score.offset_top
 	if _tdm_menu_status != null:
 		_tdm_menu_status.text=score_text
 		if match_session.finished:
@@ -725,6 +756,7 @@ func _process(delta: float) -> void:
 	elif session.current_tool==3:
 		if session.is_cooking_grenade:_weapon_status.text=_ui("Фитиль: %.1f с","Fuse: %.1f s")%maxf(0,3-session.grenade_cook_time)
 		elif session.grenades==0:_weapon_status.text=OpenSpadesLocalization.text("Out of Grenade","Client")
+	_combat_readout.status_text=_weapon_status.text
 	_mode.text="%s   ·   %s"%[world.map_name,session.mode.to_upper()]
 	_update_tdm_status()
 	_performance.visible=_show_statistics
@@ -989,6 +1021,7 @@ func _update_mobile_layout() -> void:
 	if _menu==null:return
 	_release_mobile_input()
 	var mobile:=uses_mobile_controls()
+	_combat_readout.compact=mobile
 	var portrait:=get_window().size.y>get_window().size.x
 	var base:=Vector2i(480,854) if portrait else Vector2i(854,480)
 	var desired:=base if mobile else _desktop_scale
@@ -1015,7 +1048,8 @@ func _update_mobile_layout() -> void:
 	_set_hud_rect(_weapon_status,Rect2(-220,-18,204,18) if mobile else Rect2(-420,-30,392,25))
 	_set_hud_rect(_intel_icon,Rect2(-265,-48,32,32) if mobile else Rect2(-280,-65,48,48))
 	_performance.add_theme_font_size_override("font_size",11 if mobile else 13)
-	_set_hud_rect(_performance,Rect2(16,-18,440,18) if mobile else Rect2(28,-30,750,25))
+	# Diagnostics use their own row above vitals, rather than covering the readout.
+	_set_hud_rect(_performance,Rect2(16,-76,440,18) if mobile else Rect2(28,-157,750,25))
 	var width:=minf(640.0,float(desired.x)-32.0) if mobile else 640.0
 	_set_hud_rect(_state_hint,Rect2(-width*.5,-130,width,90))
 	_state_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
@@ -1431,9 +1465,10 @@ func _apply_map_settings() -> void:
 	_map.offset_top=top
 	_map.offset_bottom=top+map_size
 	# Align the read-only color palette beside the map, clear of both button rows.
-	_native_palette.anchor_top=0.0 if uses_mobile_controls() else 1.0
+	_native_palette.anchor_top=0.0
 	_native_palette.anchor_bottom=_native_palette.anchor_top
-	_set_hud_rect(_native_palette,Rect2(-map_size-inset-98,top,90,90) if uses_mobile_controls() else Rect2(-100,-146,90,90))
+	_set_hud_rect(_native_palette,Rect2(-map_size-inset-98,top,90,90))
+	_set_hud_rect(_map_frame,Rect2(-map_size-inset-6,top-6,map_size+12,map_size+12))
 	_map.show_weapon_icons=_map_weapon_icons
 	_large_map.show_weapon_icons=_map_weapon_icons
 	_map.per_player_colors=_map_player_colors
@@ -1602,11 +1637,13 @@ func _create_alert() -> void:
 	_alert_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	_alert_style=StyleBoxFlat.new()
 	_alert_style.bg_color=Color(0,0,0,.5)
+	_alert_style.set_corner_radius_all(12)
 	_alert_style.set_border_width_all(1)
 	_alert_style.border_blend=false
 	_alert_panel.add_theme_stylebox_override("panel",_alert_style)
 	_hud.add_child(_alert_panel)
 	_notice=_label("",17,Color.WHITE)
+	_notice.add_theme_font_override("font",CombatTheme.font())
 	_notice.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	_notice.remove_meta("lab_text")
 	_alert_panel.add_child(_notice)

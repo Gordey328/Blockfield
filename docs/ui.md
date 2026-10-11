@@ -95,6 +95,37 @@ Run:
 - Post-processing toggles expose Compatibility adaptations, including optional float HDR and bounded indirect light. See renderer documentation/ADR for fidelity limits. GI/water/corpse/environmental-audio switches require backend and deployed-browser acceptance.
 # Browser pointer capture fallback
 
+## Modern combat presentation — 2026-10-11
+
+User-selected presentation replacement: [ADR0022](decisions/0022-modern-combat-ui.md).
+CombatReadout presents authoritative health/resources/ammunition in rounded
+translucent edge islands, with a slim cyan/red HP bar and large tabular digits.
+Reload/fuse/depletion feedback is localized; low magazine uses amber. Desktop
+shows four icon/hotkey slots. Mobile uses a compact footer and circular action
+controls; tool tiles retain labels and selected-tool emphasis. TDM keeps the
+centered score/timer through death. The native block palette sits beside the map.
+
+Inter4.1 is bundled under OFL1.1 with Latin/Cyrillic and the existing multilingual
+fallback; font provenance/reproduction is in game/assets/fonts/README.md.
+Procedural icons are authored here. No game art is copied from the references.
+HUD adapters and touch hit regions/claims/gestures retain their contracts.
+
+Pinned Godot4.7.2.stable.official.ed1daf0bf and OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961. Workspace parser/import passes;
+UI284/0, controls3099/0, look226/0, actual combat readout166/0 pass.
+The new fixture's initial WeakRef type warning is fixed; failed log retained.
+Existing lab fixture119/1 reproduces its saved-HDR-preference dependency;
+the final frozen check uses private test settings. Native Compatibility helper
+captures desktop rifle/lowHP/block palette/grenade, touch landscape/portrait and
+TDM. Export/browser evidence and exact release source are recorded below when
+available. Original U03–U07 row acceptance remains IMPLEMENTED.
+
+Commands (bundled Python/engine paths are in status.md):
+`python -c "import sys; sys.path.insert(0,'tools'); import build; build.run('combat-hud',['--fixed-fps','60','--script','../tests/ui/test_combat_hud.gd'])"`;
+`Godot_v4.7.2-stable_win64_console.exe --path game --rendering-method gl_compatibility --script ../tests/ui/render_combat_hud.gd`.
+Native previews: `.cache/previews/combat-ui/`; browser acceptance remains separate
+from headless state assertions and these GPU captures.
+
 Current unpublished integration passed actual-Main UI247/0, console76/0 and
 preparation menu72/0. It adds legacy source eyedropper/fog miss behavior,
 progressive map completion, independent source gain/EFX preferences and exact

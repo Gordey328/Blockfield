@@ -76,6 +76,7 @@ var _locale: String = ""
 var _normal_style: StyleBoxFlat
 var _held_style: StyleBoxFlat
 var _font: Font
+var _displayed_tool: int = -1
 
 func setup(player: BlockfieldPlayer, hud: LabHUD) -> void:
 	release_all()
@@ -94,9 +95,9 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_NONE
 	resized.connect(_on_resized)
 	get_viewport().size_changed.connect(_on_canvas_resized)
-	_normal_style = _make_style(Color(0.035, 0.065, 0.085, 0.42), Color(0.72, 0.86, 0.92, 0.42))
-	_held_style = _make_style(Color(0.19, 0.43, 0.56, 0.66), Color(0.86, 0.96, 1.0, 0.92))
-	_font = get_theme_default_font()
+	_normal_style = _make_style(Color(0.035, 0.055, 0.075, 0.38), Color(0.88, 0.94, 1.0, 0.28))
+	_held_style = _make_style(Color(0.08, 0.24, 0.30, 0.64), Color(0.45, 0.88, 1.0, 0.90))
+	_font = CombatTheme.font()
 	_ensure_layout()
 	_sync_active()
 
@@ -344,6 +345,11 @@ func _local_position(position: Vector2) -> Vector2:
 func _process(_delta: float) -> void:
 	_ensure_layout()
 	_sync_active()
+	# Only invalidate paint when the session changes its selected tool.
+	var displayed_tool: int = _player.session.current_tool if is_instance_valid(_player) and _player.session != null else -1
+	if displayed_tool != _displayed_tool:
+		_displayed_tool = displayed_tool
+		queue_redraw()
 	var locale: String = TranslationServer.get_locale()
 	if locale != _locale:
 		_locale = locale
@@ -474,27 +480,68 @@ func _make_style(fill: Color, border: Color) -> StyleBoxFlat:
 	style.bg_color = fill
 	style.border_color = border
 	style.set_border_width_all(1)
-	style.set_corner_radius_all(13)
+	style.set_corner_radius_all(20)
+	style.anti_aliasing = true
 	return style
 
 func _draw() -> void:
 	if not _active or _regions.is_empty() or _normal_style == null:
 		return
 	if _font == null:
-		_font = get_theme_default_font()
+		_font = CombatTheme.font()
 	for action: String in TOP_ACTIONS + PLAY_ACTIONS:
 		var rect: Rect2 = _regions[action]
 		var held: bool = _action_counts.get(action, 0) > 0
-		draw_style_box(_held_style if held else _normal_style, rect)
-		var color := Color(1.0, 0.79, 0.58, 0.95) if action == "primary" else Color(0.91, 0.96, 1.0, 0.94)
-		_draw_label(rect, _label(action), _button_font_size, color)
+		_draw_action(rect, action, held)
 	var center: Vector2 = _stick_center
-	draw_circle(center, _stick_radius, Color(0.035, 0.065, 0.085, 0.28))
-	draw_arc(center, _stick_radius, 0, TAU, 64, Color(0.8, 0.91, 1.0, 0.46), 2.0, true)
-	draw_circle(center + _stick_delta, 24.0 * _stick_radius / STICK_RADIUS, Color(0.75, 0.9, 1.0, 0.40 if _move_owner == NO_POINTER else 0.72))
+	var moving: bool = _move_owner != NO_POINTER
+	var stick_color: Color = Color(0.45, 0.88, 1.0, 0.90) if moving else Color(0.92, 0.96, 1.0, 0.60)
+	draw_circle(center, _stick_radius, Color(0.035, 0.055, 0.075, 0.22))
+	draw_arc(center, _stick_radius, 0.0, TAU, 64, Color(0.91, 0.96, 1.0, 0.30), 1.0, true)
+	draw_arc(center, _stick_radius * 0.66, 0.0, TAU, 48, Color(0.91, 0.96, 1.0, 0.09), 1.0, true)
+	for direction: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+		draw_line(center + direction * (_stick_radius - 7.0), center + direction * (_stick_radius - 3.0), Color(0.92, 0.96, 1.0, 0.34), 1.5, true)
+	var knob: Vector2 = center + _stick_delta
+	var knob_radius: float = 24.0 * _stick_radius / STICK_RADIUS
+	if moving:
+		draw_line(center, knob, Color(0.45, 0.88, 1.0, 0.28), 2.0, true)
+	draw_circle(knob, knob_radius, Color(0.035, 0.055, 0.075, 0.46 if moving else 0.30))
+	draw_arc(knob, knob_radius, 0.0, TAU, 48, stick_color, 1.5, true)
+	draw_circle(knob, 2.5 * _stick_radius / STICK_RADIUS, stick_color)
 	var hint_y: float = minf(center.y + _stick_radius - 4.0, size.y - HUD_BOTTOM_RESERVE - 24.0)
-	_draw_label(Rect2(Vector2(center.x - 75, hint_y), Vector2(150, 24)), _ui("Движение", "Move"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.58))
-	_draw_label(_look_hint_rect, _ui("Проведи для поворота", "Drag to look"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.34))
+	_draw_label(Rect2(Vector2(center.x - 75, hint_y), Vector2(150, 24)), _ui("Движение", "Move"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.54))
+	_draw_label(_look_hint_rect, _ui("Проведи для поворота", "Drag to look"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.42))
+
+func _draw_action(rect: Rect2, action: String, held: bool) -> void:
+	var is_play_action: bool = PLAY_ACTIONS.has(action)
+	var tool_index: int = TOP_ACTIONS.find(action)
+	var is_tool: bool = tool_index >= 0 and tool_index < 4
+	var selected: bool = is_tool and _displayed_tool == tool_index
+	var emphasized: bool = held or selected
+	var color: Color = Color(0.45, 0.88, 1.0, 0.96) if emphasized else Color(0.95, 0.97, 1.0, 0.90)
+	if is_play_action:
+		var radius: float = minf(rect.size.x, rect.size.y) * 0.5 - 2.0
+		var fill: Color = Color(0.08, 0.24, 0.30, 0.64) if held else Color(0.035, 0.055, 0.075, 0.34)
+		var ring: Color = Color(0.45, 0.88, 1.0, 0.96) if held else Color(0.92, 0.96, 1.0, 0.36)
+		if action == "primary" and not held:
+			ring = Color(0.45, 0.88, 1.0, 0.65)
+		draw_circle(rect.get_center(), radius, fill)
+		draw_arc(rect.get_center(), radius, 0.0, TAU, 64, ring, 1.5, true)
+	else:
+		draw_style_box(_held_style if emphasized else _normal_style, rect.grow(-1.0))
+		if selected:
+			var center: Vector2 = rect.get_center()
+			draw_line(Vector2(center.x - rect.size.x * 0.15, rect.end.y - 5.0), Vector2(center.x + rect.size.x * 0.15, rect.end.y - 5.0), color, 2.0, true)
+	var label_size: int = mini(_button_font_size, _hint_font_size)
+	var label_height: float = _font.get_height(label_size)
+	var icon_extent: float = minf(rect.size.x * 0.42, maxf(16.0, rect.size.y - label_height - 14.0))
+	var icon_center: Vector2 = Vector2(rect.get_center().x, rect.position.y + (rect.size.y - label_height) * 0.42)
+	CombatTheme.draw_icon(self, action, Rect2(icon_center - Vector2.ONE * icon_extent * 0.5, Vector2.ONE * icon_extent), color)
+	var label_rect: Rect2 = Rect2(Vector2(rect.position.x + 2.0, rect.end.y - label_height - 11.0), Vector2(rect.size.x - 4.0, label_height))
+	_draw_label(label_rect, _label(action), label_size, color)
+	if is_tool:
+		var number_rect: Rect2 = Rect2(rect.position + Vector2(4.0, 3.0), Vector2(label_height, label_height))
+		_draw_label(number_rect, str(tool_index + 1), label_size, Color(0.45, 0.88, 1.0, 0.84) if selected else Color(0.91, 0.96, 1.0, 0.45))
 
 func _draw_label(rect: Rect2, text: String, font_size: int, color: Color) -> void:
 	var lines: PackedStringArray = text.split("\n")
@@ -507,15 +554,15 @@ func _draw_label(rect: Rect2, text: String, font_size: int, color: Color) -> voi
 func _label(action: String) -> String:
 	match action:
 		"primary": return _ui("Огонь", "Fire")
-		"secondary": return _ui("Прицел\nALT", "Aim\nALT")
+		"secondary": return _ui("Прицел", "Aim")
 		"reload": return _ui("Перез.", "Reload")
 		"jump": return _ui("Прыжок", "Jump")
 		"crouch": return _ui("Присед", "Crouch")
 		"sprint": return _ui("Бег", "Sprint")
-		"tool_spade": return _ui("1\nЛопата", "1\nSpade")
-		"tool_block": return _ui("2\nБлок", "2\nBlock")
-		"tool_weapon": return _ui("3\nОружие", "3\nGun")
-		"tool_grenade": return _ui("4\nГран.", "4\nGren.")
+		"tool_spade": return _ui("Лопата", "Spade")
+		"tool_block": return _ui("Блок", "Block")
+		"tool_weapon": return _ui("Оружие", "Gun")
+		"tool_grenade": return _ui("Гран.", "Gren.")
 		"map": return _ui("Карта", "Map")
 		"view_toggle": return _ui("Вид", "View")
 		"menu": return _ui("Меню", "Menu")

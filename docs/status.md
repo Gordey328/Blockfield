@@ -3,6 +3,22 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Modern combat UI — 2026-10-11 (integration in progress)
+
+User requests researched modern combat styling. Root owns LabHUD, new
+CombatTheme/CombatReadout, Inter font/provenance/import, build registration,
+ADR0022, docs and serial engine/release integration. Specialist touch_ui owns
+only MobileControls presentation; all29 nonvisual methods compare unchanged.
+Specialist hud_checks owns only new tests/ui/test_combat_hud.gd. Both handoffs
+are complete and engine leases returned. Baseline d2c9acbd47ccf51e4b45f68919ce95cc27ba1550;
+Godot4.7.2.stable.official.ed1daf0bf, upstream dcf449c845d509bbde9d79239b32d201c1389961.
+Native parser/import passes via tools.build.run('combat-ui-import',
+['--editor','--import','--quit']). Current work adds translucent rounded edge
+readouts, tabular ammo, slim HP, line icons, centered TDM score and circular
+touch actions. Existing template/optimization/Steam edits are preserved.
+Focused behavior checks and normal Web rendering/input/publication are next;
+no parity promotion or new release is claimed at this intermediate milestone.
+
 ## Offline 3×3 team combat — 2026-10-11 (verified Crossroads addition)
 
 User authorized an offline match: one human, two allied bots and three opponents,
