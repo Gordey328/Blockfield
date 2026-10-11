@@ -30,11 +30,23 @@ var _particles: Array[Dictionary] = []
 var _casings: Array[Dictionary] = []
 var _tracers: Array[Dictionary] = []
 var _lights: Array[Dictionary] = []
+var _particle_pool: Array[Node3D] = []
+var _rifle_casing_pool: Array[Node3D] = []
+var _smg_casing_pool: Array[Node3D] = []
+var _tracer_pool: Array[Node3D] = []
+var _light_pool: Array[Node3D] = []
+var _created_nodes := 0
 var _textures: Dictionary = {}
+var _smoke_frames: Dictionary = {}
 var _sounds: Array[AudioStreamPlayer3D] = []
 var audio_service: OpenSpadesAudio
 var _tracer_material: StandardMaterial3D
 var _tracer_mesh: QuadMesh
+var _fragment_batch: MultiMeshInstance3D
+var _fragment_multimesh: MultiMesh
+var _fragment_material: StandardMaterial3D
+var _fragment_count := 0
+var _fragment_aspect := 1.0
 var _fast_shake := 0.0
 var _slow_shake := 0.0
 var _time := 0.0
@@ -47,6 +59,41 @@ func setup(voxel_world: Node3D, view_camera: Camera3D) -> void:
 	rng.randomize()
 	_noise.seed = 7341
 	_noise.frequency = 1.0
+	prewarm()
+
+func prewarm() -> void:
+	# Loading-screen work: firing never instantiates sprites, GLB shells or lights
+	# within the configured budgets. Each shell variant retains its own GLB.
+	_trim_pool(_particle_pool, max_particles - _particles.size())
+	_trim_pool(_rifle_casing_pool, max_casings)
+	_trim_pool(_smg_casing_pool, max_casings)
+	_trim_pool(_tracer_pool, max_tracers - _tracers.size())
+	_trim_pool(_light_pool, max_lights - _lights.size())
+	_texture("Gfx/White.png")
+	_texture("Textures/WaterExpl.png")
+	_texture("Textures/Fluid.png")
+	_ensure_fragment_batch()
+	for smoke in range(1, 3):
+		if not _smoke_frames.has(smoke):
+			var frames: Array[Texture2D] = []
+			for frame in range(180 if smoke == 1 else 48):
+				frames.append(_texture("Textures/Smoke%d/%03d.png" % [smoke, frame]))
+			_smoke_frames[smoke] = frames
+	_ensure_tracer_resources()
+	while _particle_pool.size() + _particles.size() < max_particles:
+		_release(_new_particle(), _particle_pool, max_particles)
+	for weapon in range(2):
+		var pool := _casing_pool(weapon)
+		var active := 0
+		for entry in _casings:
+			if entry.weapon == weapon:
+				active += 1
+		while pool.size() + active < max_casings:
+			_release(_new_casing(weapon), pool, max_casings)
+	while _tracer_pool.size() + _tracers.size() < max_tracers:
+		_release(_new_tracer(), _tracer_pool, max_tracers)
+	while _light_pool.size() + _lights.size() < max_lights:
+		_release(_new_light(), _light_pool, max_lights)
 
 func _process(delta: float) -> void:
 	update_effects(delta)
@@ -56,20 +103,55 @@ func _exit_tree() -> void:
 
 func reload_resources() -> void:
 	clear()
+	if is_instance_valid(_fragment_batch):
+		remove_child(_fragment_batch)
+		_dispose(_fragment_batch)
+	_fragment_batch = null
+	_fragment_multimesh = null
+	_fragment_material = null
+	# Queued nodes leave the manager immediately and cannot be acquired again.
+	for pool in [_particle_pool, _rifle_casing_pool, _smg_casing_pool, _tracer_pool, _light_pool]:
+		for node: Node3D in pool:
+			remove_child(node)
+			_dispose(node)
+		pool.clear()
 	_textures.clear()
+	_smoke_frames.clear()
 	_tracer_material = null
 	_tracer_mesh = null
+	prewarm()
 
 func stats() -> Dictionary:
 	return {"particles": _particles.size(), "casings": _casings.size(),
-		"tracers": _tracers.size(), "lights": _lights.size(), "audio": _sounds.size()}
+		"tracers": _tracers.size(), "lights": _lights.size(), "audio": _sounds.size(),
+		"pooled_particles": _particle_pool.size(),
+		"pooled_casings": _rifle_casing_pool.size() + _smg_casing_pool.size(),
+		"pooled_tracers": _tracer_pool.size(), "pooled_lights": _light_pool.size(),
+		"created_nodes": _created_nodes, "batched_particles": _fragment_count}
 
 func clear() -> void:
 	stop_audio()
-	for collection in [_particles, _casings, _tracers, _lights]:
-		for entry: Dictionary in collection:
-			_dispose(entry.node)
-		collection.clear()
+	for entry in _particles:
+		_release(entry.node, _particle_pool, max_particles)
+	for entry in _casings:
+		_release(entry.node, _casing_pool(entry.weapon), max_casings)
+	for entry in _tracers:
+		_release(entry.node, _tracer_pool, max_tracers)
+	for entry in _lights:
+		_release(entry.node, _light_pool, max_lights)
+	_particles.clear()
+	_casings.clear()
+	_tracers.clear()
+	_lights.clear()
+	_fragment_count = 0
+	if _fragment_multimesh != null:
+		_fragment_multimesh.visible_instance_count = 0
+		_fragment_batch.visible = false
+	_trim_pool(_particle_pool, max_particles)
+	_trim_pool(_rifle_casing_pool, max_casings)
+	_trim_pool(_smg_casing_pool, max_casings)
+	_trim_pool(_tracer_pool, max_tracers)
+	_trim_pool(_light_pool, max_lights)
 	_fast_shake = 0.0
 	_slow_shake = 0.0
 	_camera_rotation = Vector3.ZERO
@@ -157,9 +239,9 @@ func muzzle_fire(position: Vector3, _direction: Vector3, _weapon: int, _local: b
 
 func grenade_explosion(position: Vector3, underwater: bool = false) -> void:
 	var distance := _distance(position)
-	kick_camera((1.5 if underwater else 2.0) / (distance + 5.0))
 	if distance > 170.0:
 		return
+	kick_camera((1.5 if underwater else 2.0) / (distance + 5.0))
 	if underwater:
 		_underwater_explosion(position)
 		return
@@ -245,13 +327,14 @@ func water_hit(position: Vector3) -> void:
 
 func eject_shell(position: Vector3, front: Vector3, right: Vector3, up: Vector3, weapon: int) -> void:
 	# Original source has no shotgun firing ejection (pump ejection is a FIXME).
+	_trim_pool(_rifle_casing_pool, max_casings)
+	_trim_pool(_smg_casing_pool, max_casings)
 	if weapon < 0 or weapon > 1 or _distance(position) > 130.0 or _casings.size() >= max_casings:
 		return
-	var node := Node3D.new()
-	var model := OpenSpadesModels.create("Weapons/%s/Casing" % WEAPONS[weapon])
-	model.scale = Vector3.ONE * 0.02
-	node.add_child(model)
-	add_child(node)
+	var pool := _casing_pool(weapon)
+	var node: Node3D = pool.pop_back() if not pool.is_empty() else _new_casing(weapon)
+	node.transform = Transform3D.IDENTITY
+	node.visible = true
 	node.global_position = position - front * 0.5
 	node.global_basis = Basis(right.normalized(), up.normalized(), -front.normalized()).orthonormalized()
 	var fly_direction := front * (0.5 if weapon == 0 else -0.2) + right + up * 0.2
@@ -261,8 +344,20 @@ func eject_shell(position: Vector3, front: Vector3, right: Vector3, up: Vector3,
 		"ground_cell": Vector3i.ZERO, "played": false})
 
 func tracer(origin: Vector3, end: Vector3, weapon: int, local_first_person: bool = false) -> void:
+	_trim_pool(_tracer_pool, max_tracers - _tracers.size())
 	if local_first_person or _tracers.size() >= max_tracers or origin.distance_to(end) < 0.001:
 		return
+	_ensure_tracer_resources()
+	var node: MeshInstance3D = (_tracer_pool.pop_back() if not _tracer_pool.is_empty() else _new_tracer()) as MeshInstance3D
+	# The first tracer update supplies its transform and visibility.
+	node.transform = Transform3D.IDENTITY
+	node.visible = false
+	var speed: float = TRACER_SPEEDS[clampi(weapon, 0, 2)]
+	_tracers.append({"node": node, "origin": origin, "direction": origin.direction_to(end),
+		"distance": -speed / 30.0 + rng.randf() / 30.0, "length": origin.distance_to(end),
+		"speed": speed, "visible_length": speed / 30.0, "first": true})
+
+func _ensure_tracer_resources() -> void:
 	if _tracer_material == null:
 		_tracer_material = StandardMaterial3D.new()
 		_tracer_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -273,33 +368,36 @@ func tracer(origin: Vector3, end: Vector3, weapon: int, local_first_person: bool
 		_tracer_material.albedo_color = Color(1.0, 0.6, 0.2, 0.4)
 		_tracer_mesh = QuadMesh.new()
 		_tracer_mesh.size = Vector2(1.0, 0.1)
-	var node := MeshInstance3D.new()
-	node.mesh = _tracer_mesh
-	node.material_override = _tracer_material
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(node)
-	var speed: float = TRACER_SPEEDS[clampi(weapon, 0, 2)]
-	_tracers.append({"node": node, "origin": origin, "direction": origin.direction_to(end),
-		"distance": -speed / 30.0 + rng.randf() / 30.0, "length": origin.distance_to(end),
-		"speed": speed, "visible_length": speed / 30.0, "first": true})
 
 func update_effects(delta: float) -> void:
+	var elapsed := maxf(delta, 0.0)
 	var duration := clampf(delta, 0.0, 0.1)
 	var steps := maxi(1, ceili(duration * 60.0))
+	for entry in _particles:
+		entry.frame_age = entry.age
+	for entry in _casings:
+		entry.frame_age = entry.age
+	var consumed := 0.0
 	for step in range(steps):
 		var dt := duration / float(steps)
-		_update_particles(dt)
-		_update_casings(dt)
-	_update_tracers(duration)
+		var frame_elapsed := elapsed if step == steps - 1 else elapsed * float(step + 1) / float(steps)
+		var lifetime_dt := frame_elapsed - consumed
+		_update_particles(dt, lifetime_dt, frame_elapsed)
+		_update_casings(dt, lifetime_dt, frame_elapsed)
+		consumed = frame_elapsed
+	_sync_fragment_batch()
+	_update_tracers(elapsed, elapsed - duration)
 	for index in range(_lights.size() - 1, -1, -1):
 		var entry: Dictionary = _lights[index]
-		entry.life -= duration
+		entry.life -= elapsed
 		if entry.life <= 0:
-			_dispose(entry.node)
+			_release(entry.node, _light_pool, max_lights)
 			_lights.remove_at(index)
-	_time += duration
-	_fast_shake = maxf(0.0, _fast_shake - duration)
-	_slow_shake = maxf(0.0, _slow_shake - duration)
+	# Collision integration is bounded, but camera vibration must decay in real
+	# elapsed time even when a slow frame exceeds the particle step budget.
+	_time += elapsed
+	_fast_shake = maxf(0.0, _fast_shake - elapsed)
+	_slow_shake = maxf(0.0, _slow_shake - elapsed)
 	_camera_rotation = Vector3.ZERO
 	if shake_level >= 1:
 		var intensity := minf(_fast_shake * 10.0, 1.0)
@@ -310,23 +408,20 @@ func update_effects(delta: float) -> void:
 			_noise.get_noise_1d(_time * 11.0 + 31.0), _noise.get_noise_1d(_time * 8.0 + 61.0)) * Vector3(0.1, 0.1, 0.2) * intensity
 
 func _spawn(position: Vector3, velocity: Vector3, color: Color, radius: float, life: float, options: Dictionary = {}) -> void:
+	_trim_pool(_particle_pool, max_particles - _particles.size())
 	if _particles.size() >= max_particles:
 		return
 	var smoke: int = options.get("smoke", 0)
 	var image: String = options.get("image", "Gfx/White.png")
-	if smoke != 0:
-		image = "Textures/Smoke%d/000.png" % smoke
-	var node := Sprite3D.new()
-	node.texture = _texture(image)
+	var batched := smoke == 0 and image == "Gfx/White.png"
+	var node: Sprite3D = (_particle_pool.pop_back() if not _particle_pool.is_empty() else _new_particle()) as Sprite3D
+	node.transform = Transform3D.IDENTITY
+	node.texture = _smoke_texture(smoke, 0) if smoke != 0 else _texture(image)
 	node.pixel_size = 1.0 / float(node.texture.get_width())
-	node.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	node.shaded = false
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	node.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 	node.modulate = color
 	node.scale = Vector3.ONE * radius * 2.0
 	node.rotation.z = rng.randf() * TAU
-	add_child(node)
+	node.visible = not batched
 	node.global_position = position
 	_particles.append({"node": node, "velocity": velocity, "age": 0.0, "life": life,
 		"radius": radius, "color": color, "gravity": options.get("gravity", 0.0),
@@ -334,15 +429,15 @@ func _spawn(position: Vector3, velocity: Vector3, color: Color, radius: float, l
 		"radius_damping": options.get("radius_damping", 1.0),
 		"fade_in": options.get("fade_in", 0.0), "fade_out": options.get("fade_out", 1.0),
 		"collision": options.get("collision", DELETE), "smoke": smoke,
-		"fps": options.get("fps", 60.0), "frame": 0})
+		"fps": options.get("fps", 60.0), "frame": 0, "batched": batched})
 
-func _update_particles(delta: float) -> void:
+func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float) -> void:
 	for index in range(_particles.size() - 1, -1, -1):
 		var entry: Dictionary = _particles[index]
-		entry.age += delta
+		entry.age = entry.frame_age + frame_elapsed
 		var frame: int = floori(entry.age * entry.fps)
 		if entry.age >= entry.life or (entry.smoke == 2 and frame >= 48):
-			_dispose(entry.node)
+			_release(entry.node, _particle_pool, max_particles)
 			_particles.remove_at(index)
 			continue
 		var node: Sprite3D = entry.node
@@ -351,15 +446,15 @@ func _update_particles(delta: float) -> void:
 		entry.velocity.y -= 32.0 * entry.gravity * delta
 		if entry.collision != IGNORE and _solid(next):
 			if entry.collision == DELETE:
-				_dispose(node)
+				_release(node, _particle_pool, max_particles)
 				_particles.remove_at(index)
 				continue
 			entry.velocity = _bounce(previous, next, entry.velocity) * 0.36
 			next = previous
 		node.global_position = next
-		entry.velocity *= pow(entry.damping, delta)
-		entry.radius = maxf(0.0001, entry.radius + entry.growth * delta)
-		entry.growth *= pow(entry.radius_damping, delta)
+		entry.velocity *= pow(entry.damping, lifetime_delta)
+		entry.radius = maxf(0.0001, entry.radius + entry.growth * lifetime_delta)
+		entry.growth *= pow(entry.radius_damping, lifetime_delta)
 		node.scale = Vector3.ONE * entry.radius * 2.0
 		var fade := 1.0
 		if entry.fade_in > 0.0:
@@ -372,22 +467,22 @@ func _update_particles(delta: float) -> void:
 		if entry.smoke > 0:
 			frame = frame % (180 if entry.smoke == 1 else 48)
 			if frame != entry.frame:
-				node.texture = _texture("Textures/Smoke%d/%03d.png" % [entry.smoke, frame])
+				node.texture = _smoke_texture(entry.smoke, frame)
 				entry.frame = frame
 
-func _update_casings(delta: float) -> void:
+func _update_casings(delta: float, lifetime_delta: float, frame_elapsed: float) -> void:
 	for index in range(_casings.size() - 1, -1, -1):
 		var entry: Dictionary = _casings[index]
 		var node: Node3D = entry.node
-		entry.age += delta
+		entry.age = entry.frame_age + frame_elapsed
 		if entry.age > 15.0 or (entry.ground_time >= 0 and (entry.ground_time > 2.0 or not _solid_cell(entry.ground_cell))):
-			_dispose(node)
+			_release(node, _casing_pool(entry.weapon), max_casings)
 			_casings.remove_at(index)
 			continue
 		if entry.ground_time >= 0:
-			entry.ground_time += delta
+			entry.ground_time += lifetime_delta
 			if entry.ground_time > 1.0:
-				node.position.y -= delta * 0.2
+				node.position.y -= lifetime_delta * 0.2
 			continue
 		var previous := node.global_position
 		var next: Vector3 = previous + entry.velocity * delta
@@ -395,7 +490,7 @@ func _update_casings(delta: float) -> void:
 		node.rotate_object_local(entry.axis, entry.spin * delta)
 		if next.y < _water_level():
 			_contact(previous, true, entry.weapon)
-			_dispose(node)
+			_release(node, _casing_pool(entry.weapon), max_casings)
 			_casings.remove_at(index)
 			continue
 		if _solid(next):
@@ -414,14 +509,18 @@ func _update_casings(delta: float) -> void:
 		else:
 			node.global_position = next
 
-func _update_tracers(delta: float) -> void:
+func _update_tracers(delta: float, first_frame_hitch: float = 0.0) -> void:
 	for index in range(_tracers.size() - 1, -1, -1):
 		var entry: Dictionary = _tracers[index]
 		if not entry.first:
 			entry.distance += entry.speed * delta
+		else:
+			# Preserve the native initial segment at normal frame times while
+			# accounting for real time lost beyond the first collision frame.
+			entry.distance += entry.speed * first_frame_hitch
 		entry.first = false
 		if entry.distance > entry.length:
-			_dispose(entry.node)
+			_release(entry.node, _tracer_pool, max_tracers)
 			_tracers.remove_at(index)
 			continue
 		var start := maxf(entry.distance, 0.0)
@@ -438,14 +537,16 @@ func _update_tracers(delta: float) -> void:
 		node.global_transform = Transform3D(Basis(entry.direction * (end - start), y, entry.direction.cross(y)), middle)
 
 func _flash(position: Vector3, radius: float, life: float) -> void:
+	_trim_pool(_light_pool, max_lights - _lights.size())
 	if _lights.size() >= max_lights:
 		return
-	var node := OmniLight3D.new()
+	var node: OmniLight3D = (_light_pool.pop_back() if not _light_pool.is_empty() else _new_light()) as OmniLight3D
+	node.transform = Transform3D.IDENTITY
 	node.omni_range = radius
 	node.light_color = Color(1.0, 1.6 / 3.0, 0.5 / 3.0)
 	node.light_energy = 3.0
 	node.shadow_enabled = false
-	add_child(node)
+	node.visible = true
 	node.global_position = position
 	_lights.append({"node": node, "life": life})
 
@@ -510,6 +611,130 @@ func _texture(relative: String) -> Texture2D:
 	if not _textures.has(relative):
 		_textures[relative] = EXTENSIONS.texture(IMAGE_ROOT + relative)
 	return _textures[relative]
+
+func _smoke_texture(smoke: int, frame: int) -> Texture2D:
+	if not _smoke_frames.has(smoke):
+		# Supports tools which reload resources then emit before setup/prewarm.
+		var frames: Array[Texture2D] = []
+		for index in range(180 if smoke == 1 else 48):
+			frames.append(_texture("Textures/Smoke%d/%03d.png" % [smoke, index]))
+		_smoke_frames[smoke] = frames
+	return _smoke_frames[smoke][frame]
+
+func _casing_pool(weapon: int) -> Array[Node3D]:
+	return _rifle_casing_pool if weapon == 0 else _smg_casing_pool
+
+func _new_particle() -> Sprite3D:
+	var node := Sprite3D.new()
+	node.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	node.shaded = false
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	_register_node(node)
+	return node
+
+func _new_casing(weapon: int) -> Node3D:
+	var node := Node3D.new()
+	var model := OpenSpadesModels.create("Weapons/%s/Casing" % WEAPONS[weapon])
+	model.scale = Vector3.ONE * 0.02
+	node.add_child(model)
+	_register_node(node)
+	return node
+
+func _new_tracer() -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.mesh = _tracer_mesh
+	node.material_override = _tracer_material
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_register_node(node)
+	return node
+
+func _new_light() -> OmniLight3D:
+	var node := OmniLight3D.new()
+	node.shadow_enabled = false
+	_register_node(node)
+	return node
+
+func _ensure_fragment_batch() -> void:
+	if _fragment_multimesh == null:
+		var texture := _texture("Gfx/White.png")
+		_fragment_aspect = float(texture.get_height()) / float(texture.get_width())
+		_fragment_material = StandardMaterial3D.new()
+		_fragment_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_fragment_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_fragment_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_fragment_material.vertex_color_use_as_albedo = true
+		_fragment_material.albedo_texture = texture
+		_fragment_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+		var mesh := QuadMesh.new()
+		mesh.size = Vector2(1.0, _fragment_aspect)
+		mesh.material = _fragment_material
+		_fragment_multimesh = MultiMesh.new()
+		_fragment_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		_fragment_multimesh.use_colors = true
+		_fragment_multimesh.mesh = mesh
+		_fragment_batch = MultiMeshInstance3D.new()
+		_fragment_batch.multimesh = _fragment_multimesh
+		_fragment_batch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_register_node(_fragment_batch)
+	if _fragment_multimesh.instance_count != maxi(0, max_particles):
+		_fragment_multimesh.instance_count = maxi(0, max_particles)
+		_fragment_multimesh.visible_instance_count = 0
+		_fragment_count = 0
+		_fragment_batch.visible = false
+
+func _sync_fragment_batch() -> void:
+	_ensure_fragment_batch()
+	_fragment_count = 0
+	var billboard := camera.global_basis.orthonormalized() if is_instance_valid(camera) else Basis.IDENTITY
+	var to_local := _fragment_batch.global_transform.affine_inverse()
+	for entry in _particles:
+		if entry.batched and _fragment_count < _fragment_multimesh.instance_count:
+			_write_fragment(_fragment_count, entry, billboard, to_local)
+			_fragment_count += 1
+	_fragment_multimesh.visible_instance_count = _fragment_count
+	_fragment_batch.visible = _fragment_count > 0
+
+func _write_fragment(index: int, entry: Dictionary, billboard: Basis, to_local: Transform3D) -> void:
+	var node: Sprite3D = entry.node
+	# Match a camera-facing Sprite3D, including its random in-plane spin and
+	# inherited scale. MultiMesh transforms are local to the manager's batch.
+	var facing := billboard * Basis(Vector3.BACK, node.rotation.z) * Basis.from_scale(node.global_basis.get_scale())
+	var pose := Transform3D(facing, node.global_position)
+	var local_pose := to_local * pose
+	_fragment_multimesh.set_instance_transform(index, local_pose)
+	_fragment_multimesh.set_instance_color(index, node.modulate)
+
+func _register_node(node: Node3D) -> void:
+	_created_nodes += _node_count(node)
+	node.visible = false
+	node.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(node)
+
+func _node_count(node: Node) -> int:
+	var count := 1
+	for child in node.get_children():
+		count += _node_count(child)
+	return count
+
+func _release(node: Node3D, pool: Array[Node3D], limit: int) -> void:
+	node.visible = false
+	node.transform = Transform3D.IDENTITY
+	if node is Sprite3D:
+		node.modulate = Color.WHITE
+	elif node is OmniLight3D:
+		node.light_energy = 0.0
+	if pool.size() < maxi(0, limit):
+		pool.append(node)
+	else:
+		remove_child(node)
+		_dispose(node)
+
+func _trim_pool(pool: Array[Node3D], limit: int) -> void:
+	while pool.size() > maxi(0, limit):
+		var node: Node3D = pool.pop_back()
+		remove_child(node)
+		_dispose(node)
 
 func _dispose(node: Node) -> void:
 	if is_instance_valid(node) and not node.is_queued_for_deletion():
