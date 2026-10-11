@@ -63,7 +63,9 @@ Compression enum **1 (reserved Zstandard)** returns an explicit unsupported erro
 
 BEGIN hashes the encoded flagged baseline; END hashes canonical terrain. They can
 differ even without terrain edits. Sender freezes the damage mask and map at the
-actual simulation tick without rewriting authority terrain's last-edit tick.
+actual simulation tick without rewriting live authority data during capture.
+Runtime separately maintains `data.last_tick` as the current closed HitHistory
+frame, which remains required for lag-compensated shooting.
 Catch-up edits remove masks and record their latest per-cell ticks under a32768-cell
 cap. Replica exposes damage before its existing map-install callback, then accepts
 bounded loading-hit replay before the initial state, filtering baseline/stale edits.

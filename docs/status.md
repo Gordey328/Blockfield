@@ -46,10 +46,12 @@ the user's chosen deployment scope is Docker/configuration preparation.
   are complete; frozen f0ddb456dbc7 parser/full prefix through client-prediction
   passed (Controller194/0, MatchSimulation226/0). MapTransfer stopped1171/1 on a
   source-event fixture missing its mandatory actor ordinal; production unchanged.
-  Preserve that failed log, repair the fixture and continue a recorded validation
-  chain with identical game bytes. Next: remaining checks, Web+server export,
-  interactive/public verification. Unrelated effects/pooling work
-  in another chat stays outside this change's staged files and frozen release.
+  Fixture repair passed1186/0 on a14b26f; suffix caught a Runtime hit-history clock
+  regression223/1. Root restores the existing current-tick assignment required by
+  HitHistory, independent of HP. Preserve both failures. Effects chat subsequently
+  committed16f1e70; the next frozen release preserves that committed work and reruns
+  the complete suite rather than reusing its older effects results. Next: fresh
+  full parser/checks, Web+server export, interactive/public verification.
 - Fidelity repairs: recorded frozen0898d6c successful full prefix through mobile-controls;
   dcee15f import/mobile-look144/0/damage31/0; test-only07b3a1b socket-damage32/0;
   dcee15f shaped latency459/0, runtime/server-launcher smoke and Web export. `game/`

@@ -24,6 +24,9 @@ baseline cells: bit `0x02000000` marks damaged canonical solid cells above bedro
 The encoded baseline hash authenticates the flags. Bounded decoding splits flags
 from canonical0x01RRGGBB; the verified END hash remains canonical terrain. Flags
 consume no extra map bytes and are frozen with the map at an actual authority tick.
+Runtime still advances `data.last_tick` each step for HitHistory's closed-frame
+identity and query lease. Frozen sender tick overrides do not mutate live data;
+removing the runtime clock would invalidate lag-compensated shooting.
 Catch-up terrain edits clear affected masks. Damage acquired while loading is
 queued under the existing bounded event budget and delivered before the first
 live state. Replica emits these surviving hits as tint-only catch-up, filtering

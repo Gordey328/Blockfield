@@ -532,6 +532,9 @@ func step_once() -> bool:
 			_shot_ticks[id] = mini(taken.input_tick,simulation.tick)
 	simulation.step_fixed(commands,_shot_ticks)
 	if simulation.tick != next_tick: return false
+	# HitHistory's closed-frame/query lease requires the current authority tick.
+	# This clock is independent of persistent HP and baseline damage capture.
+	simulation.data.last_tick = simulation.tick
 	for id: int in _inputs:
 		var actor := simulation.get_actor(id)
 		if actor != null and actor.spawn_generation != _inputs[id].generation:
