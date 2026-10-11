@@ -143,9 +143,15 @@ the user's chosen deployment scope is Docker/configuration preparation.
   [Evidence](nexquake-mobile-camera.md), [ADR0014](decisions/0014-nexquake-mobile-camera.md),
   [PR1](https://github.com/Gordey328/Blockfield/pull/1). Main's pending research
   records are incorporated; their original bytes and unrelated untracked
-  tools/inspect_aos_install.py are retained in .cache/nexquake-integration-backup-20261011.
-  Next: full frozen combined checks, real exported-browser check, main merge and
-  publication. Physical-phone feel remains pending; parity rows are not promoted.
+  tools/inspect_aos_install.py snapshot are retained in .cache/nexquake-integration-backup-20261011.
+  The live inspection helper continues under its separate research chat ownership.
+  Frozen combined1c04665 passed all85 registered native behavioral/latency checks,
+  parser/import, runtime/server-launcher smoke and Web export. Actual integrated
+  Web probe passed15/0 each at844x390 and390x844, including real movement and shots.
+  Normal rendered Mobile On/mirrored look/fire-drag also passed with empty logs.
+  Probe-only unattributed MutationObserver exception is retained in the evidence.
+  No game bytes changed in subsequent documentation. Main merge/publication is
+  next; physical-phone feel remains pending and parity rows are not promoted.
 
 - Optimization item4 completed/published (2026-10-11): user approved audio,
   VXL loading/saving and memory. Frozen66e4b5b7eb89956657f97d7f623856080ea117b5

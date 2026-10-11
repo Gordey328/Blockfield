@@ -109,17 +109,59 @@ Mobile On and the mirrored layout survived a real browser reload. Engine/browser
 error/warning capture for that tab was empty. Screenshots are retained in
 `.cache/browser/nexquake-normal-*.jpg`; this remains desktop preview evidence.
 
-The source branch is pushed and [draft PR1](https://github.com/Gordey328/Blockfield/pull/1)
-is attached to this chat. The mobile implementation itself is commit4af719a.
-While remote main still lacks the other chat's localafbd05a/eef2225 commits, the
-PR also displays that prerequisite history. After those commits reach main,
-the diff will narrow to this mobile change. Do not merge or publish this older
-combined export over its ongoing VXL-download work; incorporate its final source
-and verify the affected integration before release.
+## Integration with completed optimization work — 2026-10-11
 
-All specialist leases are returned. Our Godot browser tabs were closed after
-checks so they do not compete with the other chat's audio/browser measurements.
-The normal preview HTTP server remains available on8877; failed diagnostic
-servers can be stopped without deleting retained reports.
-Physical Android/iPhone multitouch, aiming comfort, OS safe areas and sustained
-device performance remain unverified.
+The user requested checking the other chat, preserving its changes, merging main
+and publishing for phone testing. The optimization chat completed and returned all
+leases. Merge1c046655fef23dcf46257dc10649d345ec4256d0 contains every main commit
+through922f23072afdee7552e0ed9653fca277ab92e529, including browser VXL staging774e506
+and audio-fixture correction66e4b5b. Git ancestry and the changed-path allowlist
+confirm every other production game file is identical to that completed main;
+only PlayerController, MobileControls and LabHUD differ. No protocol/authority,
+world, audio, material-cache or export-pipeline change was overwritten.
+
+A clean git archive of1c04665 passed all85 registered native behavioral/latency
+invocations, parser/import, runtime/server-launcher smoke and normal Web export
+on Godot4.7.2.stable.official.ed1daf0bf. Controls3068/0, actual mobile look209/0,
+UI284/0, network controller511/0, camera45/0, epoch437/0, VXL62/0, actual Main
+VXL15/0, bounded materials1555/0 and latency465/0 are included in that full run.
+Headless effects explicitly skip three GPU readback assertions; browser rendering
+is checked separately. Logs: `.cache/release-1c046655fef2/.cache/logs/`.
+
+Reproduction uses the pinned engine and frozen helper (absolute Python/Godot paths
+from this machine's status). In a worktree lacking its own .tools engine cache:
+
+```python
+import sys
+from pathlib import Path
+sys.path.insert(0, "tools")
+import build, release_checkpoint
+build.engine = lambda: Path("C:/Users/Gordey/Documents/ChatGPT/Blockfield/.tools/godot/Godot_v4.7.2-stable_win64_console.exe")
+sys.argv = ["release_checkpoint.py", "--revision", "1c046655fef23dcf46257dc10649d345ec4256d0"]
+release_checkpoint.main()
+```
+
+The integrated test-only probe was exported from the same frozen source using
+`--name nexquake-integrated-1` and that source's imported cache. At844x390 it
+passed15/0, yaw-90.000023deg/pitch-10.000005deg, movement3.732916 and two real shots.
+At390x844 it passed15/0, yaw-89.999989deg/pitch-10.000051deg, movement4.109588 and
+ two shots. DOM JSON/screenshots: `.cache/browser/nexquake-integrated-{landscape,portrait}.*`.
+The probe tab captured one unattributed MutationObserver exception with no source
+URL; there were no captured Godot script errors and all checks completed. This
+exception is retained as diagnostic evidence rather than attributed to game code.
+The separate normal export rendered the real lab, retained Mobile On/mirrored
+settings, and accepted horizontal/vertical look and fire-drag; its warning/error
+capture was empty. Screenshot: `.cache/browser/nexquake-integrated-normal.jpg`.
+All three input script hashes match between the probe and frozen normal source.
+
+The separate active chat "Сравнить Ace of Spades и OpenSpades" owns its evolving
+inspection helper and research; those pending files are not included or modified
+by the mobile release. Earlier mobile research bytes are preserved in the main
+checkout's `.cache/nexquake-integration-backup-20261011`, and their substantive
+records are included in this branch. Subsequent documentation-only commits do not
+change the tested game bytes. PR1 is ready for integration after these checks.
+
+Publication evidence is recorded below after deployment. Physical Android/iPhone
+multitouch, aiming comfort, OS safe areas and sustained performance remain pending.
+The existing66e4b5b dedicated-server package stays compatible: wire/authority files
+are byte-identical. No new hosted server or complete-port acceptance is claimed.
