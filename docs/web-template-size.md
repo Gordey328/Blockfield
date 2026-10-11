@@ -122,3 +122,10 @@ Bundle c1a5d66e0793a0944cca725eed8398e1772bfbc3 built; public metadata/WASM/PCK
 SHA256s match (build/reduced-public-verification.json). Public normal Russian
 menu/TDM/keyboard movement passed. The user then approved default integration
 with current main work; see ADR0021.
+
+Default integration source20889b25bbd035639c88bc4b6cc63d2b57d8e90b passed93
+test runs, import/parser/smokes and reduced export. Pages bundle
+88bae197fcfed3aed1c33d7dcb1e1f2d21c1c6cf built; main site uses the reduced
+engine with modern combat UI. Public WASM/PCK hashes match; sibling preserved.
+Public normal TDM movement and rifle10-to8 work, captured warnings/errors empty.
+Evidence: build/integrated-public-verification.json, integrated-public-browser.jpg.

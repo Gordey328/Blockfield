@@ -70,14 +70,24 @@ Next release can explicitly select the accepted custom ZIP; repeat browser
 acceptance if enabling a removed capability or changing the retained contracts.
 
 User approved default integration. Release exports now select the hash-pinned
-reduced ZIP; presets are restored and metadata records its hash. Frozen main
-integration export/public verification pending. New helper: tools/web_release_template.py.
+reduced ZIP; presets are restored and metadata records its hash. Frozen main integration verified and published. New helper: tools/web_release_template.py.
 Sibling https://gordey328.github.io/Blockfield/reduced/ was published as bundle
 c1a5d66e0793a0944cca725eed8398e1772bfbc3 (built). Public metadata/WASM/PCK
 hashes match; normal Russian menu/TDM/keyboard movement work and public
 warning/error list is empty. Evidence: build/reduced-public-verification.json
 and build/reduced-public-browser.jpg. Publisher: tools/publish_pages_variant.py.
 
+Main integration source20889b25bbd035639c88bc4b6cc63d2b57d8e90b passed all93
+test runs, import/parser, runtime/server smokes and reduced export. Modern UI,
+movement, tools and finite TDM shots pass locally; public TDM movement and
+rifle10-to8 pass with no captured warnings/errors. Pages bundle
+88bae197fcfed3aed1c33d7dcb1e1f2d21c1c6cf built at
+https://gordey328.github.io/Blockfield/. Public WASM/PCK hashes match the frozen
+export; sibling retained (build/integrated-public-verification.json). Screenshot:
+build/integrated-public-browser.jpg. Preset restoration checked byte-for-byte.
+Command: bundled Python tools/release_checkpoint.py --revision 20889b25bbd035639c88bc4b6cc63d2b57d8e90b --import-cache game/.godot; tools/publish_pages.py.
+Python compilation and diff checks pass. Unfinished mobile UX and other chats
+remain owned by their coordinators; their next release inherits reduced export.
 
 ## Offline 3×3 team combat — 2026-10-11 (verified Crossroads addition)
 
