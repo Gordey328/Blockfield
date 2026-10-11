@@ -129,9 +129,15 @@ the user's chosen deployment scope is Docker/configuration preparation.
   movement and two weapon shots occurred in both. Harness failures1–4 are retained.
   [Evidence/commands](nexquake-mobile-camera.md), [ADR0014](decisions/0014-nexquake-mobile-camera.md).
   Physical phone aiming/OS safe areas remain unverified; parity stays IMPLEMENTED.
-  Next: normal frozen-export interaction, draft PR handoff, then incorporate the
-  optimization chat's final source before shared integration/publication. All
-  specialist file leases returned; coordinator owns this isolated export only.
+  Clean normal source4af719a import/export passed; actual browser Mobile On,
+  mirrored mouse look/fire-drag and settings reload were exercised without captured
+  engine warnings/errors. Pushed [draft PR1](https://github.com/Gordey328/Blockfield/pull/1)
+  is attached; no shared Main/Pages publication was performed by this change.
+  Remote main does not yet contain the prerequisite local optimization commits,
+  so its current draft diff includes those commits until the other chat pushes.
+  Next: incorporate that chat's final source before shared integration/publication,
+  recheck actual Main/HUD on the combined source, then assess physical phone feel.
+  All specialist leases returned; our browser tabs closed to free render capacity.
 
 - Optimization item4 implementation (2026-10-11): user authorized the summary's
   audio, VXL loading/saving and memory scope. Specialists returned all file leases;

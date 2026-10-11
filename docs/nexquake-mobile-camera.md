@@ -99,6 +99,27 @@ and screenshot are saved under `.cache/browser/nexquake-camera-5-landscape.*`.
 Portrait390×844 passed15/0 with logical480×1038, yaw-89.999989°,
 pitch-10.000051°, movement3.732950 units and two shots. Its DOM JSON and full-page
 screenshot are saved under `.cache/browser/nexquake-camera-5-portrait.*`.
-Normal-export outcomes are recorded after their actual run.
+The normal development export froze clean source
+`4af719a9543747f521fa8cee3857562511a1e7e1`; production import/export passed with
+unchanged project config. SHA-256 for all three input scripts matches the tested
+probe. Served at `http://127.0.0.1:8877/index.html`, the normal game rendered,
+accepted Mobile On and mirrored controls from its actual settings menu, and
+responded to mouse-preview horizontal/vertical look and primary-fire drag.
+Mobile On and the mirrored layout survived a real browser reload. Engine/browser
+error/warning capture for that tab was empty. Screenshots are retained in
+`.cache/browser/nexquake-normal-*.jpg`; this remains desktop preview evidence.
+
+The source branch is pushed and [draft PR1](https://github.com/Gordey328/Blockfield/pull/1)
+is attached to this chat. The mobile implementation itself is commit4af719a.
+While remote main still lacks the other chat's localafbd05a/eef2225 commits, the
+PR also displays that prerequisite history. After those commits reach main,
+the diff will narrow to this mobile change. Do not merge or publish this older
+combined export over its ongoing VXL-download work; incorporate its final source
+and verify the affected integration before release.
+
+All specialist leases are returned. Our Godot browser tabs were closed after
+checks so they do not compete with the other chat's audio/browser measurements.
+The normal preview HTTP server remains available on8877; failed diagnostic
+servers can be stopped without deleting retained reports.
 Physical Android/iPhone multitouch, aiming comfort, OS safe areas and sustained
 device performance remain unverified.
