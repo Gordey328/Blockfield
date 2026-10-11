@@ -31,7 +31,7 @@ func _run() -> void:
 	_test_grenade_distance(effects, camera)
 	_test_hitch_lifetimes(effects, origin)
 	effects.collapse_impact(origin,100)
-	_check(is_equal_approx(effects._slow_shake,.1),"native100-block breakup at5m contributes .1 vibration")
+	_check(is_equal_approx(effects._slow_shake,.0852071006),"100-block breakup at5m applies the shorter feedback range")
 	effects.clear()
 	effects.collapse_impact(camera.position,1000)
 	_check(effects._slow_shake==1.0,"native breakup vibration clamps at1")
@@ -117,36 +117,38 @@ func _run() -> void:
 	quit(0 if failures == 0 else 1)
 
 func _test_grenade_distance(effects: OpenSpadesEffects, camera: Camera3D) -> void:
-	# Source accumulators are tested directly, without stochastic camera samples.
+	# Presentation range is deliberately shorter than native saturation.
 	for underwater in [false, true]:
 		var strength := 1.5 if underwater else 2.0
 		var previous_fast := INF
 		var previous_slow := INF
-		for distance: float in [0.0, 20.0, 80.0, 170.0]:
+		for distance: float in [0.0, 5.0, 20.0, 32.0, 80.0, 170.0]:
 			effects.clear()
 			effects.grenade_explosion(camera.global_position + Vector3.RIGHT * distance, underwater)
-			var expected := strength / (distance + 5.0)
-			_check(is_equal_approx(effects._fast_shake, minf(expected, 0.4)), "Grenade fast vibration uses source distance falloff at %sm (water=%s)" % [distance, underwater])
-			_check(is_equal_approx(effects._slow_shake, minf(expected * 5.0, 0.4)), "Grenade slow vibration uses source distance falloff at %sm (water=%s)" % [distance, underwater])
-			_check(effects._fast_shake < previous_fast and effects._slow_shake <= previous_slow, "Increasing blast distance reduces source vibration accumulators")
+			var expected := strength / (distance + 5.0) / (1.0 + distance * distance / 144.0)
+			_check(is_equal_approx(effects._fast_shake, minf(expected, 0.4)), "Grenade fast vibration has shorter distance falloff at %sm (water=%s)" % [distance, underwater])
+			_check(is_equal_approx(effects._slow_shake, minf(expected * 5.0, 0.4)), "Grenade slow vibration has shorter distance falloff at %sm (water=%s)" % [distance, underwater])
+			_check(effects._fast_shake < previous_fast and effects._slow_shake <= previous_slow, "Increasing blast distance reduces vibration accumulators")
 			previous_fast = effects._fast_shake
 			previous_slow = effects._slow_shake
 			if distance == 170.0:
 				_check(effects.stats().particles > 0, "170m blast boundary still emits source effects")
-		var fast_boundary := 10.0 if underwater else 15.0
-		var slow_boundary := 25.0 if underwater else 35.0
 		effects.clear()
-		effects.grenade_explosion(camera.global_position + Vector3.RIGHT * fast_boundary, underwater)
-		_check(is_equal_approx(effects._fast_shake * 10.0, 1.0), "Original near fast-shake saturation boundary is retained")
-		effects.clear()
-		effects.grenade_explosion(camera.global_position + Vector3.RIGHT * slow_boundary, underwater)
-		_check(is_equal_approx(effects._slow_shake * 4.0, 1.0), "Original near slow-shake saturation boundary is retained")
+		effects.grenade_explosion(camera.global_position + Vector3.RIGHT * 32.0, underwater)
+		var sample := SourceCameraEffects.new().sample({"first_person":false,"shake_level":2,
+			"grenade_fast":effects._fast_shake,"grenade_slow":effects._slow_shake,
+			"random_values":[1,0,1,0,1,0,1,0],"grenade_noise":Vector3.ONE},0.0)
+		_check(absf(sample.native_angles.z) < deg_to_rad(1.0), "32-unit throw has less than one degree of combined peak camera roll")
+		_check(sample.grenade_fast_scaled < .07 and sample.grenade_slow_scaled < .02, "Far throw no longer reaches either camera saturation plateau")
 		effects.clear()
 		effects.grenade_explosion(camera.global_position + Vector3.RIGHT * 170.01, underwater)
 		_check(effects._fast_shake == 0.0 and effects._slow_shake == 0.0 and effects.stats().particles == 0, "Blast beyond170m produces neither vibration nor particles")
 		effects.grenade_explosion(camera.global_position, underwater)
 		effects.update_effects(1.0)
 		_check(effects._fast_shake == 0.0 and effects._slow_shake == 0.0 and effects.get_camera_rotation() == Vector3.ZERO, "One-second hitch drains vibration using elapsed time")
+	effects.clear()
+	effects.collapse_impact(camera.global_position + Vector3.RIGHT * 32.0,100000)
+	_check(effects._slow_shake < .125, "A huge distant collapse cannot bypass the shorter feedback range")
 	effects.clear()
 
 func _test_pooling(effects: OpenSpadesEffects, origin: Vector3) -> void:

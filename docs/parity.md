@@ -258,6 +258,12 @@ No whole-row/device acceptance is implied; rows remain IMPLEMENTED. Commands,
 frozen release and browser limits: [impact evidence](block-impact-performance.md),
 [ADR0015](decisions/0015-budgeted-block-impact-rendering.md).
 
+2026-10-11, U11/U12: the user's distant-blast report leads to an explicit shorter
+grenade/collapse camera and grenade dry/wet audio range under
+[ADR0019](decisions/0019-grenade-feedback-range.md). It supersedes the original
+near-distance saturation contract below. Rules, world scale and particle sizes
+stay unchanged; rows remain IMPLEMENTED. [Current evidence](grenade-feedback.md).
+
 2026-10-11, U12: repair16f1e70 introduces bounded prewarmed effect pools and one
 fragment MultiMesh draw, retains native emission counts/near-distance grenade
 saturation, culls vibration beyond170 units, and consumes actual elapsed lifetime

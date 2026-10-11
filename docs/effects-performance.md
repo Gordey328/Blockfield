@@ -12,8 +12,11 @@ Distance is measured from the current camera, including spectator views.
 
 Native land strength is `2/(distance+5)`, water `1.5/(distance+5)`. Fast vibration
 scales by10, slow accumulates at5 times strength then scales by4 and squares.
-Thus land's initial fast peak saturates through15 units, slow through35; water
-through10/25. Duration still decreases with distance. Those source curves remain.
+Thus native land's initial fast peak saturates through15 units, slow through35;
+water through10/25. Duration decreases with distance. On2026-10-11 the user
+requested a shorter effective range: [ADR0019](decisions/0019-grenade-feedback-range.md)
+adds continuous attenuation to grenade/collapse feedback; [new evidence](grenade-feedback.md)
+supersedes the near-distance saturation assertions recorded below.
 
 The port used a0.1s-capped delta for both collision integration and effect age.
 Long frames prolonged vibration, smoke, fragments, lights and casings and increased

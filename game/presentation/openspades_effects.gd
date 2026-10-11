@@ -184,7 +184,9 @@ func kick_camera(strength: float) -> void:
 func collapse_impact(position: Vector3,block_count: int) -> void:
 	var distance:=_distance(position)
 	if distance>170.0:return
-	_slow_shake=minf(1.0,_slow_shake+float(block_count)/100.0/(distance+5.0))
+	# A large grenade-triggered collapse must not restore a distant full kick.
+	var strength: float = minf(1.0, maxf(0.0, float(block_count)) / 100.0 / (distance + 5.0))
+	_slow_shake=minf(1.0,_slow_shake+strength*GrenadeFeedback.distance_gain(distance))
 
 func blood(position: Vector3) -> void:
 	if not blood_enabled or quality < 1 or _distance(position) > 150.0:
@@ -250,7 +252,7 @@ func grenade_explosion(position: Vector3, underwater: bool = false) -> void:
 	var distance := _distance(position)
 	if distance > 170.0:
 		return
-	kick_camera((1.5 if underwater else 2.0) / (distance + 5.0))
+	kick_camera((1.5 if underwater else 2.0) / (distance + 5.0) * GrenadeFeedback.distance_gain(distance))
 	if underwater:
 		_underwater_explosion(position)
 		return

@@ -88,6 +88,29 @@ func _run() -> void:
 	if world_mono!=null:
 		check(is_equal_approx(db_to_linear(world_mono.volume_db),.2),"mono/stereo world volume agrees")
 		check(world_mono.max_distance==0.0 and world_mono.unit_size==4.0,"no extra 150m linear fade")
+	# The source layer fixtures above stay exact; only explosion playback gets
+	# the selected presentation range, after caps and on both room branches.
+	audio.stop()
+	audio.explosion(Vector3(0,0,-12),false)
+	check(audio._voices.size()==5,"all land explosion layers still start")
+	for voice: Node in audio._voices:
+		check(voice.get_meta("blast_falloff",false),"every explosion layer opts into blast distance response")
+		check(is_equal_approx(db_to_linear(voice.volume_db),.5),"all land layers at12 units are half gain after native caps")
+		for copy: Node in voice.get_meta("copies"):
+			var compensation: float=3.0103 if copy is AudioStreamPlayer3D else 0.0
+			check(is_equal_approx(db_to_linear(copy.volume_db-compensation),.5),"early and late room copies attenuate with the blast")
+	# Listener movement must change existing voices, not only their start gain.
+	camera.position.z=20.0
+	for voice: Node in audio._voices:
+		audio._update_gain(voice)
+		check(db_to_linear(voice.volume_db)<.125,"existing explosion becomes quiet at32 units after listener movement")
+	audio.positional=false
+	audio.explosion(Vector3(0,0,-12),true)
+	for voice: Node in audio._voices.slice(5):
+		check(voice is AudioStreamPlayer and db_to_linear(voice.volume_db)<.125,"water explosion retains distance response with panning disabled")
+	camera.position=Vector3.ZERO
+	var control:=audio.play_spatial("Weapons/DryFire",Vector3(0,0,-12),1.0,12.0)
+	check(not control.get_meta("blast_falloff",false) and is_equal_approx(db_to_linear(control.volume_db),1.0),"ordinary spatial audio keeps its previous attenuation")
 	for weapon in range(3):
 		for first_person in [false,true]:
 			for entry in OpenSpadesAudio.weapon_layers(weapon,first_person,.5,.5,4,4):

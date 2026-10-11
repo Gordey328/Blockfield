@@ -39,8 +39,10 @@ paired evidence: [ADR0016](decisions/0016-impact-cpu-batching.md),
 - Reload gains are .2; shotgun shell completion plays CockLocal/Cock. Tool-swap
   signals play the appropriate RaiseLocal after lowering the old tool. Dry fire and
   restock use the native listener-relative offset.
-- Explosions play five land or three underwater layers with native gains/reference
-  distances. Debris uses the downward voxel hit. Footsteps, jumping/landing, collapse,
+- Explosions retain five land or three underwater layers with native gains/reference
+  metadata; user-selected shorter distance feedback additionally attenuates dry/wet
+  playback after native caps. See [ADR0019](decisions/0019-grenade-feedback-range.md).
+  Debris uses the downward voxel hit. Footsteps, jumping/landing, collapse,
   grenade bounce/water entry, flesh and objective feedback are routed separately.
 - Ogg identification packets determine channel count. Mono voices use Godot spatial
   panning. Stereo world voices keep their channels and use manual inverse-distance

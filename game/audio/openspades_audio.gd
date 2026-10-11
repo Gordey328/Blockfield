@@ -244,7 +244,7 @@ func explosion(point: Vector3,underwater: bool) -> void:
 			var ground:=world.cast_voxel(point,Vector3.DOWN,8.0)
 			if _workload_timing:_ground_usec += Time.get_ticks_usec() - started
 			if ground.hit:origin=Vector3(ground.cell)+Vector3(0,.8,0)
-		play_spatial(layer.path,origin,layer.gain,layer.reference)
+		_play(layer.path,layer.gain,origin,false,layer.reference,true)
 
 func play_local(path: String,gain: float=1.0,offset: Vector3=Vector3.ZERO) -> Node:
 	return _play(path,gain,offset,true,1.0)
@@ -277,14 +277,14 @@ static func is_stereo(stream: AudioStream) -> bool:
 	if stream is AudioStreamWAV:return stream.stereo
 	return false
 
-func _play(path: String,gain: float,point: Vector3,local: bool,reference_distance: float) -> Node:
+func _play(path: String,gain: float,point: Vector3,local: bool,reference_distance: float,blast_falloff: bool = false) -> Node:
 	# A button's later signal listener can outlive immediate scene replacement.
 	if gain<=0.0 or not is_instance_valid(camera) or not is_inside_tree() or not camera.is_inside_tree():return null
 	var stream:=OpenSpadesExtensions.sound("res://assets/openspades/sounds/"+path+".ogg")
 	if stream==null:return null
-	return _start_voice(stream,path,gain,point,local,reference_distance)
+	return _start_voice(stream,path,gain,point,local,reference_distance,blast_falloff)
 
-func _start_voice(stream: AudioStream, path: String, gain: float, point: Vector3, local: bool, reference_distance: float) -> Node:
+func _start_voice(stream: AudioStream, path: String, gain: float, point: Vector3, local: bool, reference_distance: float, blast_falloff: bool = false) -> Node:
 	var identifier:=stream.get_instance_id()
 	if not _stereo.has(identifier):_stereo[identifier]=is_stereo(stream)
 	var spatial: bool=not _stereo[identifier] and positional and (not local or point!=Vector3.ZERO)
@@ -297,6 +297,7 @@ func _start_voice(stream: AudioStream, path: String, gain: float, point: Vector3
 	voice.set_meta("origin",point)
 	voice.set_meta("reference",reference_distance)
 	voice.set_meta("stereo",bool(_stereo[identifier]))
+	voice.set_meta("blast_falloff",blast_falloff)
 	voice.set_meta("efx_eligible",not local or point!=Vector3.ZERO)
 	voice.set_meta("copies",[])
 	_update_routes(voice)
@@ -355,8 +356,11 @@ func _update_gain(voice: Node) -> void:
 	var distance: float=0.0 if local else camera.global_position.distance_to(voice.get_meta("origin",Vector3.ZERO))
 	var reference: float=voice.get_meta("reference",1.0)
 	var gain: float=effective_gain(raw,distance,reference,local,stereo,source_gain)
+	var blast_gain: float=GrenadeFeedback.distance_gain(distance) if voice.get_meta("blast_falloff",false) else 1.0
+	gain*=blast_gain
 	voice.volume_db=linear_to_db(maxf(.000001,gain))
 	var wet_gain: float=effective_wet_gain(raw,distance,reference,local,stereo,source_gain,float(_environment.parameters.decay_time))
+	wet_gain*=blast_gain
 	var target_pitch: float=voice.pitch_scale
 	var target_transform: Transform3D=voice.global_transform if voice is AudioStreamPlayer3D else Transform3D.IDENTITY
 	for copy: Node in voice.get_meta("copies",[]):

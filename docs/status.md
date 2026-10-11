@@ -3,6 +3,23 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Grenade distance feedback — 2026-10-11
+
+User reports almost constant shake/loudness after a distant throw. Root owns
+Effects/Audio and new shared GrenadeFeedback range, related fixtures, ADR0019,
+evidence and release integration. Two read-only camera/audio specialists returned
+their audits without edits/engine leases. No unit/listener defect: native slow
+camera peaks saturate through35 units, main blast sound through150/240. User-selected
+shorter presentation envelope now also bounds grenade-triggered collapse kicks;
+damage/map scale/particle sizes stay intact. All-tool Fire/look, optimization
+advisory and Steam AoS research remain separately owned. Serial workspace import,
+effects32601/0 (3 explicit headless GPU skips), audio158/0, mixer43/0,
+environment76/0, source-camera45/0 and fragment44/0 pass. Raw land mixer RMS32/5
+is.14252 and80/5 .02354; water.05897/.00937. Actual-Main/mobile checks and
+isolated frozen Web interaction/export/publication are pending.
+[Contract](decisions/0019-grenade-feedback-range.md),
+[evidence](grenade-feedback.md). Next: validate and integrate the latest source.
+
 ## Startup download megabytes — 2026-10-11
 
 User asks to show downloaded MB on the startup screen. Root owns only the new
