@@ -43,8 +43,12 @@ the user's chosen deployment scope is Docker/configuration preparation.
   specialists do not run the engine/publish. New client/server identity is network5 /
   authority5-no-block-regen. Current published dcee15f remains the previous source
   recovery behavior until the new validated release is published. Specialist handoffs
-  are complete; MatchSimulation226/0 passed. Next: frozen parser/affected checks,
-  Web+server export, interactive/public verification. Unrelated effects/pooling work
+  are complete; frozen f0ddb456dbc7 parser/full prefix through client-prediction
+  passed (Controller194/0, MatchSimulation226/0). MapTransfer stopped1171/1 on a
+  source-event fixture missing its mandatory actor ordinal; production unchanged.
+  Preserve that failed log, repair the fixture and continue a recorded validation
+  chain with identical game bytes. Next: remaining checks, Web+server export,
+  interactive/public verification. Unrelated effects/pooling work
   in another chat stays outside this change's staged files and frozen release.
 - Fidelity repairs: recorded frozen0898d6c successful full prefix through mobile-controls;
   dcee15f import/mobile-look144/0/damage31/0; test-only07b3a1b socket-damage32/0;

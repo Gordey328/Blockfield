@@ -328,7 +328,7 @@ func _test_damage_flag_failures() -> void:
 	check(full._start(large,_large_transaction(large,1),{},edits,true).ok and not full.advance().ok and large.blocks==before,"join edit-tick history is capped before new private writes instead of growing across slow transfer")
 
 func _damage_event(cell: Vector3i, tick: int, sequence: int, spade: bool = false) -> Dictionary:
-	var event: Dictionary = {"type":"spade_block_hit" if spade else "block_hit","epoch":7,"tick":tick,"owner_id":4,"spawn_generation":1,"action_sequence":1,"match_sequence":sequence,"event_id":"7:4:1:%d" % sequence,"source_event_id":"7:4:1:1","cell":cell,"position":Vector3(cell)+Vector3.ONE*.5,"normal":Vector3i.BACK}
+	var event: Dictionary = {"type":"spade_block_hit" if spade else "block_hit","epoch":7,"tick":tick,"owner_id":4,"spawn_generation":1,"action_sequence":1,"match_sequence":sequence,"actor_event_sequence":sequence,"event_id":"7:4:1:%d" % sequence,"source_event_id":"7:4:1:1","cell":cell,"position":Vector3(cell)+Vector3.ONE*.5,"normal":Vector3i.BACK}
 	if spade: event["dig"]=false
 	else: event["pellet"]=0
 	return event
@@ -360,7 +360,7 @@ func _test_damage_replica_handoff() -> void:
 	replica.drain_events()
 	var events: Array[Dictionary] = [_damage_event(first,11,1),_damage_event(first,12,2),_damage_event(third,14,3,true)]
 	var converted: Dictionary = EVENTS.from_events(7,events)
-	check(converted.ok,"post-baseline hit replay uses unchanged real event schemas and actor IDs")
+	check(converted.ok,"post-baseline hit replay uses unchanged real event schemas and actor IDs: %s" % converted.get("error",""))
 	if converted.ok:
 		replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,converted.payload,7,14,3)))
 		var replay: Array[Dictionary] = replica.drain_events()
@@ -368,10 +368,10 @@ func _test_damage_replica_handoff() -> void:
 		check(replica.baseline_damage_cells=={second:true,third:true} and replica._event_cursor==3,"presentation mask and normal monotonic event cursor advance before initial state")
 		replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,converted.payload,7,14,3)))
 		check(replica.drain_events().is_empty() and replica._event_cursor==3,"duplicate replay packet never emits damage or cosmetics twice")
-		var private_event: Dictionary = {"type":"hurt","epoch":7,"tick":15,"owner_id":8,"spawn_generation":1,"action_sequence":1,"match_sequence":4,"event_id":"7:8:1:1","amount":10,"attacker_id":4,"cause":"weapon","action_id":"7:4:1:1"}
+		var private_event: Dictionary = {"type":"hurt","epoch":7,"tick":15,"owner_id":8,"spawn_generation":1,"action_sequence":1,"match_sequence":4,"actor_event_sequence":1,"event_id":"7:8:1:1","amount":10,"attacker_id":4,"cause":"weapon","action_id":"7:4:1:1"}
 		var private_events: Array[Dictionary] = [private_event]
 		var private_frame: Dictionary = EVENTS.from_events(7,private_events)
-		check(private_frame.ok,"owned private event fixture retains original schema")
+		check(private_frame.ok,"owned private event fixture retains original schema: %s" % private_frame.get("error",""))
 		if private_frame.ok:
 			replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,private_frame.payload,7,15,4)))
 			var owner_events: Array[Dictionary] = replica.drain_events()
@@ -379,7 +379,7 @@ func _test_damage_replica_handoff() -> void:
 		replica.status="live"
 		var live_events: Array[Dictionary] = [_damage_event(first,16,5)]
 		var live_frame: Dictionary = EVENTS.from_events(7,live_events)
-		check(live_frame.ok,"live damage event fixture validates")
+		check(live_frame.ok,"live damage event fixture validates: %s" % live_frame.get("error",""))
 		if live_frame.ok:
 			replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,live_frame.payload,7,16,5)))
 			var live: Array[Dictionary] = replica.drain_events()
