@@ -119,3 +119,21 @@ Other read-only suspects remain: weapon ambience casts24..48 acoustic rays per
 shot; dry/wet audio players still allocate; terrain destruction remeshes chunks.
 These were not changed without measured isolation. Browser/device sustained
 original-map performance remains unaccepted; U12 remains IMPLEMENTED.
+
+## User follow-up: distant shake (2026-10-11)
+
+The user still observes camera shake at a distance and asks whether the repair
+was applied. A fresh public fetch confirms source4c051639e286 and PCK SHA256
+`10be980d25073beab27914f28c6a709d4fea4fa4f571165d9dc96fa46437f518`, equal to the
+local frozen export. The effects repair is therefore in the currently served
+artifact; a user's already-open tab may still be running an earlier load.
+
+The previous repair deliberately retained the native strength curve. It removed
+shake only beyond170 units, and corrected elapsed-time decay. At35 units or less
+the slow channel's initial peak still saturates; beyond35 and through170 it remains
+nonzero. Nearby falling-cluster impacts can also add distance-scaled slow vibration.
+The broad statement that grenade shake was fixed did not mean distant shake was
+removed or near/mid-distance attenuation redesigned. The user's observation is
+compatible with the published behavior. No game changes or new engine checks were
+made for this read-only follow-up. Next action, if requested: tune the intended
+felt range/strength and document the departure from the native curve explicitly.

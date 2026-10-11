@@ -279,6 +279,13 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ### Camera/effects repair handoff (2026-10-11)
 
+Follow-up user report: camera still shakes at a distance. Fresh public metadata/PCK
+fetch confirms4c051639e286 and SHA25610be980d25073beab27914f28c6a709d4fea4fa4f571165d9dc96fa46437f518,
+equal to the local export. The previous repair is published, but retained native
+nonzero shake through170 units and slow-peak saturation through35 units. It did
+not redesign distant attenuation. Read-only source/metadata/hash verification only;
+no game/test/export edits or engine runs. [Clarification](effects-performance.md#user-follow-up-distant-shake-2026-10-11).
+
 Chat `01a1290b-3aaf-79f3-bc3d-a98e264cf7f5` owns only
 `game/presentation/openspades_effects.gd`, `tests/presentation/test_effects.gd`,
 new `tests/browser/effects_probe.gd` and `tools/export_effects_probe.py`, plus its
