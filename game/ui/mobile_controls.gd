@@ -5,6 +5,7 @@ extends Control
 signal action_changed(action: String, pressed: bool)
 signal movement_changed(axis: Vector2)
 signal look_moved(relative: Vector2)
+signal look_canceled
 signal menu_requested
 
 const STICK_SIZE := 160.0
@@ -20,6 +21,7 @@ const MIN_CSS_LABEL_SIZE := 12.0
 const MAX_POINTERS := 32
 const NO_POINTER := -2
 const MOUSE_POINTER := -1
+const MOVE_WIDTH_RATIO := 0.4
 const TOP_ACTIONS: Array[String] = ["tool_spade", "tool_block", "tool_weapon", "tool_grenade", "map", "view_toggle", "menu"]
 const PLAY_ACTIONS: Array[String] = ["primary", "secondary", "reload", "jump", "crouch", "sprint"]
 
@@ -36,20 +38,25 @@ var movement_axis: Vector2 = Vector2.ZERO
 var _floating_stick: bool = true
 var _control_scale: float = 1.0
 var _fire_drag_look: bool = true
+var _left_handed: bool = false
 var floating_stick: bool:
 	get: return _floating_stick
-	set(value): set_touch_preferences(value, _control_scale, _fire_drag_look)
+	set(value): set_touch_preferences(value, _control_scale, _fire_drag_look, _left_handed)
 var control_scale: float:
 	get: return _control_scale
-	set(value): set_touch_preferences(_floating_stick, value, _fire_drag_look)
+	set(value): set_touch_preferences(_floating_stick, value, _fire_drag_look, _left_handed)
 var fire_drag_look: bool:
 	get: return _fire_drag_look
-	set(value): set_touch_preferences(_floating_stick, _control_scale, value)
+	set(value): set_touch_preferences(_floating_stick, _control_scale, value, _left_handed)
+var left_handed: bool:
+	get: return _left_handed
+	set(value): set_touch_preferences(_floating_stick, _control_scale, _fire_drag_look, value)
 var _player: BlockfieldPlayer
 var _hud: LabHUD
 var _enabled: bool = false
 var _active: bool = false
 var _regions: Dictionary[String, Rect2] = {}
+var _look_hint_rect: Rect2 = Rect2()
 var _owners: Dictionary[int, PointerOwner] = {}
 var _action_counts: Dictionary[String, int] = {}
 var _move_owner: int = NO_POINTER
@@ -99,18 +106,19 @@ func set_enabled(enabled: bool) -> void:
 		release_all()
 	_sync_active()
 
-func set_touch_preferences(floating: bool, scale: float, fire_look: bool) -> void:
+func set_touch_preferences(floating: bool, scale: float, fire_look: bool, left: bool = false) -> void:
 	# A new layout/gesture policy cannot inherit a held pointer's old baseline.
 	release_all()
 	_floating_stick = floating
 	if is_finite(scale): _control_scale = clampf(scale, 0.8, 1.4)
 	_fire_drag_look = fire_look
+	_left_handed = left
 	_layout_size = Vector2(-1, -1)
 	_ensure_layout()
 
 func set_mouse_preview_enabled(enabled: bool) -> void:
 	_mouse_preview_enabled = enabled
-	if not enabled: _release_pointer(MOUSE_POINTER)
+	if not enabled: _release_pointer(MOUSE_POINTER, true)
 
 func release_all() -> void:
 	# Clear ownership before emitting: menu/focus callbacks may reenter this.
@@ -126,6 +134,8 @@ func release_all() -> void:
 	_move_grab_offset = Vector2.ZERO
 	_stick_center = _resting_stick_center
 	_set_movement(Vector2.ZERO)
+	# Previously emitted look may still be queued until the player's next frame.
+	look_canceled.emit()
 	for action: String in actions:
 		action_changed.emit(action, false)
 	queue_redraw()
@@ -178,7 +188,7 @@ func _handle_pointer(index: int, position: Vector2, pressed: bool, canceled: boo
 	if not _active:
 		return false
 	if canceled or not pressed:
-		return _release_pointer(index)
+		return _release_pointer(index, canceled)
 	if _owners.has(index):
 		return true # Duplicate down cannot change a pointer's original claim.
 	if _owners.size() >= MAX_POINTERS:
@@ -250,10 +260,11 @@ func _drag_pointer(index: int, position: Vector2, relative: Vector2) -> bool:
 	queue_redraw()
 	return true
 
-func _release_pointer(index: int) -> bool:
+func _release_pointer(index: int, canceled: bool = false) -> bool:
 	if not _owners.has(index):
 		return false
 	var owner: PointerOwner = _owners[index]
+	var cancel_look: bool = canceled and _look_owner == index
 	_owners.erase(index)
 	match owner.kind:
 		PointerKind.MOVE:
@@ -271,6 +282,8 @@ func _release_pointer(index: int) -> bool:
 			_set_owner_holding(owner, false)
 		_:
 			pass
+	if cancel_look:
+		look_canceled.emit()
 	queue_redraw()
 	return true
 
@@ -376,6 +389,7 @@ func _ensure_layout() -> void:
 	release_all()
 	_layout_size = size
 	_regions.clear()
+	_look_hint_rect = Rect2()
 	if size.x < 440.0 or size.y < 320.0:
 		return
 	var button_floor: float = _logical_button_floor()
@@ -404,24 +418,39 @@ func _ensure_layout() -> void:
 	var play_rows: int = ceili(float(PLAY_ACTIONS.size()) / float(play_columns))
 	var grid_width: float = _button_size * play_columns + GAP * (play_columns - 1)
 	var grid_origin := Vector2(size.x - MARGIN - grid_width, size.y - HUD_BOTTOM_RESERVE - _button_size * play_rows - GAP * (play_rows - 1))
+	var move_width: float = size.x * MOVE_WIDTH_RATIO
 	_stick_extent = maxf(32.0, minf(desired_stick, minf(grid_origin.x - MARGIN - GAP, size.y - HUD_BOTTOM_RESERVE - look_top - GAP - 32.0)))
+	if not _floating_stick:
+		# A fixed activation pad must fit inside the movement column. Floating
+		# mode keeps the existing radius and only clamps its visible base.
+		_stick_extent = minf(_stick_extent, move_width - MARGIN * 2.0)
 	_stick_radius = STICK_RADIUS * _stick_extent / STICK_SIZE
 	_resting_stick_center = Vector2(MARGIN + _stick_extent * 0.5, size.y - HUD_BOTTOM_RESERVE - _stick_extent * 0.5)
 	if _floating_stick:
 		# Buttons have hit-test priority. The left thumb need not hit a small
 		# drawn circle to begin movement; each gesture starts neutral at DOWN.
-		var move_width: float = minf(size.x * 0.45 - MARGIN, grid_origin.x - MARGIN - GAP)
-		_regions["move"] = Rect2(Vector2(MARGIN, look_top), Vector2(move_width, size.y - HUD_BOTTOM_RESERVE - look_top))
+		_regions["move"] = Rect2(Vector2.ZERO, Vector2(move_width, size.y))
 		_stick_radius = minf(_stick_radius, minf(move_width, _regions["move"].size.y) * 0.5)
+		_resting_stick_center.x = clampf(_resting_stick_center.x, _stick_radius, move_width - _stick_radius)
 	else:
 		_regions["move"] = Rect2(Vector2(MARGIN, size.y - HUD_BOTTOM_RESERVE - _stick_extent), Vector2.ONE * _stick_extent)
-	_stick_center = _resting_stick_center
 	for index: int in range(PLAY_ACTIONS.size()):
 		var offset := Vector2(index % play_columns, floori(float(index) / float(play_columns))) * (_button_size + GAP)
 		_regions[PLAY_ACTIONS[index]] = Rect2(grid_origin + offset, Vector2.ONE * _button_size)
-	var look_bottom: float = (grid_origin.y if _floating_stick else minf(grid_origin.y, _regions["move"].position.y)) - GAP
-	_regions["look"] = Rect2(Vector2(size.x * 0.5, look_top), Vector2(size.x * 0.5 - MARGIN, maxf(0, look_bottom - look_top)))
+	# Blank space behind the toolbar, action grid and footer can begin look;
+	# buttons win the DOWN hit test, then this role stays owned until release.
+	_regions["look"] = Rect2(Vector2(move_width, 0.0), Vector2(size.x - move_width, size.y))
+	_look_hint_rect = Rect2(Vector2(move_width, grid_origin.y - GAP - 24.0), Vector2(size.x - move_width - MARGIN, 24.0))
+	if _left_handed:
+		for name: String in _regions:
+			_regions[name] = _mirror_rect(_regions[name])
+		_resting_stick_center.x = size.x - _resting_stick_center.x
+		_look_hint_rect = _mirror_rect(_look_hint_rect)
+	_stick_center = _resting_stick_center
 	queue_redraw()
+
+func _mirror_rect(rect: Rect2) -> Rect2:
+	return Rect2(Vector2(size.x - rect.end.x, rect.position.y), rect.size)
 
 func _layout_row(actions: Array[String], y: float) -> void:
 	var width: float = actions.size() * _button_size + (actions.size() - 1) * GAP
@@ -465,8 +494,7 @@ func _draw() -> void:
 	draw_circle(center + _stick_delta, 24.0 * _stick_radius / STICK_RADIUS, Color(0.75, 0.9, 1.0, 0.40 if _move_owner == NO_POINTER else 0.72))
 	var hint_y: float = minf(center.y + _stick_radius - 4.0, size.y - HUD_BOTTOM_RESERVE - 24.0)
 	_draw_label(Rect2(Vector2(center.x - 75, hint_y), Vector2(150, 24)), _ui("Движение", "Move"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.58))
-	var look: Rect2 = _regions["look"]
-	_draw_label(Rect2(Vector2(look.position.x, look.end.y - 24), Vector2(look.size.x, 24)), _ui("Проведи для поворота", "Drag to look"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.34))
+	_draw_label(_look_hint_rect, _ui("Проведи для поворота", "Drag to look"), _hint_font_size, Color(0.91, 0.96, 1.0, 0.34))
 
 func _draw_label(rect: Rect2, text: String, font_size: int, color: Color) -> void:
 	var lines: PackedStringArray = text.split("\n")

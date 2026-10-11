@@ -72,6 +72,7 @@ var touch_controls_mode:=0 # Auto / on / off, persisted with UI preferences.
 var floating_stick: bool = true
 var touch_control_scale: float = 1.0
 var fire_drag_look: bool = true
+var left_handed_touch: bool = false
 var _touch_device:=false
 var _focused:=true
 var _mobile_mouse_bindings: Dictionary={}
@@ -774,7 +775,8 @@ func _create_mobile_controls() -> void:
 	_apply_touch_preferences()
 	mobile_controls.action_changed.connect(_mobile_action_changed)
 	mobile_controls.movement_changed.connect(func(axis: Vector2):player.touch_movement=axis)
-	mobile_controls.look_moved.connect(func(relative: Vector2):player.apply_touch_motion(relative,mobile_controls.size))
+	mobile_controls.look_moved.connect(func(relative: Vector2):player.queue_touch_motion(relative,mobile_controls.size))
+	mobile_controls.look_canceled.connect(player.clear_touch_motion)
 	mobile_controls.menu_requested.connect(func():set_menu_visible(true))
 	mobile_controls.set_enabled(false)
 
@@ -782,16 +784,17 @@ func _apply_touch_preferences() -> void:
 	touch_control_scale = clampf(touch_control_scale, 0.8, 1.4) if is_finite(touch_control_scale) else 1.0
 	if mobile_controls == null:
 		return
-	mobile_controls.set_touch_preferences(floating_stick, touch_control_scale, fire_drag_look)
+	mobile_controls.set_touch_preferences(floating_stick, touch_control_scale, fire_drag_look, left_handed_touch)
 	mobile_controls.set_mouse_preview_enabled(not _touch_device)
 	_apply_map_settings()
 
 func _build_touch_settings(column: VBoxContainer) -> void:
-	column.add_child(_ui_label("Движение слева, обзор справа. Удерживайте «Огонь» и ведите пальцем для стрельбы с обзором.","Move on the left, look on the right. Hold Fire and drag to aim while firing.",14))
+	column.add_child(_ui_label("Свайп в области обзора поворачивает камеру. Удерживайте «Огонь» и ведите пальцем для стрельбы с обзором.","Swipe in the look area to turn the camera. Hold Fire and drag to aim while firing.",14))
 	_ui_settings_controls.touch_sensitivity = _touch_setting_slider(column,"Обзор пальцем","Touch look",0.25,3.0,player.touch_sensitivity,func(value: float):player.touch_sensitivity=value;main.save_settings())
 	_ui_settings_controls.touch_ads_sensitivity = _touch_setting_slider(column,"Обзор в прицеле","Touch ADS look",0.25,2.0,player.touch_ads_sensitivity,func(value: float):player.touch_ads_sensitivity=value;main.save_settings())
 	_ui_settings_controls.invert_touch = _ui_check(column,"Инвертировать обзор пальцем","Invert touch look",player.invert_touch,func(value: bool):player.invert_touch=value;main.save_settings())
 	_ui_settings_controls.floating_stick = _ui_check(column,"Плавающий джойстик","Floating joystick",floating_stick,func(value: bool):floating_stick=value;_apply_touch_preferences();_save_ui_settings())
+	_ui_settings_controls.left_handed_touch = _ui_check(column,"Джойстик справа · для левшей","Joystick on the right · left-handed",left_handed_touch,func(value: bool):left_handed_touch=value;_apply_touch_preferences();_save_ui_settings())
 	_ui_settings_controls.fire_drag_look = _ui_check(column,"Огонь и обзор одним пальцем","Fire and look with one finger",fire_drag_look,func(value: bool):fire_drag_look=value;_apply_touch_preferences();_save_ui_settings())
 	_ui_settings_controls.touch_control_scale = _touch_setting_slider(column,"Размер кнопок и джойстика","Button and joystick size",0.8,1.4,touch_control_scale,func(value: float):touch_control_scale=value;_apply_touch_preferences();_save_ui_settings())
 	_ui_settings_controls.touch_reset = _ui_button("Сбросить мобильное управление","Reset mobile controls",_reset_touch_settings)
@@ -824,14 +827,15 @@ func _reset_touch_settings() -> void:
 	floating_stick=true
 	touch_control_scale=1.0
 	fire_drag_look=true
+	left_handed_touch=false
 	for key: String in ["touch_sensitivity","touch_ads_sensitivity","touch_control_scale"]:
 		var slider: HSlider = _ui_settings_controls[key]
 		slider.set_value_no_signal(1.0)
 		var amount: Label = slider.get_meta("touch_amount_label")
 		amount.text="100%"
-	for key: String in ["invert_touch","floating_stick","fire_drag_look"]:
+	for key: String in ["invert_touch","floating_stick","fire_drag_look","left_handed_touch"]:
 		var button: CheckButton = _ui_settings_controls[key]
-		button.set_pressed_no_signal(bool(player.invert_touch) if key=="invert_touch" else true)
+		button.set_pressed_no_signal(false if key in ["invert_touch","left_handed_touch"] else true)
 	_apply_touch_preferences()
 	_save_ui_settings()
 	main.save_settings()
@@ -846,7 +850,9 @@ func _mobile_action_changed(action: String,pressed: bool) -> void:
 
 func _release_mobile_input() -> void:
 	if mobile_controls!=null:mobile_controls.release_all()
-	if player!=null:player.touch_movement=Vector2.ZERO
+	if player!=null:
+		player.touch_movement=Vector2.ZERO
+		player.clear_touch_motion()
 
 func _set_mobile_mouse_bindings(active: bool) -> void:
 	# Input's global action state updates before a Control can consume a click.
@@ -1273,6 +1279,7 @@ func _load_ui_settings() -> void:
 		floating_stick=bool(config.get_value("ui","floating_stick",true))
 		touch_control_scale=float(config.get_value("ui","touch_control_scale",1.0))
 		fire_drag_look=bool(config.get_value("ui","fire_drag_look",true))
+		left_handed_touch=bool(config.get_value("ui","left_handed_touch",false))
 	_apply_touch_preferences()
 	_apply_map_settings()
 	_refresh_ui_controls()
@@ -1315,7 +1322,7 @@ func _apply_map_settings() -> void:
 func _save_ui_settings() -> void:
 	var config:=ConfigFile.new()
 	config.load("user://settings.cfg")
-	var values: Dictionary={"touch_controls":touch_controls_mode,"floating_stick":floating_stick,"touch_control_scale":touch_control_scale,"fire_drag_look":fire_drag_look,"minimap_size":_minimap_size,"statistics":_show_statistics,"hit_feedback":_show_hit_feedback,"alerts":_show_alerts,"player_names":_show_names,"map_weapon_icons":_map_weapon_icons,"map_player_colors":_map_player_colors,"hidden":_hud_hidden}
+	var values: Dictionary={"touch_controls":touch_controls_mode,"floating_stick":floating_stick,"touch_control_scale":touch_control_scale,"fire_drag_look":fire_drag_look,"left_handed_touch":left_handed_touch,"minimap_size":_minimap_size,"statistics":_show_statistics,"hit_feedback":_show_hit_feedback,"alerts":_show_alerts,"player_names":_show_names,"map_weapon_icons":_map_weapon_icons,"map_player_colors":_map_player_colors,"hidden":_hud_hidden}
 	for key in values:config.set_value("ui",key,values[key])
 	config.save("user://settings.cfg")
 
@@ -1648,6 +1655,7 @@ func _refresh_ui_controls() -> void:
 			"floating_stick":value=floating_stick
 			"touch_control_scale":value=touch_control_scale
 			"fire_drag_look":value=fire_drag_look
+			"left_handed_touch":value=left_handed_touch
 			"touch_reset":continue
 			_:value=get_console_setting(key)
 		if control is CheckButton:control.set_pressed_no_signal(bool(value))

@@ -116,6 +116,23 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
+- NexQuake mobile camera (2026-10-11, isolated branch): user selected the reference
+  and requested checking the other chat to avoid overwrites. Implemented in managed
+  worktree `C:/Users/Gordey/.codex/worktrees/nexquake-mobile/Blockfield`, branch
+  `codex/nexquake-mobile`; incorporated optimizationafbd05a/eef2225. Changed only
+  MobileControls/PlayerController/HUD, their UI/integration fixtures, test-only
+  browser probe/export helper and mobile docs/ADR0014. Main/audio/world/model/build
+  remain owned by the active chat "Изучить проект и составить план".
+  Godot4.7.2 import and eight affected suites passed4635/0; actual Main/HUD repeated
+  on eef2225:208/0+284/0, runtime passed. Temporary native userdata keys were removed.
+  Real Web export synthetic-touch checks passed15/0 each at844×390/390×844; actual
+  movement and two weapon shots occurred in both. Harness failures1–4 are retained.
+  [Evidence/commands](nexquake-mobile-camera.md), [ADR0014](decisions/0014-nexquake-mobile-camera.md).
+  Physical phone aiming/OS safe areas remain unverified; parity stays IMPLEMENTED.
+  Next: normal frozen-export interaction, draft PR handoff, then incorporate the
+  optimization chat's final source before shared integration/publication. All
+  specialist file leases returned; coordinator owns this isolated export only.
+
 - Optimization item4 implementation (2026-10-11): user authorized the summary's
   audio, VXL loading/saving and memory scope. Specialists returned all file leases;
   coordinator owns integration/docs, including ADR0013, and engine/export/release.

@@ -5,8 +5,8 @@ const SCENE = preload("res://scenes/main.tscn")
 const FILES: Array[String] = ["user://settings.cfg", "user://servers.cfg"]
 const DESKTOP := {"sensitivity":0.006,"mouse_exponent":1.8,"ads_sensitivity":0.43,"invert_mouse":true}
 const TOUCH_KEYS: Array[String] = ["touch_sensitivity","touch_ads_sensitivity","invert_touch"]
-const UI_KEYS: Array[String] = ["floating_stick","touch_control_scale","fire_drag_look"]
-const TURN := 300.0 * PI / 180.0
+const UI_KEYS: Array[String] = ["floating_stick","touch_control_scale","fire_drag_look","left_handed_touch"]
+const TURN := 400.0 * PI / 180.0
 const EPS := 0.00003
 var checks := 0
 var failures := 0
@@ -14,6 +14,27 @@ var app: Node3D
 var saved: Dictionary = {}
 var globals: Dictionary = {}
 var finishing := false
+
+## Records the actual controller's command boundary; transport and prediction
+## are deliberately absent. Socket/recoil behavior remains covered separately.
+class RecordingReplica extends BlockfieldClientReplica:
+	var owner: SharedPlayerState = SharedPlayerState.new()
+	var submitted: Array[Dictionary] = []
+	var objectives: Dictionary = {}
+
+	func get_owner_state() -> SharedPlayerState:
+		return owner.copy() if owner != null else null
+
+	func get_public_state() -> Dictionary:
+		if owner == null:
+			return {}
+		return {"epoch":owner.match_epoch,"tick":owner.last_tick,"actors":[],"grenades":[],"objectives":objectives}
+
+	func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: int = 255, weapon: int = 255) -> Dictionary:
+		submitted.append({"buttons":buttons,"move":move,"yaw":yaw,"pitch":pitch,"tool":tool,"weapon":weapon})
+		owner.yaw = yaw
+		owner.pitch = pitch
+		return {"ok":true}
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -44,6 +65,7 @@ func pose() -> Vector4:
 	return Vector4(app.player.rotation.y,app.player.head.rotation.x,app.player._camera_yaw,app.player._camera_pitch)
 
 func reset_pose(mode: int = BlockfieldPlayer.CameraMode.FIRST_PERSON) -> void:
+	app.player.clear_touch_motion()
 	app.player.camera_mode = mode
 	app.player.rotation = Vector3.ZERO
 	app.player.head.rotation = Vector3.ZERO
@@ -116,6 +138,7 @@ func create_app() -> bool:
 	app.set_process(false)
 	app.set_physics_process(false)
 	app.player.set_physics_process(false)
+	app.player.set_process(false)
 	app.hud.set_process(false)
 	return ready
 
@@ -124,11 +147,14 @@ func initial_defaults() -> void:
 	check(app.hud.floating_stick and near(app.hud.touch_control_scale,1.0) and app.hud.fire_drag_look,"missing UI preferences load floating stick, default scale and fire-drag defaults")
 	var mobile: Control = app.hud.mobile_controls
 	check(mobile.floating_stick and near(mobile.control_scale,1.0) and mobile.fire_drag_look,"actual first overlay creation receives HUD default preferences")
+	check(not app.hud.left_handed_touch and not mobile.left_handed,"missing preference keeps the NexQuake movement zone on the left")
 	for property: String in DESKTOP:
 		check(app.player.get(property) == DESKTOP[property],"new defaults preserve independently loaded desktop " + property)
 
 func normalization() -> void:
 	defaults()
+	app.player.apply_touch_motion(Vector2(450,0),Vector2(1000,600))
+	check(yaw_near(app.player.rotation.y,-PI),"NexQuake default gives 180 degrees per 45 percent of full logical width")
 	for extent: Vector2 in [Vector2(960,540),Vector2(1920,1080),Vector2(844,390),Vector2(390,844)]:
 		reset_pose()
 		app.player.apply_touch_motion(Vector2(extent.x * 0.18,extent.x * 0.035),extent)
@@ -167,6 +193,212 @@ func segmentation() -> void:
 		check(yaw_near(app.player.rotation.y,-TURN * total.x / extent.x),"one swipe split into%d events preserves yaw despite mouse acceleration" % segments)
 		check(near(app.player.head.rotation.x,-TURN * total.y / extent.x),"event/frame-rate segmentation preserves linear touch pitch")
 	check(near(app.player.mouse_exponent,2.7) and near(app.player.sensitivity,0.07) and near(app.player.ads_sensitivity,1.9),"touch events do not rewrite desktop tuning")
+	for segments: int in [1,2,7,64]:
+		reset_pose()
+		for index in segments:
+			app.player.queue_touch_motion(total / float(segments),extent)
+		check(pose() == Vector4.ZERO,"queued swipe waits for a frame boundary at%d event segments" % segments)
+		check(app.player.flush_touch_motion(),"queued swipe is consumed once")
+		check(yaw_near(app.player.rotation.y,-TURN * total.x / extent.x) and near(app.player.head.rotation.x,-TURN * total.y / extent.x),"queued event segmentation preserves angular displacement")
+		var consumed := pose()
+		check(not app.player.flush_touch_motion() and pose() == consumed,"second flush never replays a consumed swipe")
+	reset_pose()
+	for index in 8:
+		app.player.queue_touch_motion(total / 8.0,extent)
+		app.player._process(0.002 if index % 2 == 0 else 0.2)
+	check(yaw_near(app.player.rotation.y,-TURN * total.x / extent.x) and near(app.player.head.rotation.x,-TURN * total.y / extent.x),"render-frame segmentation and variable dt do not change touch displacement")
+
+func queued_permissions() -> void:
+	defaults()
+	var extent := Vector2(1000,600)
+	app.player.queue_touch_motion(Vector2(20,-5),extent)
+	for invalid: Vector2 in [Vector2.ZERO,Vector2(1000,0),Vector2(NAN,600),Vector2(1000,INF)]:
+		app.player.queue_touch_motion(Vector2(100,100),invalid)
+	app.player.queue_touch_motion(Vector2(INF,0),extent)
+	check(app.player.flush_touch_motion() and yaw_near(app.player.rotation.y,-TURN * 0.02) and near(app.player.head.rotation.x,TURN * 0.005),"invalid queued input cannot poison an earlier valid drag")
+	reset_pose()
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	app.player.clear_touch_motion()
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"explicit cancellation discards pending motion without replay")
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	app.player.controls_enabled = false
+	app.player.controls_enabled = true
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"permission loss clears queued motion even if focus returns before flush")
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	app.player._clear_input_state()
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"respawn/map input reset clears pending look")
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	var offline: LocalSession = app.player.session
+	app.player.session = null
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"detached session drops rather than defers pending motion")
+	app.player.session = offline
+	check(not app.player.flush_touch_motion(),"session restoration cannot replay detached input")
+	reset_pose(BlockfieldPlayer.CameraMode.FOLLOW_FIRST_PERSON)
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"follow first-person cannot queue local look")
+	defaults()
+	app.player.touch_sensitivity = 1.25
+	app.player.touch_ads_sensitivity = 0.6
+	app.player.invert_touch = true
+	app.player._aim_down_state = 0.5
+	var gain: float = TURN * 1.25 * pow(0.6,0.5) / app.player.get_aim_zoom()
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	app.player.flush_touch_motion()
+	check(yaw_near(app.player.rotation.y,-gain * 0.05) and near(app.player.head.rotation.x,gain * 0.01),"queued path shares weapon ADS zoom and independent touch inversion")
+	defaults()
+	app.session.team = 2
+	reset_pose(BlockfieldPlayer.CameraMode.FREE)
+	app.player._free_position = Vector3(8,4,8)
+	app.player.queue_touch_motion(Vector2(50,10),extent)
+	app.player._process(0.005)
+	check(near(app.player._camera_yaw,-TURN * 0.05) and near(app.player._camera_pitch,-TURN * 0.01),"render boundary consumes spectator touch without a physics step")
+	var expected: Basis = Basis.from_euler(Vector3(-TURN * 0.01,-TURN * 0.05,0.0))
+	check(app.player.camera.global_basis.is_equal_approx(expected),"render flush refreshes spectator presentation basis: " + str(app.player.camera.global_basis))
+	# Setting a global transform beneath the translated Head round-trips through
+	# its inverse; the presentation position can differ by float rounding.
+	check(app.player._free_position == Vector3(8,4,8) and app.player.camera.global_position.is_equal_approx(Vector3(8,4,8)),"render flush preserves free-camera position: " + str(app.player.camera.global_position))
+	defaults()
+
+func orbit_effects_preserved() -> void:
+	defaults()
+	app.session.team = 2
+	reset_pose(BlockfieldPlayer.CameraMode.FREE)
+	app.player._free_position = Vector3(8,4,8)
+	var saved_helper: SourceCameraEffects = app.player._camera_effects
+	var saved_basis: Basis = app.player._camera_effect_basis
+	var saved_shake: int = app.graphics_options.shake
+	var saved_fast: float = app.effects._fast_shake
+	var saved_slow: float = app.effects._slow_shake
+	app.player._camera_effects = SourceCameraEffects.new(9273)
+	app.graphics_options.shake = 2
+	app.effects._fast_shake = 0.2
+	app.effects._slow_shake = 0.2
+	app.player._update_camera_transform()
+	var old_base: Basis = app.player.camera.global_basis
+	app.player._update_camera_effects(1.0 / 60.0)
+	# Observe the real applied grenade sample rather than using the cache as the
+	# oracle. Orbit updates must carry this rotation onto the newly aimed basis.
+	var effect: Basis = old_base.inverse() * app.player.camera.global_basis
+	check(not effect.is_equal_approx(Basis.IDENTITY),"spectator grenade fixture has a nonzero actual rotation effect")
+	var random_state: int = app.player._camera_effects._rng.state
+	var aim_state: float = app.player._aim_down_state
+	var fov: float = app.player.camera.fov
+	var radial: float = app.player.camera_radial_blur
+	app.player.queue_touch_motion(Vector2(50,10),Vector2(1000,600))
+	app.player._process(0.25)
+	var new_base: Basis = Basis.from_euler(Vector3(-TURN * 0.01,-TURN * 0.05,0.0))
+	check(app.player.camera.global_basis.is_equal_approx(new_base * effect),"render look refresh preserves the current grenade rotation on the new spectator base")
+	check(app.player._camera_effects._rng.state == random_state and near(app.player._aim_down_state,aim_state),"render refresh does not sample new randomness or integrate ADS")
+	check(near(app.player.camera.fov,fov) and near(app.player.camera_radial_blur,radial) and near(app.effects._fast_shake,0.2) and near(app.effects._slow_shake,0.2),"render refresh preserves sampled FOV/blur and does not decay grenade intensities")
+	app.player.queue_touch_motion(Vector2(10,0),Vector2(1000,600))
+	app.player._process(0.001)
+	new_base = Basis.from_euler(Vector3(-TURN * 0.01,-TURN * 0.06,0.0))
+	check(app.player.camera.global_basis.is_equal_approx(new_base * effect),"successive render look refreshes reapply the effect once rather than accumulating it")
+	check(app.player._camera_effects._rng.state == random_state,"successive render refresh leaves the camera RNG stream untouched")
+	app.player._camera_effects = saved_helper
+	app.player._camera_effect_basis = saved_basis
+	app.graphics_options.shake = saved_shake
+	app.effects._fast_shake = saved_fast
+	app.effects._slow_shake = saved_slow
+	defaults()
+
+func network_command_boundary() -> void:
+	defaults()
+	LabInputBindings.release_actions()
+	var replica := RecordingReplica.new()
+	replica.status = "live"
+	replica.actor_id = 1
+	replica.epoch = 1
+	replica.owner.team = 0
+	replica.owner.health = 100
+	replica.owner.spawn_generation = 1
+	replica.owner.last_tick = 0
+	replica.owner.tool_raise = 1.0
+	replica.owner.magazine = 10
+	replica.owner.reserve = 50
+	replica.owner.motion = SourcePlayerMotion.create_state(app.player.global_position)
+	var offline: LocalSession = app.player.session
+	replica.objectives = {"mode":offline.mode,"capture_limit":offline.capture_limit,"winning_team":offline.winning_team,"scores":offline.team_scores.duplicate(),"bases":offline.ctf_bases.duplicate(true),"flags":offline.ctf_flags.duplicate(true),"territories":offline.territories.duplicate(true)}
+	var network := NetworkSession.new()
+	network.bind_replica(replica)
+	var previous_replica: BlockfieldClientReplica = app.network_client
+	var previous_connected: LocalSession = app.player._connected_session
+	app.network_client = replica
+	app.player.session = network
+	app.player._connected_session = network
+	app.player._network_epoch = 0
+	app.player._network_generation = -1
+	app.player._physics_process(0.0)
+	replica.submitted.clear()
+	reset_pose()
+	var extent := Vector2(1000,600)
+	app.player.queue_touch_motion(Vector2(20,8),extent)
+	app.player.queue_touch_motion(Vector2(30,12),extent)
+	check(pose() == Vector4.ZERO,"network touch waits for the production command boundary")
+	app.player._physics_process(1.0 / 60.0)
+	check(replica.submitted.size() == 1,"one physics callback samples exactly one network command")
+	if not replica.submitted.is_empty():
+		var command: Dictionary = replica.submitted.back()
+		check(yaw_near(command.yaw,-TURN * 0.05) and near(command.pitch,-TURN * 0.02),"all queued events enter network yaw/pitch before command submission")
+	var before := pose()
+	app.player._process(0.001)
+	app.player._physics_process(1.0 / 60.0)
+	check(replica.submitted.size() == 2 and pose().is_equal_approx(before),"render and following physics do not replay already submitted motion")
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	app.player.controls_enabled = false
+	app.player.controls_enabled = true
+	app.player._physics_process(1.0 / 60.0)
+	check(pose().is_equal_approx(before),"canceled queued motion cannot enter a later network command")
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	replica.owner.spawn_generation += 1
+	app.player._physics_process(1.0 / 60.0)
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"network spawn transition clears old gesture before new command sample")
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	replica.owner.spawn_generation += 1
+	var command_count: int = replica.submitted.size()
+	app.player._process(0.001)
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion() and replica.submitted.size() == command_count,"render before network spawn adoption discards the old gesture without displaying or submitting it")
+	app.player._physics_process(1.0 / 60.0)
+	check(pose().is_equal_approx(before) and app.player._network_generation == replica.owner.spawn_generation,"physics adopts the new network life after the render guard")
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	replica.owner.match_epoch += 1
+	replica.epoch = replica.owner.match_epoch
+	app.player._process(0.001)
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"render before network epoch adoption discards old queued look")
+	app.player._physics_process(1.0 / 60.0)
+	check(pose().is_equal_approx(before) and app.player._network_epoch == replica.owner.match_epoch,"physics adopts the new epoch without replaying the old gesture")
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	replica.status = "loading"
+	app.player._process(0.001)
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"nonlive network render cannot consume stale queued look")
+	replica.status = "live"
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	var saved_owner: SharedPlayerState = replica.owner
+	replica.owner = null
+	app.player._process(0.001)
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"network render without an owner discards queued look")
+	replica.owner = saved_owner
+	app.player.queue_touch_motion(Vector2(100,20),extent)
+	replica.owner.player_id += 1
+	replica.actor_id = replica.owner.player_id
+	app.player._process(0.001)
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"network render for a changed actor discards a previous actor's gesture")
+	replica.owner.player_id -= 1
+	replica.actor_id = replica.owner.player_id
+	app.player.queue_touch_motion(Vector2(10,5),extent)
+	app.player._process(0.001)
+	check(yaw_near(app.player.rotation.y,before.x - TURN * 0.01) and near(app.player.head.rotation.x,before.y - TURN * 0.005),"current network owner still receives responsive render look")
+	var rendered := pose()
+	app.player._physics_process(1.0 / 60.0)
+	check(pose().is_equal_approx(rendered),"next network command retains responsive render look exactly once")
+	app.player.session = offline
+	app.player._connected_session = previous_connected
+	app.network_client = previous_replica
+	app.player._network_owner = null
+	app.player._network_epoch = 0
+	app.player._network_generation = -1
+	network.free()
+	defaults()
 
 func ads_and_mouse_independence() -> void:
 	defaults()
@@ -283,6 +515,8 @@ func hud_bridge() -> void:
 		var delta := Vector2(extent.x * 0.06,-extent.x * 0.02)
 		reset_pose()
 		check(mobile.handle_touch(11,start,true) and mobile.handle_drag(11,start+delta,delta),"actual HUD accepts local look pointer/drag")
+		check(pose() == Vector4.ZERO,"actual HUD queues look rather than applying each event immediately")
+		app.player.flush_touch_motion()
 		check(yaw_near(app.player.rotation.y,-TURN * 0.06) and near(app.player.head.rotation.x,TURN * 0.02),"actual HUD signal uses overlay logical extent and touch path at " + str(extent))
 		mobile.release_all()
 	var mobile := configure_overlay(Vector2(960,540))
@@ -294,9 +528,33 @@ func hud_bridge() -> void:
 	mobile.handle_drag(12,move+Vector2(0,-25),Vector2(300,400))
 	check(pose() == Vector4.ZERO and app.player.touch_movement.y < 0.0,"stick updates real player movement without rotating its look")
 	mobile.handle_drag(13,look+Vector2(60,0),Vector2(60,0))
+	app.player.flush_touch_motion()
 	check(yaw_near(app.player.rotation.y,-TURN * 60.0 / 960.0) and app.player.touch_movement.y < 0.0,"look updates yaw while actual stick intent remains independent")
 	mobile.release_all()
 	check(app.player.touch_movement == Vector2.ZERO,"actual HUD releases simultaneous movement/look ownership")
+	reset_pose()
+	check(mobile.handle_touch(40,look,true) and mobile.handle_drag(40,look+Vector2(20,-5),Vector2(500,500)),"look uses its ID's absolute history despite an unrelated browser relative delta")
+	mobile.handle_touch(40,look+Vector2(20,-5),false)
+	check(pose() == Vector4.ZERO and app.player.flush_touch_motion(),"normal release preserves the final queued motion until a frame boundary")
+	check(yaw_near(app.player.rotation.y,-TURN * 20.0 / 960.0) and near(app.player.head.rotation.x,TURN * 5.0 / 960.0),"released gesture rotates by exactly its owned displacement")
+	mobile.release_all()
+	reset_pose()
+	mobile.handle_touch(41,look,true)
+	mobile.handle_drag(41,look+Vector2(50,10),Vector2(50,10))
+	mobile.handle_touch(41,look+Vector2(50,10),false,true)
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"actual canceled pointer clears queued look through HUD signal")
+	mobile.release_all()
+	mobile.handle_touch(42,look,true)
+	mobile.handle_drag(42,look+Vector2(50,10),Vector2(50,10))
+	mobile.release_all()
+	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"actual lifecycle release clears pending look without replay")
+	var fire: Vector2 = (regions.primary as Rect2).get_center()
+	mobile.handle_touch(43,fire,true)
+	mobile.handle_drag(43,fire+Vector2(-20,-5),Vector2(-20,-5))
+	mobile.handle_touch(43,fire+Vector2(-20,-5),false)
+	app.player.flush_touch_motion()
+	check(yaw_near(app.player.rotation.y,TURN * 20.0 / 960.0) and near(app.player.head.rotation.x,TURN * 5.0 / 960.0),"actual primary-button gesture retains fire-and-look displacement on release")
+	mobile.release_all()
 	# Real ScreenTouch/ScreenDrag run through production canvas conversion, then
 	# the actual HUD signal. Neither physical scale nor nonuniform scale is a
 	# second sensitivity factor when delta and extent share local coordinates.
@@ -315,6 +573,7 @@ func hud_bridge() -> void:
 	drag.index = 23;drag.position = transform * (look+delta);drag.relative = transform.basis_xform(delta)
 	root.push_input(drag,true)
 	await process_frame
+	app.player.flush_touch_motion()
 	check(yaw_near(app.player.rotation.y,-TURN * 64.0 / 960.0) and near(app.player.head.rotation.x,TURN * 16.0 / 960.0),"real scaled screen events preserve local fractional look gain through Main/HUD")
 	touch = InputEventScreenTouch.new()
 	touch.window_id = root.get_window_id();touch.index = 23;touch.position = transform * (look+delta);touch.pressed = false
@@ -325,14 +584,17 @@ func hud_bridge() -> void:
 	reset_pose()
 	app.hud.set_menu_visible(true)
 	mobile.look_moved.emit(Vector2(50,50))
+	app.player.flush_touch_motion()
 	check(not app.player.controls_enabled and pose() == Vector4.ZERO,"actual menu permission blocks even a late look signal")
 	app.hud.set_menu_visible(false)
 	app.hud.open_chat(false)
 	mobile.look_moved.emit(Vector2(50,50))
+	app.player.flush_touch_motion()
 	check(not app.player.controls_enabled and pose() == Vector4.ZERO,"actual chat permission blocks late look signals")
 	app.hud._chat.cancel_input()
 	app.hud._notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	mobile.look_moved.emit(Vector2(50,50))
+	app.player.flush_touch_motion()
 	check(not app.player.controls_enabled and pose() == Vector4.ZERO,"focus loss blocks touch and clears actual control ownership")
 	app.hud._notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
 	check(app.player.controls_enabled,"focus return restores permission without a latent drag")
@@ -355,14 +617,17 @@ func ui_preferences() -> void:
 	button_value("floating_stick",false)
 	range_value("touch_control_scale",1.2)
 	button_value("fire_drag_look",false)
+	button_value("left_handed_touch",true)
 	check(near(app.player.touch_sensitivity,1.75) and near(app.player.touch_ads_sensitivity,0.6) and app.player.invert_touch,"real settings callbacks change only player touch preferences")
 	check(not app.hud.floating_stick and near(app.hud.touch_control_scale,1.2) and not app.hud.fire_drag_look,"real settings callbacks change HUD touch preferences")
 	var mobile: Control = app.hud.mobile_controls
 	check(not mobile.floating_stick and near(mobile.control_scale,1.2) and not mobile.fire_drag_look,"live overlay receives persisted UI preference changes")
+	check(app.hud.left_handed_touch and mobile.left_handed,"real left-handed callback mirrors the live overlay")
 	var config := ConfigFile.new()
 	check(config.load(FILES[0]) == OK,"real callbacks saved a readable ConfigFile")
 	check(near(float(config.get_value("input","touch_sensitivity",0.0)),1.75) and near(float(config.get_value("input","touch_ads_sensitivity",0.0)),0.6) and bool(config.get_value("input","invert_touch",false)),"player preferences persist in input section")
 	check(not bool(config.get_value("ui","floating_stick",true)) and near(float(config.get_value("ui","touch_control_scale",0.0)),1.2) and not bool(config.get_value("ui","fire_drag_look",true)),"HUD preferences persist in ui section")
+	check(bool(config.get_value("ui","left_handed_touch",false)),"left-handed layout persists in the UI section")
 	for property: String in DESKTOP:
 		check(config.get_value("input",property) == DESKTOP[property],"touch callbacks preserve desktop setting " + property)
 	check(config.get_value("test_mobile_look","untouched") == "retain unrelated settings" and config.get_value("input","future_input_option") == true and config.get_value("ui","future_ui_option") == Vector2(3,4),"touch save preserves unrelated/unknown settings across sections")
@@ -373,6 +638,7 @@ func roundtrip() -> void:
 	check(not app.hud.floating_stick and near(app.hud.touch_control_scale,1.2) and not app.hud.fire_drag_look,"fresh HUD reloads persisted floating/scale/fire-drag settings")
 	var mobile: Control = app.hud.mobile_controls
 	check(not mobile.floating_stick and near(mobile.control_scale,1.2) and not mobile.fire_drag_look,"new overlay creation receives reloaded settings rather than component defaults")
+	check(app.hud.left_handed_touch and mobile.left_handed,"fresh HUD and overlay reload mirrored controls")
 	for property: String in DESKTOP:
 		check(app.player.get(property) == DESKTOP[property],"fresh scene preserves desktop setting " + property)
 	app.player._aim_down_state = 0.0
@@ -383,6 +649,7 @@ func roundtrip() -> void:
 	mobile = configure_overlay(Vector2(960,540))
 	var look: Vector2 = (mobile.get_hit_regions().look as Rect2).get_center()
 	check(mobile.handle_touch(24,look,true) and mobile.handle_drag(24,look+Vector2(48,10),Vector2(48,10)),"new overlay retains its actual HUD look connection")
+	app.player.flush_touch_motion()
 	check(yaw_near(app.player.rotation.y,-TURN * 0.05 * 1.75) and near(app.player.head.rotation.x,TURN * 10.0 / 960.0 * 1.75),"reloaded sensitivity and inversion apply to actual new-scene touch look")
 	mobile.release_all()
 	var controls: Dictionary = app.hud._ui_settings_controls
@@ -390,11 +657,13 @@ func roundtrip() -> void:
 	if controls.has("touch_reset") and controls.touch_reset is Button:controls.touch_reset.pressed.emit()
 	check(near(app.player.touch_sensitivity,1.0) and near(app.player.touch_ads_sensitivity,1.0) and not app.player.invert_touch,"real reset callback restores touch input defaults")
 	check(app.hud.floating_stick and near(app.hud.touch_control_scale,1.0) and app.hud.fire_drag_look and mobile.floating_stick and near(mobile.control_scale,1.0) and mobile.fire_drag_look,"real reset callback restores and propagates HUD defaults")
+	check(not app.hud.left_handed_touch and not mobile.left_handed,"reset restores left movement and right look zones")
 	for property: String in DESKTOP:
 		check(app.player.get(property) == DESKTOP[property],"mobile reset leaves desktop setting unchanged: " + property)
 	var config := ConfigFile.new();config.load(FILES[0])
 	check(near(float(config.get_value("input","touch_sensitivity",0.0)),1.0) and near(float(config.get_value("input","touch_ads_sensitivity",0.0)),1.0) and not bool(config.get_value("input","invert_touch",true)),"reset saves default input preferences")
 	check(bool(config.get_value("ui","floating_stick",false)) and near(float(config.get_value("ui","touch_control_scale",0.0)),1.0) and bool(config.get_value("ui","fire_drag_look",false)),"reset saves default UI preferences")
+	check(not bool(config.get_value("ui","left_handed_touch",true)),"reset saves default handedness")
 	check(config.get_value("test_mobile_look","untouched") == "retain unrelated settings" and config.get_value("input","future_input_option") == true and config.get_value("ui","future_ui_option") == Vector2(3,4),"mobile reset preserves unrelated settings")
 
 func destroy_app() -> void:
@@ -421,6 +690,9 @@ func run() -> void:
 	normalization()
 	await segmentation()
 	if finishing:return
+	queued_permissions()
+	orbit_effects_preserved()
+	network_command_boundary()
 	ads_and_mouse_independence()
 	spectator_and_permissions()
 	await hud_bridge()

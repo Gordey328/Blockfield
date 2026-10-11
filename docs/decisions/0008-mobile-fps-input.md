@@ -3,6 +3,10 @@
 Accepted 2026-10-10 after the user authorized the researched fix and requested
 comfortable mobile game controls in addition to the jitter repair.
 
+The canvas partition and baseline gain were superseded2026-10-11 by
+[ADR0014](0014-nexquake-mobile-camera.md) after the user selected NexQuake.
+Pointer ownership, same-ID position history, ADS and lifecycle requirements remain.
+
 ## Decision
 
 Keep pointer roles fixed from DOWN to UP/cancel. Store the previous absolute
