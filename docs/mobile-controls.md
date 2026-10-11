@@ -53,11 +53,14 @@ input use that shared axis.
 Exactly one finger owns the stick and one owns look. Additional touches cannot
 steal those roles. Ordinary buttons count their owners, emitting the first press
 and last release; dragging out releases and re-entry can repress the same action.
-Primary fire can claim the free look role at DOWN for a living armed player in
+Primary fire can claim the free look role at DOWN for a living player in
 their own first/third-person view. That composite gesture fires and looks until
 UP/cancel, including outside the button. If another pointer already owns look,
-primary stays an ordinary button. Spectator selection and non-firearm tools retain
-ordinary action behavior. Roles never change mid-gesture; look crossing buttons
+primary stays an ordinary button. Rifle, SMG, shotgun, spade, block and grenade
+all support this gesture; primary still performs the selected item's existing
+action, including grenade cook/throw on release. Spectator selection retains
+ordinary action behavior. See [ADR0018](decisions/0018-all-tool-primary-look.md).
+Roles never change mid-gesture; look crossing buttons
 does not press them, and unclaimed drags cannot rotate the camera.
 
 Touch up/cancel releases that finger. Normal UP retains already queued look;

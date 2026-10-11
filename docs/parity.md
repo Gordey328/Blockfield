@@ -42,6 +42,12 @@ portrait/small-screen evidence, plus hardware limits, are recorded in
 
 ## Player and combat
 
+2026-10-11 input adaptation: held primary-button camera look now applies to all
+six item selections (rifle/SMG/shotgun/spade/block/grenade), per
+[ADR0018](decisions/0018-all-tool-primary-look.md). Native/exported browser
+evidence is recorded in [mobile controls](mobile-controls.md); this does not
+promote full P01/P08–P16 or W03 acceptance.
+
 | ID | Feature and acceptance requirement | Original evidence | Iteration | Status |
 | --- | --- | --- | --- | --- |
 | P01 | First-person movement, yaw/pitch, world collision and map boundaries | `Sources/Client/Player.cpp:349,991,1108`; `Client_Scene.cpp` | 1+2 | IMPLEMENTED |
@@ -219,8 +225,10 @@ Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path g
 
 2026-10-11, U01/B01/B02: Web startup adds actual downloaded/total decimal MB from
 Godot's existing progress callback and exported WASM/pack sizes. Parser/import,
-normal export and throttled browser download/start pass; full-row U01/B01 statuses
-stay IMPLEMENTED. Frozen/public verification is recorded in status and [ADR0017](decisions/0017-web-download-progress.md).
+normal export and throttled browser download/start pass. Frozen4a522ce repeats
+parser/import, runtime smoke and Web export; Pages56bbc6f0 is built/hash-verified,
+with public12.3→53.7/63.3MB, overlay removal and offline entry checked. Full-row
+U01/B01 statuses stay IMPLEMENTED. Commands/artifacts: [ADR0017](decisions/0017-web-download-progress.md).
 
 2026-10-11, W02/W07/U11/U12: continued warmed Title optimization batches unchanged
 world units without per-column packed ownership overhead, skips identity particle

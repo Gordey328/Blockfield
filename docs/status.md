@@ -16,8 +16,18 @@ Parser/import and normal Web export pass. A real throttled browser download
 visibly shows1.2/63.3MB, then removes the overlay and enters the offline rendered
 lab. Only the existing host pointer-lock UnknownError occurs during lab entry;
 visible drag fallback works. No gameplay code changes; the prior89 native checks
-are not presented as a new run. Current local Web console, frozen export and
-public progress/hash verification follow. [Contract](decisions/0017-web-download-progress.md).
+are not presented as a new run. Frozen clean4a522ceca4edb7b007397331403915a24e689bc6
+passes parser/import, runtime smoke and normal Web export; engine/upstream unchanged.
+Production diff since19c4d51 is only the new HTML shell and Web preset selection.
+Pages bundle56bbc6f09724a5e51b3d732b5a9a08df16c4141e reports built/no error.
+Public metadata and all six downloaded export files match the frozen export;
+public reload shows12.3→53.7/63.3MB, then removes the overlay and enters the
+rendered offline lab. Public console has only startup messages, no warnings/errors.
+Local/public logs, screenshots and reproducible commands:
+[contract/evidence](decisions/0017-web-download-progress.md).
+Both owned loading-test HTTP helpers are stopped; all leases are returned.
+Next: no MB-display implementation work remains; broader port/performance
+acceptance remains as recorded below.
 Separate Steam AoS research files/status insertion remain untouched.
 
 ## Published warmed Title / aggregate CPU optimization — 2026-10-11
@@ -133,7 +143,7 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a`, pushed (warmed Title impact/aggregate CPU optimization).
+- Published client source: `4a522ceca4edb7b007397331403915a24e689bc6`, pushed (startup MB display; warmed Title optimization retained).
 - NexQuake mobile controls are merged into main through PR1, merge0fd90e75e508.
   All completed optimization commits through922f230 remain intact. Subsequent
   documentation does not change the checked game bytes. Client engine/release and
@@ -215,15 +225,17 @@ the user's chosen deployment scope is Docker/configuration preparation.
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) serves clean
-  source `19c4d51c73db4d51775fdafe556c8eb0b1ad6b9a`.
-  Bundle `836f49c0a54310024686a8e91af9c63a37e55853`, Pages built/no error. All game changes are pushed to main;
+  source `4a522ceca4edb7b007397331403915a24e689bc6`.
+  Bundle `56bbc6f09724a5e51b3d732b5a9a08df16c4141e`, Pages built/no error. All game changes are pushed to main;
   later evidence/documentation commits do not change checked game bytes.
 - Independently downloaded public metadata/HTML/JS/WASM/PCK and both audio worklets
   match the frozen export. PCK23750832bytes SHA256
-  `4348f30f216c79d3471f1832e9d3ff94e4d47a4a8977eb8a7d94b157081d50d1`;
-  HTML5568bytes SHA256 `ac19141accd11dcc54d50adae9aa82726b74be56922b1bc8a91cd5134912a612`.
-  Hash report `.cache/benchmarks/title-public-verification.json`; normal public
-  screenshot `.cache/previews/title-normal-public.png`. Title load/SMG selection,
+  `17415c443df0659763ee1969158e55a282f405b6ae82c571f8a8a63719f66902`;
+  HTML7092bytes SHA256 `a8b639dd5299b8cf7dc7deaa20aa687d854128408ab3bd9faa940111021166b9`.
+  Hash report `.cache/benchmarks/loading-public-verification.json`; startup screenshot
+  `.cache/previews/loading-public-progress.png`. Actual downloaded/total MB,
+  overlay removal and offline entry are checked on4a522ce. The earlier19c4d51
+  Title evidence/screenshots remain retained separately: Title load/SMG selection,
   held touch fire, cliff destruction,30→0 magazine/reload30/90 and current
   Verification map/profile exercised. Public startup has no warnings/errors;
   local pointer-lock limits and rare measured peaks remain explicit. Three paired
@@ -236,8 +248,9 @@ the user's chosen deployment scope is Docker/configuration preparation.
   commits differ because this release changes client presentation only. Previous
   release evidence remains in subsystem documents and frozen validation above.
 - Windows exported-PCK smoke on66e did not execute Linux. No server export/PCK
-  smoke was repeated on19c4d51; all89 native checks include server-launcher/network
-  verification. Docker, Linux and deployed TLS/WSS remain unverified;
+  smoke was repeated after66e. Prior frozen19c4d51's89 native checks include
+  server-launcher/network verification;4a522ce repeats parser/runtime/Web export,
+  with no gameplay-code change. Docker, Linux and deployed TLS/WSS remain unverified;
   see [server deployment](server-deployment.md).
 
 ## Earlier frozen57 Web evidence

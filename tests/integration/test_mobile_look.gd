@@ -549,12 +549,21 @@ func hud_bridge() -> void:
 	mobile.release_all()
 	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"actual lifecycle release clears pending look without replay")
 	var fire: Vector2 = (regions.primary as Rect2).get_center()
-	mobile.handle_touch(43,fire,true)
-	mobile.handle_drag(43,fire+Vector2(-20,-5),Vector2(-20,-5))
-	mobile.handle_touch(43,fire+Vector2(-20,-5),false)
-	app.player.flush_touch_motion()
-	check(yaw_near(app.player.rotation.y,TURN * 20.0 / 960.0) and near(app.player.head.rotation.x,TURN * 5.0 / 960.0),"actual primary-button gesture retains fire-and-look displacement on release")
-	mobile.release_all()
+	for selection: Array in [[2,0],[2,1],[2,2],[0,0],[1,0],[3,0]]:
+		app.session.current_tool = selection[0]
+		app.session.current_weapon = selection[1]
+		reset_pose()
+		mobile.handle_touch(43,fire,true)
+		mobile.handle_drag(43,fire+Vector2(-100,-20),Vector2(999,-999))
+		await process_frame
+		check(Input.is_action_pressed("primary"),"actual tool%d weapon%d keeps primary held outside its button" % selection)
+		app.player.flush_touch_motion()
+		check(yaw_near(app.player.rotation.y,TURN * 100.0 / 960.0) and near(app.player.head.rotation.x,TURN * 20.0 / 960.0),"actual tool%d weapon%d turns both camera axes during held primary" % selection)
+		mobile.handle_touch(43,fire+Vector2(-100,-20),false)
+		await process_frame
+		check(not Input.is_action_pressed("primary") and not app.player.flush_touch_motion(),"actual tool%d weapon%d UP releases primary without repeating camera motion" % selection)
+		mobile.release_all()
+	defaults()
 	# Real ScreenTouch/ScreenDrag run through production canvas conversion, then
 	# the actual HUD signal. Neither physical scale nor nonuniform scale is a
 	# second sensitivity factor when delta and extent share local coordinates.

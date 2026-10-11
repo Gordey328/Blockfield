@@ -292,7 +292,6 @@ func _can_fire_drag_look() -> bool:
 	if not _fire_drag_look: return false
 	if not is_instance_valid(_player): return true
 	return _player.controls_enabled and _player.session != null and _player.session.health > 0 and _player.session.team < 2 \
-		and _player.session.current_tool == LocalSession.Tool.WEAPON \
 		and _player.camera_mode in [BlockfieldPlayer.CameraMode.FIRST_PERSON, BlockfieldPlayer.CameraMode.THIRD_PERSON]
 
 func _set_owner_holding(owner: PointerOwner, holding: bool) -> void:

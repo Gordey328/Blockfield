@@ -566,13 +566,17 @@ func composite_fire_look() -> void:
 	gate_player.controls_enabled = true
 	gate_player.camera_mode = PLAYER.CameraMode.FIRST_PERSON
 	make_overlay(Vector2(960, 540), gate_player, false)
-	for tool: int in [0, 1, 3]:
-		gate_session.current_tool = tool
+	for selection: Array in [[2, 0], [2, 1], [2, 2], [0, 0], [1, 0], [3, 0]]:
+		gate_session.current_tool = selection[0]
+		gate_session.current_weapon = selection[1]
 		clear_trace()
 		overlay.handle_touch(0, center("primary"), true)
 		overlay.handle_drag(0, center("primary") + Vector2(-100, 0), Vector2(-100, 0))
 		await settle_input()
-		check(look_events.is_empty() and not Input.is_action_pressed("primary"), "non-weapon tool %d retains ordinary primary semantics" % tool)
+		check(look_events == [Vector2(-100, 0)] and Input.is_action_pressed("primary"), "tool%d weapon%d retains held primary while dragging outside to look" % selection)
+		overlay.handle_touch(0, center("primary") + Vector2(-100, 0), false)
+		await settle_input()
+		check(not Input.is_action_pressed("primary") and events_for("primary", false) == 1, "tool%d weapon%d releases primary exactly once on UP" % selection)
 		overlay.release_all()
 	gate_session.current_tool = 2
 	for mode: int in [PLAYER.CameraMode.INTRO, PLAYER.CameraMode.DEATH, PLAYER.CameraMode.FREE, PLAYER.CameraMode.FOLLOW_FIRST_PERSON, PLAYER.CameraMode.FOLLOW_THIRD_PERSON]:

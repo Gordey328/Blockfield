@@ -364,6 +364,22 @@ func _run_checks() -> void:
 		"Fire button wins DOWN and keeps firing while dragging outside to aim")
 	_touch(2, fire, false)
 	_neutral()
+	for selection: Array in [[2, 0, "Rifle"], [2, 1, "SMG"], [2, 2, "Shotgun"], [0, 0, "Spade"], [1, 0, "Block"], [3, 0, "Grenade"]]:
+		app.session.current_tool = selection[0]
+		app.session.current_weapon = selection[1]
+		_touch(2, fire, true)
+		_drag(2, fire - Vector2(mobile.size.x * 0.1, mobile.size.x * 0.025))
+		app.player.flush_touch_motion()
+		_check(Input.is_action_pressed("primary") and _yaw_is(TURN * 0.1) \
+			and absf(app.player.head.rotation.x - TURN * 0.025) < EPS,
+			selection[2] + " held primary turns yaw/pitch outside its button through DOM touch",
+			{"yaw_degrees": rad_to_deg(app.player.rotation.y), "pitch_degrees": rad_to_deg(app.player.head.rotation.x)})
+		_touch(2, fire, false)
+		_check(not Input.is_action_pressed("primary") and not app.player.flush_touch_motion(),
+			selection[2] + " UP releases primary without repeating camera motion")
+		_neutral()
+	app.session.current_tool = LocalSession.Tool.WEAPON
+	app.session.current_weapon = LocalSession.Weapon.RIFLE
 	_touch(1, look, true)
 	_drag(1, look + Vector2(90, 0))
 	_touch(1, look, false, true)

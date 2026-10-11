@@ -6,6 +6,8 @@ comfortable mobile game controls in addition to the jitter repair.
 The canvas partition and baseline gain were superseded2026-10-11 by
 [ADR0014](0014-nexquake-mobile-camera.md) after the user selected NexQuake.
 Pointer ownership, same-ID position history, ADS and lifecycle requirements remain.
+The firearm-only primary/look gate was superseded2026-10-11 by
+[ADR0018](0018-all-tool-primary-look.md) at the user's request.
 
 ## Decision
 
