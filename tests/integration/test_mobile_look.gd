@@ -550,8 +550,8 @@ func hud_bridge() -> void:
 	check(not app.player.flush_touch_motion() and pose() == Vector4.ZERO,"actual lifecycle release clears pending look without replay")
 	var fire: Vector2 = (regions.primary as Rect2).get_center()
 	for selection: Array in [[2,0],[2,1],[2,2],[0,0],[1,0],[3,0]]:
-		app.session.current_tool = selection[0]
-		app.session.current_weapon = selection[1]
+		app.session.select_weapon(selection[1])
+		app.session.select_tool(selection[0])
 		reset_pose()
 		mobile.handle_touch(43,fire,true)
 		mobile.handle_drag(43,fire+Vector2(-100,-20),Vector2(999,-999))
