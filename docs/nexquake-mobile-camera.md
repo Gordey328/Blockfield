@@ -215,6 +215,37 @@ The browser fixture now dispatches DOM TouchEvents with IDs `-1`, `-2`, INT_MIN,
 INT_MAX and0 through the actual JS/WASM boundary. Engine-native cancellation and
 DOM cancellation are distinguished because pinned Godot maps DOM cancel to UP.
 
-Validation and publication are in progress in the existing managed mobile
-worktree. Specialist owns only the native mobile fixture; root owns the production
-fix, browser fixture, docs and release. Concurrent AoS research remains untouched.
+Frozen source2d60434b7534ff75c2a1b3863d235b643d0ea0b8 passed parser/import,
+controls3090/0, actual Main mobile-look209/0, UI284/0, source-input35/0,
+network-controller514/0, camera-target-rays11/0, runtime smoke and normal Web
+export on pinned Godot4.7.2. This is focused validation of the one production
+file changed since26bdf7d, with all85-check baseline evidence retained; it is
+not a claim that all85 suites reran on this fix. Frozen logs:
+`.cache/release-2d60434b7534/.cache/logs/`.
+
+The same DOM fixture failed15/5 on the prior game bytes (movement0/shots0)
+and passed15/0 on the fixed bytes at844x390 and390x844. Landscape movement
+3.732885/two genuine shots; portrait3.732935/two shots. Owned swipe yaw is
+-90deg/pitch-10deg in both. Input script hashes match the frozen normal source.
+Reports/screenshots: `.cache/browser/iphone-dom-{red,landscape,portrait}.*`.
+The probe captured the same unattributed MutationObserver exception without a
+source URL as the prior diagnostic; no Godot script errors were captured. This
+exception is recorded without attribution, and does not negate the completed
+assertions. Normal public rendering/input is checked separately after publication.
+Native RED3090/13 log: `.cache/logs/nexquake-signed-touch-red.log`.
+
+Reproduce the focused native checks with the pinned executable:
+`Godot_v4.7.2-stable_win64_console.exe --headless --path <frozen>/game
+--fixed-fps 60 --script <frozen>/tests/ui/test_mobile_controls.gd`, substituting
+`tests/integration/test_mobile_look.gd`, `tests/ui/test_ui.gd`,
+`tests/integration/test_source_input.gd`, `tests/network/test_network_controller.gd`
+and `tests/gameplay/test_camera_target_rays.gd` for the remaining fixtures.
+Import uses `--editor --import --quit`, runtime uses `--quit-after 120`, export
+uses `--export-release Web <output>/index.html`. Freeze with `git archive` of
+2d60434 first. `tools/export_mobile_probe.py --source <frozen> --name <unique>
+--godot <absolute executable> --import-cache <frozen>/game/.godot` creates the
+separate DOM diagnostic; serve its build/web and use the visible run/size buttons.
+
+Native-fixture specialist and read-only upstream reviewer have returned their
+leases. Root owns only integration/publication; concurrent AoS research remains
+untouched. Physical iPhone retry remains pending.
