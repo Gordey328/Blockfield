@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Mobile UX and aim friction — 2026-10-11 (browser fixes verified, final export pending)
+## Mobile UX and aim friction — 2026-10-11 (verified development release)
 
 User requests asymmetric mobile UX and slight enemy aim stickiness. Root owns
 TouchAimAssist, Player integration, Main/settings/HUD clearance, build registration,
@@ -33,9 +33,35 @@ Its outer568×320 browser view reports canvas567×319, exposing a further1px can
 edge loss; root corrects tolerance to2px and touch_ui adds these exact landscape/
 portrait cases. First actual probe finishes39/0 (the planned42 count was incorrect).
 Other template, optimization and Steam work is preserved.
-Next: freeze the CSS fixes, run affected UI/input checks and export, then repeat
-actual normal Web/39 DOM-touch checks in portrait, landscape and320px-edge layouts,
-and publish the verified development build.
+Final frozen2561c83b4297ef8611eb8334930d5878237700a8 passes import/parser,
+controls10128/0, UI284/0, CombatHUD680/0, touch look225/0, actual Main aim79/0,
+both smokes and reduced-template normal Web export. Full94 remain tied to0f;
+only affected checks repeat for the final CSS-only changes. Native captures11
+and local normal Web1280×720/390×844 plus final568×320 visually checked; compact
+controls now remain visible at canvas567×319. Final actual DOM→JS/WASM touch
+probe passes39/0 each at844×390,390×844,568×320 (117/0); enemy gain0.82, ally/
+wall/fast-swipe full gain, simultaneous move/look/fire, all-item drag, lifecycle,
+mirroring/minimap and actual live movement with2 shots each pass. Evidence:
+.cache/mobile-ux-browser-evidence.json and .cache/mobile-probe-mobile-ux-2561c83.
+Probe inspection reports one MutationObserver TypeError without that identifier
+in exported/probe source; all authored checks pass. Normal local warnings/errors
+are empty. Templates retain accepted SHA256 a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922.
+Commands: bundled Python tools/release_checkpoint.py --revision 0f582d74679c
+--import-cache game/.godot; .cache/freeze_mobile_css.py archives finalHEAD and runs
+the named affected suites/smokes/export; tools/export_mobile_probe.py --source
+.cache/release-2561c83b4297 --name mobile-ux-2561c83 --import-cache game/.godot.
+Source main pushed; tools/publish_pages.py publishes bundle
+3f8c0517b9f242068fcf42f7ba8bc6b0a97c1734; Pages API reports built.
+.cache/verify_mobile_ux_pages.py 2561c83b4297ef8611eb8334930d5878237700a8
+confirms frozen metadata and7 core/OFL SHA256s; /reduced sibling metadata is
+preserved. Evidence .cache/mobile-ux-pages-verification.json. Actual public normal
+game starts, displays new controls/captions, responds to stick movement and fire,
+and displays all13 actions at568×320. Captured public warning/error list is empty.
+[Published game](https://gordey328.github.io/Blockfield/). Browser viewport reset;
+published tab retained for the user, touch preference preserved. No own server
+helper was started; specialist leases returned. Original parity remains IMPLEMENTED.
+Next: user assessment on their physical phone; browser evidence does not establish
+physical-phone comfort or complete-port acceptance.
 
 ## Modern combat UI — 2026-10-11 (verified development release)
 

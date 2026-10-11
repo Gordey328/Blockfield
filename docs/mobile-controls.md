@@ -90,6 +90,9 @@ do not establish phone text readability or OS safe-area handling.
 Button captions and gesture hints retain a12 CSS-pixel font floor, measured only
 when laying out. This keeps the smallest controls legible on568×320 without
 adding Web interop to the drawing loop.
+The minimum320px outer browser edge tolerates1px canvas-edge loss and less than1px
+expanded-viewport rounding. Type and icon spacing use the same CSS conversion as
+button geometry; six real CSS/logical pairs cover these boundary cases.
 
 HUD connects actions to `Input.parse_input_event(InputEventAction)`, preserving
 reload, selection and ADS edges. Movement updates `player.touch_movement`; look
@@ -107,6 +110,51 @@ own-view ADS zoom, spectator behavior and pitch bounds
 apply. Menu opens the existing HUD menu; deactivation releases overlay actions
 before global cleanup. Networking remains the same prediction/authenticated
 command/authoritative Runtime path with unchanged wire/rule limits.
+
+## Thumb layout and mild aim friction — 2026-10-11
+
+Frozen mobile change0f582d74679cd8dc1a60a7777cfabddadc6344ae passes all94
+test runs (93 Godot fixtures plus latency458/0), parser/import, both smokes and
+reduced-template Web export. Browser review discovers truncated captions at1280×720
+and missing controls at568×320. CSS-only follow-ups9f15dfe005a5 and final
+2561c83b4297ef8611eb8334930d5878237700a8 retain that full-run baseline and repeat
+the affected checks: controls10128/0, UI284/0, CombatHUD680/0, touch look225/0,
+actual Main aim79/0, parser/import, both smokes and export. The final normal Web
+displays all13 actions at outer568×320 / canvas567×319;1280×720 captions fit.
+Portrait390×844 normal Web shows tool-specific block/line labels and adjacent palette.
+Native Compatibility captures11 actual Lab/TDM landscape/portrait/mirrored/max-scale
+views under `.cache/previews/mobile-ux/`.
+
+The final isolated genuine-Main Web probe passes39/0 each at844×390,390×844 and
+568×320 (117/0 total). Authored DOM TouchEvent messages cross JS/WASM into Godot's
+normal input adapter; simultaneous movement/look/fire, all-item fire-drag, lifecycle,
+mirroring/minimap clearance and actual final movement/shots pass. Enemy fine-look
+ratios are0.81999999,0.82000011 and0.82000002; allies, foreground terrain and deliberate
+8-degree swipes retain full gain. Zero displacement produces no automatic turn.
+Observed final live movement is2.898/3.104/3.290 blocks with2 shots per case.
+One MutationObserver TypeError appears in the inspection tab; no such identifier
+occurs in the exported/probe source, and all117 authored checks pass. Normal final
+browser warning/error capture is empty. This does not establish physical-phone feel.
+
+Reproduce the full freeze with `python tools/release_checkpoint.py --revision
+0f582d74679cd8dc1a60a7777cfabddadc6344ae --import-cache game/.godot`. Final affected
+freeze/logs/export are under `.cache/release-2561c83b4297/`; run `tools/build.py`
+against an archived final revision for the complete reproducible suite. Probe:
+
+```powershell
+python tools/export_mobile_probe.py --source .cache/release-2561c83b4297 --name mobile-ux-2561c83 --import-cache game/.godot
+```
+
+The export uses Godot4.7.2.stable.official.ed1daf0bf, upstream
+dcf449c845d509bbde9d79239b32d201c1389961 and accepted reduced template SHA256
+a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922.
+Published source2561c83b4297ef8611eb8334930d5878237700a8, Pages bundle
+3f8c0517b9f242068fcf42f7ba8bc6b0a97c1734 reports built. All7 downloaded core/OFL
+artifacts match the frozen export's SHA256s, and the existing/reduced sibling is
+preserved; `.cache/mobile-ux-pages-verification.json`. The actual public normal
+game starts, responds to move/fire and displays all13 controls at568×320 with an
+empty captured warning/error list. [Published game](https://gordey328.github.io/Blockfield/).
+Browser viewport is reset and the existing touch preference retained.
 
 ## All-item primary look — 2026-10-11
 
