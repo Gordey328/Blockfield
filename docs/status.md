@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Combined Mirage/effects Pages release — 2026-10-11 (in progress)
+## Combined Mirage/effects Pages release — 2026-10-11 (published development build)
 
 The user explicitly requests waiting for the concurrent effects chat to finish,
 combining its accepted changes with Mirage and publishing the result to Pages.
@@ -16,8 +16,24 @@ local maps and raw/Blender source stay excluded. See
 [ADR0026](decisions/0026-bundled-map-publication.md). No unrelated Steam/optimization
 files are staged. Godot4.7.2.stable.official.ed1daf0bf and OpenSpades
 dcf449c845d509bbde9d79239b32d201c1389961 remain pinned.
-Next: completed effects handoff, committed combined source, full frozen checks/
-normal Web export, local/public Mirage interaction and matching public hashes.
+Frozen4530632b7eb7ff9bca2bd2ca97cb4bcdbefdb385 passes all96 test runs (95 Godot
+fixtures plus latency458/0), parser/import, both smokes and reduced normal Web
+export. Native format93/0, actual Main25/0, VXLMain15/0; effects20928/0, falling43/0,
+fragment43/0, UI284/0, mobile controls10128/0 and TDM62/0 pass. Helper0e39997 accepts
+an isolated checked bundle directory and explicit gh-pages tracking ref; main is
+pushed. The user steers immediate publication followed by public verification;
+the link is supplied during upload and when Pages is built.
+Bundleac2fff4caabdb9c881c596c10aeaecc33076344e reports built. All eight public
+metadata/core/map/font-notice hashes match; native map hash remains
+08b69203a2dde4d276053647312dbcdd5bf20f0730203ee24c4c293934e35d3a.
+Real public Web starts, opens Mirage through the menu, walks/fires, digs a floor
+cell, builds a cube and resets to original spawn/view/baseline. Final warning/error
+list is empty; persisted touch/UI/resources preferences retained. Public tab/
+captures retained; temporary combined HTTP helper/tab closed. URL:
+https://gordey328.github.io/Blockfield/?v=4530632 . Exact commands, logs and limits:
+[combined release evidence](combined-mirage-release.md). Specialist review/handoff
+complete; unrelated files remain unstaged. Requested combined publication and
+post-publication verification complete; no parity promotion.
 
 ## Fixed50 noncolliding effects — 2026-10-11 (published development build)
 

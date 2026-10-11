@@ -164,3 +164,9 @@ authored Blender-map volume/markup conversion remains future work described in
 [the pipeline proposal](blender-map-pipeline.md). Package and integration contracts
 are in[ADR0024](decisions/0024-local-map-conversion.md). Original parity rows are
 not promoted by this experiment.
+
+Follow-up: the user subsequently authorized combining this map with the finished
+effects task and publishing Pages. The unchanged compiled map is bundled under
+`game/assets/maps`; see [ADR0026](decisions/0026-bundled-map-publication.md) and
+[combined release evidence](combined-mirage-release.md) for the frozen96-test run,
+public hashes and actual published movement/destruction/build/reset checks.
