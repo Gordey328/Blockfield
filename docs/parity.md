@@ -217,6 +217,11 @@ Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path g
 
 2026-10-10 source/render integration: complete offline code rows are IMPLEMENTED without promoting them to VERIFIED. Contracts/evidence: source-audit.md (source motion128/0, scene146/0 and subsequent tool/selection corrections), assets.md (character/corpse/native weapon/spectator), ui.md (custom metadata/native palette/settings), audio.md (126 routing/parameter checks), voxel.md (AO atlas/spectral/GI/real geometry reflections and fog). Later handoffs above include the completed UI/camera/audio/action paths and normalized float HDR. B01 uses the local-validation/branch-publication replacement in ADR0003 while Actions is externally blocked. Trusted skins/data ZIP and renderer differences are recorded in ADR0004 and extensions.md. Browser evidence applies to the recorded deployed SHA, not newer workspace code.
 
+2026-10-11, U01/B01/B02: Web startup adds actual downloaded/total decimal MB from
+Godot's existing progress callback and exported WASM/pack sizes. Parser/import,
+normal export and throttled browser download/start pass; full-row U01/B01 statuses
+stay IMPLEMENTED. Frozen/public verification is recorded in status and [ADR0017](decisions/0017-web-download-progress.md).
+
 2026-10-11, W02/W07/U11/U12: continued warmed Title optimization batches unchanged
 world units without per-column packed ownership overhead, skips identity particle
 work/hidden statistics scans and predecodes49 original Opus clips to source-native

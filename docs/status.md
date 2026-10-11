@@ -3,6 +3,23 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Startup download megabytes — 2026-10-11
+
+User asks to show downloaded MB on the startup screen. Root owns only the new
+`game/web/loading.html`, Web preset selection and documentation/release integration;
+no specialist or gameplay/engine lease is outstanding. The shell derives from
+Godot4.7.2's installed `godot.html`; original startup/feature/error paths are kept.
+Existing Engine.onProgress supplies actual engine/pack bytes, exported fileSizes
+supplies the full denominator, decimal MB with one decimal appears beneath the
+bar, then a separate startup caption remains until the overlay is removed.
+Parser/import and normal Web export pass. A real throttled browser download
+visibly shows1.2/63.3MB, then removes the overlay and enters the offline rendered
+lab. Only the existing host pointer-lock UnknownError occurs during lab entry;
+visible drag fallback works. No gameplay code changes; the prior89 native checks
+are not presented as a new run. Current local Web console, frozen export and
+public progress/hash verification follow. [Contract](decisions/0017-web-download-progress.md).
+Separate Steam AoS research files/status insertion remain untouched.
+
 ## Published warmed Title / aggregate CPU optimization — 2026-10-11
 
 User requests continuing the impact work: remove remaining Title shooting stalls
