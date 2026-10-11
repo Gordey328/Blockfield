@@ -12,13 +12,27 @@ their audits without edits/engine leases. No unit/listener defect: native slow
 camera peaks saturate through35 units, main blast sound through150/240. User-selected
 shorter presentation envelope now also bounds grenade-triggered collapse kicks;
 damage/map scale/particle sizes stay intact. All-tool Fire/look, optimization
-advisory and Steam AoS research remain separately owned. Serial workspace import,
+advisory and Steam AoS research remain separately owned. Frozen d8e5ddb09d0f
+passes import/parser, ten affected native fixtures, runtime and normal Web export:
 effects32601/0 (3 explicit headless GPU skips), audio158/0, mixer43/0,
-environment76/0, source-camera45/0 and fragment44/0 pass. Raw land mixer RMS32/5
-is.14252 and80/5 .02354; water.05897/.00937. Actual-Main/mobile checks and
-isolated frozen Web interaction/export/publication are pending.
+environment76/0, camera45/0, fragment44/0, actual Main119/0, grenade17/0,
+controls3099/0 and mobile-look226/0. Exact native captures/failures/limits are
+retained in the evidence. Actual-Main Web5/32/80 clicks each capture144000 finite
+48k stereo frames/zero overflow with five layers/58 particles; amplitude32/5
+is.142805 and80/5 .023605, with much smaller camera accumulators. Initial DOM
+click's suspended audio is retained as a failed negative case; canvas-activated
+repeat passes. Local normal grenade throw/crater and public Fire-drag camera turn
+plus300ms Fire are exercised. Local host pointer-lock errors remain; public
+console captures no warnings/errors. No physical-device/listening/full-port claim.
 [Contract](decisions/0019-grenade-feedback-range.md),
-[evidence](grenade-feedback.md). Next: validate and integrate the latest source.
+[evidence](grenade-feedback.md). Frozen d8e5ddb09d0ff63917d3312a758a2f9f4c584430
+includes both all-tool Fire/look commits4833050/6d61ea9 and the grenade repair;
+its publication supersedes the older6d-only export. Pages bundle2f786bedd3e1c33c41010f382b05b7b37e476ff0
+is built/no error; public metadata and all six files match. Main is pushed and
+the normal build/web checkout fast-forwards to the same bundle. Avoid replacing
+it with an older client build. Two read-only specialists and all engine/release
+leases are returned; owned HTTP helpers are stopped before turn end. Next:
+user/device feel acceptance; broader parity, performance and listening remain open.
 
 ## All-item held primary camera look — 2026-10-11
 
@@ -196,7 +210,7 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `4a522ceca4edb7b007397331403915a24e689bc6`, pushed (startup MB display; warmed Title optimization retained).
+- Published client source: `d8e5ddb09d0ff63917d3312a758a2f9f4c584430`, pushed (grenade distance feedback and all-item held Fire/look; startup MB and warmed Title work retained).
 - NexQuake mobile controls are merged into main through PR1, merge0fd90e75e508.
   All completed optimization commits through922f230 remain intact. Subsequent
   documentation does not change the checked game bytes. Client engine/release and
@@ -278,16 +292,18 @@ the user's chosen deployment scope is Docker/configuration preparation.
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) serves clean
-  source `4a522ceca4edb7b007397331403915a24e689bc6`.
-  Bundle `56bbc6f09724a5e51b3d732b5a9a08df16c4141e`, Pages built/no error. All game changes are pushed to main;
+  source `d8e5ddb09d0ff63917d3312a758a2f9f4c584430`.
+  Bundle `2f786bedd3e1c33c41010f382b05b7b37e476ff0`, Pages built/no error. All game changes are pushed to main;
   later evidence/documentation commits do not change checked game bytes.
 - Independently downloaded public metadata/HTML/JS/WASM/PCK and both audio worklets
-  match the frozen export. PCK23750832bytes SHA256
-  `17415c443df0659763ee1969158e55a282f405b6ae82c571f8a8a63719f66902`;
-  HTML7092bytes SHA256 `a8b639dd5299b8cf7dc7deaa20aa687d854128408ab3bd9faa940111021166b9`.
-  Hash report `.cache/benchmarks/loading-public-verification.json`; startup screenshot
-  `.cache/previews/loading-public-progress.png`. Actual downloaded/total MB,
-  overlay removal and offline entry are checked on4a522ce. The earlier19c4d51
+  match the frozen export. PCK23751916bytes SHA256
+  `2b9f1d81c4190fce199a805f58eb89ad91cb2b6daaaeba252dd37b45168ea71c`;
+  HTML7092bytes SHA256 `99f3debfa2f144aa1e234492f8a9f25eeb86c76b86a4831908d56fd4d141a5a4`.
+  Hash report `.cache/grenade-public-verification.json`; current browser/mixer
+  evidence is [grenade feedback](grenade-feedback.md). Public grenade selection,
+  lab entry, held Fire-drag camera rotation and300ms Fire are exercised, with no
+  warnings/errors captured. Earlier actual downloaded/total MB, overlay removal
+  and offline entry on4a522ce remain in the loading evidence. The earlier19c4d51
   Title evidence/screenshots remain retained separately: Title load/SMG selection,
   held touch fire, cliff destruction,30→0 magazine/reload30/90 and current
   Verification map/profile exercised. Public startup has no warnings/errors;
