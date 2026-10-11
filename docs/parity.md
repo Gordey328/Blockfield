@@ -217,6 +217,17 @@ Command: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path g
 
 2026-10-10 source/render integration: complete offline code rows are IMPLEMENTED without promoting them to VERIFIED. Contracts/evidence: source-audit.md (source motion128/0, scene146/0 and subsequent tool/selection corrections), assets.md (character/corpse/native weapon/spectator), ui.md (custom metadata/native palette/settings), audio.md (126 routing/parameter checks), voxel.md (AO atlas/spectral/GI/real geometry reflections and fog). Later handoffs above include the completed UI/camera/audio/action paths and normalized float HDR. B01 uses the local-validation/branch-publication replacement in ADR0003 while Actions is externally blocked. Trusted skins/data ZIP and renderer differences are recorded in ADR0004 and extensions.md. Browser evidence applies to the recorded deployed SHA, not newer workspace code.
 
+2026-10-11, W02/W07/U11/U12: continued warmed Title optimization batches unchanged
+world units without per-column packed ownership overhead, skips identity particle
+work/hidden statistics scans and predecodes49 original Opus clips to source-native
+PCM16. PCM523/0, environment76/0 and fragment34/0 pass. Three gesture-activated
+actual-Main browser pairs remove24 original Title cells each: baseline shoot
+p95103.1/114.1/119.8ms, candidate46.6/46.7/45.9ms; mean instrumented script CPU
+per shot−9.1%, idle CPU/realsecond−20.3%. Mixer/GPU/host and rare63.9ms frames are
+explicit. Full-row status stays IMPLEMENTED. Frozen normal release evidence and
+exact commands/artifacts belong in [Title evidence](title-impact-performance.md)
+and [ADR0016](decisions/0016-impact-cpu-batching.md).
+
 2026-10-11, W02/W07/U12: terrain-hit optimization on b3e29b38c573 updates
 surviving-hit color attributes in place and budgets staged geometry with atomic
 mesh/collider publication. Minimap uploads follow changed image revisions;

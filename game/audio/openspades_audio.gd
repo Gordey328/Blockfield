@@ -357,10 +357,15 @@ func _update_gain(voice: Node) -> void:
 	var gain: float=effective_gain(raw,distance,reference,local,stereo,source_gain)
 	voice.volume_db=linear_to_db(maxf(.000001,gain))
 	var wet_gain: float=effective_wet_gain(raw,distance,reference,local,stereo,source_gain,float(_environment.parameters.decay_time))
+	var target_pitch: float=voice.pitch_scale
+	var target_transform: Transform3D=voice.global_transform if voice is AudioStreamPlayer3D else Transform3D.IDENTITY
 	for copy: Node in voice.get_meta("copies",[]):
 		copy.volume_db=linear_to_db(maxf(.000001,wet_gain))+(3.0103 if copy is AudioStreamPlayer3D else 0.0)
-		copy.pitch_scale=voice.pitch_scale
-		if copy is AudioStreamPlayer3D:copy.global_transform=voice.global_transform
+		# The native pitch setter visits AudioServer playbacks even for an equal
+		# value. Preserve every actual change without repeating that work.
+		if copy.pitch_scale != target_pitch:copy.pitch_scale=target_pitch
+		if copy is AudioStreamPlayer3D and copy.global_transform != target_transform:
+			copy.global_transform=target_transform
 
 func _process(_delta: float) -> void:
 	if camera==null:return

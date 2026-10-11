@@ -10,6 +10,7 @@ const IMAGE_ROOT := "res://assets/openspades/images/"
 const SOUND_ROOT := "res://assets/openspades/sounds/Weapons/"
 const WEAPONS := ["Rifle", "SMG", "Shotgun"]
 const EXTENSIONS = preload("res://presentation/openspades_extensions.gd")
+const VOXEL_WORLD = preload("res://world/voxel_world.gd")
 const TRACER_SPEEDS := [350.0, 180.0, 250.0] # Native velocities * 0.5 visual slowdown.
 const IGNORE := 0
 const DELETE := 1
@@ -445,11 +446,18 @@ func _spawn(position: Vector3, velocity: Vector3, color: Color, radius: float, l
 		"frame_position": node.global_position, "frame_color": color})
 
 func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float) -> void:
+	# Only the concrete renderer has the get_block -> Data contract. Custom
+	# worlds/subclasses retain their query override. This reference lasts for
+	# one synchronous substep; no packed-map storage is copied or retained.
+	var collision_data: VoxelData = null
+	if is_instance_valid(world) and world.get_script() == VOXEL_WORLD:
+		collision_data = (world as VoxelWorld).data
 	for index in range(_particles.size() - 1, -1, -1):
 		var entry: Dictionary = _particles[index]
 		entry.age = entry.frame_age + frame_elapsed
-		var frame: int = floori(entry.age * entry.fps)
-		if entry.age >= entry.life or (entry.smoke == 2 and frame >= 48):
+		var smoke: int = entry.smoke
+		var frame: int = floori(entry.age * entry.fps) if smoke > 0 else 0
+		if entry.age >= entry.life or (smoke == 2 and frame >= 48):
 			_release(entry.node, _particle_pool, max_particles)
 			_particles.remove_at(index)
 			continue
@@ -457,40 +465,53 @@ func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float
 		if entry.batched:
 			_fragment_substeps += 1
 		var previous: Vector3 = entry.frame_position if entry.batched else node.global_position
-		var next: Vector3 = previous + entry.velocity * delta
-		entry.velocity.y -= 32.0 * entry.gravity * delta
-		if entry.collision != IGNORE and _solid(next):
+		var velocity: Vector3 = entry.velocity
+		var next: Vector3 = previous + velocity * delta
+		velocity.y -= 32.0 * entry.gravity * delta
+		if entry.collision != IGNORE and _solid(next, collision_data):
 			if entry.collision == DELETE:
 				_release(node, _particle_pool, max_particles)
 				_particles.remove_at(index)
 				continue
-			entry.velocity = _bounce(previous, next, entry.velocity) * 0.36
+			velocity = _bounce(previous, next, velocity, collision_data) * 0.36
 			next = previous
 		if entry.batched:
 			entry.frame_position = next
 		else:
 			node.global_position = next
-		entry.velocity *= pow(entry.damping, lifetime_delta)
-		entry.radius = maxf(0.0001, entry.radius + entry.growth * lifetime_delta)
-		entry.growth *= pow(entry.radius_damping, lifetime_delta)
+		var damping: float = entry.damping
+		if damping != 1.0:
+			velocity *= pow(damping, lifetime_delta)
+		entry.velocity = velocity
+		var growth: float = entry.growth
+		var radius: float = entry.radius
+		if growth != 0.0 or radius < 0.0001:
+			entry.radius = maxf(0.0001, radius + growth * lifetime_delta)
+		if growth != 0.0:
+			var radius_damping: float = entry.radius_damping
+			if radius_damping != 1.0:
+				entry.growth = growth * pow(radius_damping, lifetime_delta)
 		if not entry.batched:
 			node.scale = Vector3.ONE * entry.radius * 2.0
-		var fade := 1.0
-		if entry.fade_in > 0.0:
-			fade *= minf(entry.age / entry.fade_in, 1.0)
-		if entry.fade_out > 0.0:
-			fade *= minf((entry.life - entry.age) / entry.fade_out, 1.0)
-		var color: Color = entry.color
-		color.a *= clampf(fade, 0.0, 1.0)
-		if entry.batched:
-			entry.frame_color = color
-		else:
-			node.modulate = color
-		if entry.smoke > 0:
-			frame = frame % (180 if entry.smoke == 1 else 48)
+			node.modulate = _particle_color(entry)
+		if smoke > 0:
+			frame = frame % (180 if smoke == 1 else 48)
 			if frame != entry.frame:
-				node.texture = _smoke_texture(entry.smoke, frame)
+				node.texture = _smoke_texture(smoke, frame)
 				entry.frame = frame
+
+func _particle_color(entry: Dictionary) -> Color:
+	var fade: float = 1.0
+	var age: float = entry.age
+	var fade_in: float = entry.fade_in
+	var fade_out: float = entry.fade_out
+	if fade_in > 0.0:
+		fade *= minf(age / fade_in, 1.0)
+	if fade_out > 0.0:
+		fade *= minf((entry.life - age) / fade_out, 1.0)
+	var color: Color = entry.color
+	color.a *= clampf(fade, 0.0, 1.0)
+	return color
 
 func _update_casings(delta: float, lifetime_delta: float, frame_elapsed: float) -> void:
 	for index in range(_casings.size() - 1, -1, -1):
@@ -598,22 +619,24 @@ func _contact(position: Vector3, water: bool, weapon: int) -> void:
 		_dispose(node), CONNECT_ONE_SHOT)
 	node.play()
 
-func _bounce(previous: Vector3, next: Vector3, velocity: Vector3) -> Vector3:
+func _bounce(previous: Vector3, next: Vector3, velocity: Vector3, query: VoxelData = null) -> Vector3:
 	var result := velocity
 	var before := Vector3i(previous.floor())
 	var after := Vector3i(next.floor())
-	if before.y != after.y and (before.x == after.x and before.z == after.z or not _solid(Vector3(next.x, previous.y, next.z))):
+	if before.y != after.y and (before.x == after.x and before.z == after.z or not _solid(Vector3(next.x, previous.y, next.z), query)):
 		result.y = -result.y
-	elif before.x != after.x and (before.y == after.y and before.z == after.z or not _solid(Vector3(previous.x, next.y, next.z))):
+	elif before.x != after.x and (before.y == after.y and before.z == after.z or not _solid(Vector3(previous.x, next.y, next.z), query)):
 		result.x = -result.x
 	else:
 		result.z = -result.z
 	return result
 
-func _solid(position: Vector3) -> bool:
-	return _solid_cell(Vector3i(position.floor()))
+func _solid(position: Vector3, query: VoxelData = null) -> bool:
+	return _solid_cell(Vector3i(position.floor()), query)
 
-func _solid_cell(cell: Vector3i) -> bool:
+func _solid_cell(cell: Vector3i, query: VoxelData = null) -> bool:
+	if query != null:
+		return query.get_block(cell) != 0
 	return is_instance_valid(world) and int(world.call("get_block", cell)) != 0
 
 func _water_level() -> float:
@@ -715,6 +738,7 @@ func _sync_fragment_batch() -> void:
 			# Mirror the final state once, preserving post-update node inspection
 			# and inherited transforms while eliminating invisible substep work.
 			var node: Sprite3D = entry.node
+			entry.frame_color = _particle_color(entry)
 			node.global_position = entry.frame_position
 			_fragment_position_writes += 1
 			var target_scale: Vector3 = Vector3.ONE * entry.radius * 2.0

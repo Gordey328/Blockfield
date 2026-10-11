@@ -32,6 +32,7 @@ var map_name := "Blockfield Test Grounds"
 var render_radius := 4
 var rebuild_budget := 3
 var rebuild_time_budget_ms := 4.0
+var rebuild_profiling_enabled := false
 var lighting_enabled := true
 var ambient_occlusion_enabled := true
 var irradiance_enabled := false
@@ -74,6 +75,8 @@ var _geometry_dirty: Dictionary[Vector3i, bool] = {}
 var _color_dirty: Dictionary[Vector3i, Dictionary] = {}
 var _active_chunk: VoxelChunk
 var _active_key := Vector3i(-1000, -1000, -1000)
+var _stage_cpu_usec := PackedInt64Array([0, 0, 0, 0])
+var _stage_units := PackedInt64Array([0, 0, 0, 0])
 var _rebuild_stats: Dictionary = {"mesh_builds": 0, "collision_builds": 0, "color_updates": 0,
 	"color_vertices": 0, "color_upload_bytes": 0, "build_cancellations": 0,
 	"last_frame_usec": 0, "max_frame_usec": 0, "max_step_usec": 0,
@@ -888,9 +891,16 @@ func _start_chunk_build(key: Vector3i) -> void:
 	_active_chunk.begin_rebuild(self, rebuild_collision)
 
 func _finish_active_build() -> void:
-	while not _active_chunk.advance_rebuild(self, _material, _color_dirty.get(_active_key, {})):
-		pass
+	var advanced := _active_chunk.advance_rebuild_slice(self, _material, _color_dirty.get(_active_key, {}), 0, 0, rebuild_profiling_enabled)
+	if rebuild_profiling_enabled:
+		_record_rebuild_profile(advanced)
 	_publish_chunk_build()
+
+func _record_rebuild_profile(advanced: Dictionary) -> void:
+	# Record each slice immediately so cancelled work remains represented.
+	for stage in range(4):
+		_stage_cpu_usec[stage] += advanced.stage_cpu_usec[stage]
+		_stage_units[stage] += advanced.stage_units[stage]
 
 func _publish_chunk_build() -> void:
 	_rebuild_stats.mesh_builds += 1
@@ -948,6 +958,8 @@ func process_rebuild_work(max_units: int = 0, time_budget_usec: int = 4000) -> D
 		var now := Time.get_ticks_usec()
 		while (max_units <= 0 or units < max_units) and completed < rebuild_budget and now - started < time_budget_usec:
 			var step_started := now
+			var processed := 1
+			var unit_max := 0
 			if color_key.x != -1000:
 				var cell: Vector3i = _color_dirty[color_key].keys()[0]
 				if not _streaming or _is_chunk_near(color_key):
@@ -972,12 +984,21 @@ func process_rebuild_work(max_units: int = 0, time_budget_usec: int = 4000) -> D
 						continue
 					_start_chunk_build(key)
 					pending_colors = _color_dirty.get(key, {})
-				if _active_chunk.advance_rebuild(self, _material, pending_colors):
+				var setup_usec := Time.get_ticks_usec() - step_started
+				var remaining := maxi(0, max_units - units) if max_units > 0 else 0
+				var advanced := _active_chunk.advance_rebuild_slice(self, _material, pending_colors, remaining, started + time_budget_usec, rebuild_profiling_enabled)
+				if rebuild_profiling_enabled:
+					_record_rebuild_profile(advanced)
+				processed = advanced.processed_units
+				unit_max = setup_usec + int(advanced.max_unit_usec)
+				if advanced.completed:
 					_publish_chunk_build()
 					completed += 1
-			units += 1
+			units += processed
 			now = Time.get_ticks_usec()
-			max_step = maxi(max_step, now - step_started)
+			max_step = maxi(max_step, unit_max if unit_max > 0 else now - step_started)
+			if processed == 0:
+				break
 	var elapsed := Time.get_ticks_usec() - started
 	_rebuild_stats.max_step_usec = max_step
 	_rebuild_stats.last_frame_usec = elapsed
@@ -986,6 +1007,12 @@ func process_rebuild_work(max_units: int = 0, time_budget_usec: int = 4000) -> D
 
 func get_rebuild_stats() -> Dictionary:
 	var stats := _rebuild_stats.duplicate()
+	# Ordered halo/mesh/collision/publish CPU and logical units. Only opt-in
+	# profiling measures stage dispatch/buffer ownership overhead; max_step is
+	# the longest logical unit plus scheduler setup, max_frame the whole slice.
+	stats.profiling_enabled = rebuild_profiling_enabled
+	stats.stage_cpu_usec = _stage_cpu_usec.duplicate()
+	stats.stage_units = _stage_units.duplicate()
 	stats.color_backend = "dummy_surface" if DisplayServer.get_name() == "headless" else "attribute_region"
 	stats.pending_chunks = _dirty.size()
 	stats.pending_color_chunks = _color_dirty.size()

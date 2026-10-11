@@ -10,6 +10,18 @@ class FloorWorld extends Node3D:
 	func get_block(cell: Vector3i) -> int:
 		return 0x01777777 if cell.y == 0 else 0
 
+class CountingData extends VoxelData:
+	var queries: int = 0
+	func get_block(cell: Vector3i) -> int:
+		queries += 1
+		return super.get_block(cell)
+
+class OverrideWorld extends VoxelWorld:
+	var queries: int = 0
+	func get_block(cell: Vector3i) -> int:
+		queries += 1
+		return 0x01777777 if cell.y == 6 else 0
+
 func _initialize() -> void:
 	call_deferred("run")
 
@@ -103,6 +115,47 @@ func run() -> void:
 		else:
 			check(is_equal_approx(visible.node.modulate.a, 0.95), "visible fluid keeps source elapsed fade")
 		effects.clear()
+	# Non-identity source options must retain their geometric-series updates;
+	# identity fast paths may not approximate damping, growth or elapsed fade.
+	effects._spawn(Vector3(0, 3, 0), Vector3(3, 0, 0), Color(0.2, 0.4, 0.6, 0.8), 0.2, 0.2,
+		{"collision": EFFECTS.IGNORE, "damping": 0.8, "growth": 0.8,
+		"radius_damping": 0.1, "fade_in": 0.2, "fade_out": 0.4})
+	effects.update_effects(0.1)
+	var damped: Dictionary = effects._particles[0]
+	var decay: float = pow(0.8, 1.0 / 60.0)
+	var growth_decay: float = pow(0.1, 1.0 / 60.0)
+	var expected_x: float = 3.0 / 60.0 * (1.0 - pow(decay, 6.0)) / (1.0 - decay)
+	var expected_radius: float = 0.2 + 0.8 / 60.0 * (1.0 - pow(growth_decay, 6.0)) / (1.0 - growth_decay)
+	check(absf(damped.node.global_position.x - expected_x) < 0.00001 and absf(damped.velocity.x - 3.0 * pow(0.8, 0.1)) < 0.00001, "non-identity damping keeps source explicit integration and final velocity")
+	check(absf(damped.radius - expected_radius) < 0.00001 and is_equal_approx(damped.growth, 0.8 * pow(0.1, 0.1)), "nonzero growth and radius damping retain every source substep")
+	check(is_equal_approx(damped.node.modulate.a, 0.1), "final white-fragment fade retains combined fade-in/out and intrinsic alpha")
+	effects.clear()
+	var concrete := VoxelWorld.new()
+	var concrete_data := CountingData.new()
+	concrete_data.clear(Vector3i(8, 8, 8))
+	concrete_data.seed_box(Vector3i.ZERO, Vector3i(8, 1, 8), 0x01777777)
+	concrete.data = concrete_data
+	root.add_child(concrete)
+	concrete.set_process(false)
+	effects.world = concrete
+	effects._spawn(Vector3(2, 1.05, 2), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
+		{"collision": EFFECTS.BOUNCE})
+	effects.update_effects(0.05)
+	check(concrete_data.queries > 0 and absf(effects._particles[0].node.global_position.y - 1.122) < 0.00001, "concrete VoxelWorld direct Data query retains the same source floor bounce")
+	effects.clear()
+	var overridden := OverrideWorld.new()
+	overridden.clear_world(Vector3i(8, 8, 8))
+	root.add_child(overridden)
+	overridden.set_process(false)
+	effects.world = overridden
+	effects._spawn(Vector3(2, 7.05, 2), Vector3(0, -6, 0), Color.WHITE, 0.2, 2.0,
+		{"collision": EFFECTS.BOUNCE})
+	effects.update_effects(0.05)
+	check(overridden.queries > 0 and absf(effects._particles[0].node.global_position.y - 7.122) < 0.00001, "VoxelWorld subclass collision override keeps the dynamic query fallback")
+	effects.clear()
+	effects.world = world
+	concrete.queue_free()
+	overridden.queue_free()
 	check(effects.stats().pooled_particles == effects.max_particles and effects.stats().batched_particles == 0, "clear returns all fragment/smoke/fluid nodes to the unchanged bounded pool")
 	effects.queue_free()
 	world.queue_free()

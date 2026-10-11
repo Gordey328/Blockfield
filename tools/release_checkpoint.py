@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--revision', default='HEAD')
     parser.add_argument('--server', action='store_true', help='Also export the same frozen authority revision')
+    parser.add_argument('--import-cache', type=Path, help='Seed the frozen project with an existing .godot cache; parser/import and all checks still run')
     args = parser.parse_args()
     revision = subprocess.run(['git', 'rev-parse', '--verify', args.revision + '^{commit}'],
                               cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
@@ -26,6 +27,8 @@ def main():
                    cwd=ROOT, check=True)
     with zipfile.ZipFile(archive) as source:
         source.extractall(folder)
+    if args.import_cache:
+        shutil.copytree(args.import_cache.resolve(), folder / 'game' / '.godot')
     engine_path = build.engine()
     build.ROOT = folder
     build.engine = lambda: engine_path

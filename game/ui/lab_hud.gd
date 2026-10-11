@@ -626,10 +626,15 @@ func _process(delta: float) -> void:
 		if session.is_cooking_grenade:_weapon_status.text=_ui("Фитиль: %.1f с","Fuse: %.1f s")%maxf(0,3-session.grenade_cook_time)
 		elif session.grenades==0:_weapon_status.text=OpenSpadesLocalization.text("Out of Grenade","Client")
 	_mode.text="%s   ·   %s"%[world.map_name,session.mode.to_upper()]
-	var stats:=world.get_stats()
 	_performance.visible=_show_statistics
-	_performance.text="%d FPS · %.1f ms · %s chunks · %d draw calls · %.1f MiB"%[Engine.get_frames_per_second(),1000.0/maxi(1,Engine.get_frames_per_second()),stats.get("chunks",0),RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),Performance.get_monitor(Performance.MEMORY_STATIC)/1048576.0]
-	if _live!=null:_live.text=_ui("Карта: %s  ·  Чанки: %s\nОружие: %s  ·  Профиль: %s","Map: %s  ·  Chunks: %s\nWeapon: %s  ·  Profile: %s")%[world.map_name,stats.get("chunks",0),info.name,session.profile_version]
+	# Face totals walk every loaded chunk. Gather diagnostics only while their
+	# panel is visible, including the same callback that opens the panel.
+	var show_lab_stats:=_live!=null and _live.is_visible_in_tree()
+	if _performance.is_visible_in_tree() or show_lab_stats:
+		var stats:=world.get_stats()
+		if _performance.is_visible_in_tree():
+			_performance.text="%d FPS · %.1f ms · %s chunks · %d draw calls · %.1f MiB"%[Engine.get_frames_per_second(),1000.0/maxi(1,Engine.get_frames_per_second()),stats.get("chunks",0),RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),Performance.get_monitor(Performance.MEMORY_STATIC)/1048576.0]
+		if show_lab_stats:_live.text=_ui("Карта: %s  ·  Чанки: %s\nОружие: %s  ·  Профиль: %s","Map: %s  ·  Chunks: %s\nWeapon: %s  ·  Profile: %s")%[world.map_name,stats.get("chunks",0),info.name,session.profile_version]
 	_build_cursor.enabled=_hud.is_visible_in_tree() and player.controls_enabled and live
 	_native_palette.visible=live and session.current_tool==LocalSession.Tool.BLOCK
 	_ammo.offset_left=-220 if uses_mobile_controls() else (-472 if _native_palette.visible else -380)

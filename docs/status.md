@@ -3,6 +3,42 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Active warmed Title / aggregate CPU optimization — 2026-10-11
+
+User requests continuing the impact work: remove remaining Title shooting stalls
+and reduce aggregate CPU. Baseline0d69907d05922316185333594e7a5ead29820c9b
+has the published b3e game bytes, archived under `.cache/title-impact-baseline`.
+Root owns integration/Main/UI audit, docs/config/release and serial engine lease.
+`impact_world` owns only Chunk/World; approved bounded-unit batching with buffer
+ownership retained across callback, each original unit deadline still checked.
+`impact_rules` owns only Effects and effect regression fixture; approved exact
+identity/final-fade/direct concrete Data query optimization, unchanged counts
+and physics. `impact_tests` owns new native/warmed actual-Main diagnostics plus
+isolated profile export helper; previous probe stays intact. Idle/shoot/tail,
+settled visual/minimap preparation and inclusive/exclusive CPU will be recorded.
+Existing Steam AoS research remains separately owned and untouched. World tests
+pass; native completed Title destruction median10.005→7.720ms, mean12.069→9.342ms,
+also below the old monolithic baseline. Effects fragment34/0, existing32588/0
+and actual Compatibility987/0 pass;400-fragment dense aggregate CPU falls15.0%.
+Bulk MultiMesh upload trial is slower and stays diagnostic-only. HUD skips hidden
+world/render statistics scans; wet audio copies skip exact-equal pitch/transform.
+Clean native actual-Main f pair:73shots/24removals, identical trajectory/counts,
+shoot exclusive CPU3803.4→3546.3ms; World self−24.3%, particle integration−29.7%.
+Audio decoder startup remains a hotspot. World produced49 native PCM16 derivatives
+from original Opus,7,442,462 PCM bytes, exact48k/channel/EOSframes, finite/overflow0,
+reproducible99 hashes. Rules owns Extensions bounded cache/override precedence and
+new imported-PCM fixture; both leases returned. Root owns audio wet-change fixture
+and89th suite registration. Diagnostics has the serial engine lease for import,
+PCM/environment checks and new G paired exports. Browser/FPS acceptance is pending:
+first f Web baseline appears to have suspended audio, retained separately.
+Exact commands, fixture failures and limits: [Title evidence](title-impact-performance.md).
+PCM523/0 and environment76/0 pass; all specialist leases returned. Three paired
+gesture-activated actual-Main browser runs remove24 Title cells each, baseline
+shots73/73/72 versus73/73/73. Median of shoot p95 values114.1→46.6ms; mean
+instrumented script CPU per shot−9.1%, idle CPU/realsecond−20.3%. Candidate tail
+audio/World/effects drain; rare63.9ms frames and host pointer-lock limits remain.
+Next: frozen89-check validation, normal browser input/render acceptance/publication.
+
 ## Weapon/block impact optimization — 2026-10-11
 
 Terrain surviving-hit damage/repaint now updates only cell color attributes,

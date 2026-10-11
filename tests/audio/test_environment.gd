@@ -137,6 +137,19 @@ func _run() -> void:
 	check(audio.debug_environment().owned_buses.size()==9,"bounded9DSPbuses")
 	var ui: Node=audio.play_local("Feedback/Chat")
 	check(ui.get_meta("copies").is_empty(),"UI2D alwaysdryonly")
+	# Ricochet pitch and moving 3D sources must still reach both room branches,
+	# including an externally moved branch whose dry source has not changed.
+	mono.pitch_scale=0.95
+	mono.global_transform=Transform3D(Basis(Vector3.UP,0.2),Vector3(1,2,3))
+	audio._update_gain(mono)
+	for copy: Node in mono.get_meta("copies"):
+		near(copy.pitch_scale,0.95,"wet branch follows changed ricochet pitch")
+		check(copy.global_transform==mono.global_transform,"wet branch follows exact changed source transform")
+		copy.global_position+=Vector3.RIGHT
+	mono.pitch_scale=1.05
+	audio._update_gain(mono)
+	for copy: Node in mono.get_meta("copies"):
+		check(is_equal_approx(copy.pitch_scale,1.05) and copy.global_transform==mono.global_transform,"next update restores changed branch and follows new pitch")
 	var other=AUDIO.new();host.add_child(other);other.setup(null,camera);other.get_output_bus()
 	check(other.get_output_bus()!=audio.get_output_bus(),"separateinstancesuniqueownedbuses")
 	other.stop();check(AudioServer.get_bus_count()==baseline+9,"stopremovesonlyownbuses")

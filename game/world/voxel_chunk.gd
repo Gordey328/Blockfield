@@ -57,6 +57,7 @@ var _face_directions := PackedByteArray()
 var _attribute_stride := 0
 var _color_offset := 0
 var _uv_offset := 0
+var _batch_max_unit_usec := 0
 
 func _init() -> void:
 	collision_layer = 1
@@ -68,8 +69,7 @@ func _init() -> void:
 
 func rebuild(world: Node3D, material: Material, rebuild_collision: bool = true) -> void:
 	begin_rebuild(world, rebuild_collision)
-	while not advance_rebuild(world, material):
-		pass
+	advance_rebuild_slice(world, material)
 
 func begin_rebuild(world: Node3D, rebuild_collision: bool = true) -> void:
 	AO.initialize()
@@ -93,70 +93,98 @@ func is_rebuilding() -> bool:
 	return _job != null
 
 func advance_rebuild(world: Node3D, material: Material, pending_colors: Dictionary = {}) -> bool:
-	# One 18-cell halo column, 16-cell mesh column, collision plane or publish.
-	# No retained full-map PackedArray: shots cannot trigger map-sized COW here.
-	if _job == null:
-		return true
-	var started := Time.get_ticks_usec()
-	match _job.stage:
-		0:
-			_build_halo_column(world)
-			_job.cursor += 1
-			if _job.cursor == AO.HALO_SIZE * AO.HALO_SIZE:
-				_job.stage = 1
-				_job.cursor = 0
-		1:
-			_build_mesh_column(world)
-			_job.cursor += 1
-			if _job.cursor == CHUNK_SIZE * CHUNK_SIZE:
-				_job.stage = 2 if _job.rebuild_collision else 3
-				_job.cursor = 0
-		2:
-			_merge_collision_plane(_job.cursor)
-			_job.cursor += 1
-			if _job.cursor == 6 * CHUNK_SIZE:
-				_job.stage = 3
-		3:
-			_publish(world, material, pending_colors)
-			publish_usec = Time.get_ticks_usec() - started
-			build_usec = _job.elapsed_usec + publish_usec
-			_job = null
-			return true
-	_job.elapsed_usec += Time.get_ticks_usec() - started
-	return false
+	return advance_rebuild_slice(world, material, pending_colors, 1).completed
 
-func _build_halo_column(world: Node3D) -> void:
+func advance_rebuild_slice(world: Node3D, material: Material, pending_colors: Dictionary = {}, max_units: int = 0, deadline_usec: int = 0, profiling_enabled: bool = false) -> Dictionary:
+	# Keep packed output ownership in locals for a callback, not every column.
+	# Every original column/plane is still a deadline/count boundary. No live
+	# full-map buffer survives a return, and only complete jobs publish.
+	var started := Time.get_ticks_usec()
+	var units := 0
+	var stage_cpu_usec := PackedInt64Array()
+	var stage_units := PackedInt64Array()
+	if profiling_enabled:
+		stage_cpu_usec.resize(4)
+		stage_units.resize(4)
+	_batch_max_unit_usec = 0
+	while _job != null and (max_units <= 0 or units < max_units) and (deadline_usec <= 0 or Time.get_ticks_usec() < deadline_usec):
+		var remaining := maxi(0, max_units - units) if max_units > 0 else 0
+		var processed := 0
+		var stage := _job.stage
+		var stage_started := Time.get_ticks_usec() if profiling_enabled else 0
+		match stage:
+			0:
+				processed = _build_halo_columns(world, remaining, deadline_usec)
+			1:
+				processed = _build_mesh_columns(world, remaining, deadline_usec)
+			2:
+				processed = _merge_collision_planes(remaining, deadline_usec)
+			3:
+				var published_at := Time.get_ticks_usec()
+				_publish(world, material, pending_colors)
+				publish_usec = Time.get_ticks_usec() - published_at
+				_batch_max_unit_usec = maxi(_batch_max_unit_usec, publish_usec)
+				build_usec = _job.elapsed_usec + Time.get_ticks_usec() - started
+				_job = null
+				processed = 1
+		if profiling_enabled:
+			stage_cpu_usec[stage] += Time.get_ticks_usec() - stage_started
+			stage_units[stage] += processed
+		units += processed
+		if processed == 0:
+			break
+	if _job != null:
+		_job.elapsed_usec += Time.get_ticks_usec() - started
+	var result := {"processed_units": units, "completed": _job == null, "max_unit_usec": _batch_max_unit_usec}
+	if profiling_enabled:
+		result.stage_cpu_usec = stage_cpu_usec
+		result.stage_units = stage_units
+	return result
+
+func _build_halo_columns(world: Node3D, max_units: int, deadline_usec: int) -> int:
 	var job := _job
 	var base := job.base
 	var size := job.size
 	var water := job.water
 	var native := job.native
-	var x := base.x + job.cursor % AO.HALO_SIZE - 1
-	var z := base.z + job.cursor / AO.HALO_SIZE - 1
-	var valid := x >= 0 and x < size.x and z >= 0 and z < size.z
-	var column := size.y * (x + size.x * z)
-	var ao_column := size.y * (posmod(x, size.x) + size.x * posmod(z, size.z)) if native else column
 	var map_blocks: PackedInt32Array = world._blocks
-	# Move ownership into locals before mutating. Merely assigning a packed
-	# member to a local would retain two references and copy it on each unit.
 	var blocks := job.blocks
 	var solids := job.solids
 	job.blocks = PackedInt32Array()
 	job.solids = PackedByteArray()
-	var first := job.cursor * AO.HALO_SIZE
-	for hy in range(AO.HALO_SIZE):
-		var y := base.y + hy - 1
-		if valid and y >= 0 and y < size.y:
-			blocks[first + hy] = map_blocks[column + y]
-		if y < 0:
-			solids[first + hy] = 1
-		elif y < size.y and (valid or native):
-			var sample_y := 1 if water and y == 0 and size.y > 1 else y
-			solids[first + hy] = 1 if map_blocks[ao_column + sample_y] != 0 else 0
+	var processed := 0
+	var max_unit := 0
+	var now := Time.get_ticks_usec()
+	while job.cursor < AO.HALO_SIZE * AO.HALO_SIZE and (max_units <= 0 or processed < max_units) and (deadline_usec <= 0 or now < deadline_usec):
+		var unit_started := now
+		var x := base.x + job.cursor % AO.HALO_SIZE - 1
+		var z := base.z + job.cursor / AO.HALO_SIZE - 1
+		var valid := x >= 0 and x < size.x and z >= 0 and z < size.z
+		var column := size.y * (x + size.x * z)
+		var ao_column := size.y * (posmod(x, size.x) + size.x * posmod(z, size.z)) if native else column
+		var first := job.cursor * AO.HALO_SIZE
+		for hy in range(AO.HALO_SIZE):
+			var y := base.y + hy - 1
+			if valid and y >= 0 and y < size.y:
+				blocks[first + hy] = map_blocks[column + y]
+			if y < 0:
+				solids[first + hy] = 1
+			elif y < size.y and (valid or native):
+				var sample_y := 1 if water and y == 0 and size.y > 1 else y
+				solids[first + hy] = 1 if map_blocks[ao_column + sample_y] != 0 else 0
+		job.cursor += 1
+		processed += 1
+		now = Time.get_ticks_usec()
+		max_unit = maxi(max_unit, now - unit_started)
 	job.blocks = blocks
 	job.solids = solids
+	if job.cursor == AO.HALO_SIZE * AO.HALO_SIZE:
+		job.stage = 1
+		job.cursor = 0
+	_batch_max_unit_usec = maxi(_batch_max_unit_usec, max_unit)
+	return processed
 
-func _build_mesh_column(world: Node3D) -> void:
+func _build_mesh_columns(world: Node3D, max_units: int, deadline_usec: int) -> int:
 	var job := _job
 	var base := job.base
 	var water := job.water
@@ -184,47 +212,56 @@ func _build_mesh_column(world: Node3D) -> void:
 	job.collision_mask = PackedByteArray()
 	job.collision_slices = PackedByteArray()
 	var faces := job.faces
-	var local_x := job.cursor % CHUNK_SIZE
-	var local_z := job.cursor / CHUNK_SIZE
-	var column := AO.HALO_SIZE * (local_x + 1 + AO.HALO_SIZE * (local_z + 1))
-	for local_y in range(CHUNK_SIZE):
-		var index := column + local_y + 1
-		var packed := blocks[index]
-		if packed == 0:
-			continue
-		var local_cell := Vector3(local_x, local_y, local_z)
-		var color := Color()
-		var render_voxel := not (water and base.y + local_y == 0 and blocks[index + 1] == 0)
-		var first_face := faces
-		for face in range(6):
-			var air_index := index + HALO_FACE_OFFSETS[face]
-			if blocks[air_index] != 0:
+	var processed := 0
+	var max_unit := 0
+	var now := Time.get_ticks_usec()
+	while job.cursor < CHUNK_SIZE * CHUNK_SIZE and (max_units <= 0 or processed < max_units) and (deadline_usec <= 0 or now < deadline_usec):
+		var unit_started := now
+		var local_x := job.cursor % CHUNK_SIZE
+		var local_z := job.cursor / CHUNK_SIZE
+		var column := AO.HALO_SIZE * (local_x + 1 + AO.HALO_SIZE * (local_z + 1))
+		for local_y in range(CHUNK_SIZE):
+			var index := column + local_y + 1
+			var packed := blocks[index]
+			if packed == 0:
 				continue
-			if rebuild_collision:
-				var slice: int = local_x if face < 2 else (local_y if face < 4 else local_z)
-				var u: int = local_y if face < 2 else local_x
-				var v: int = local_z if face < 4 else local_y
-				var plane := face * CHUNK_SIZE + slice
-				collision_slices[plane] = 1
-				collision_mask[plane * CHUNK_SIZE * CHUNK_SIZE + u + CHUNK_SIZE * v] = 1
-			if not render_voxel:
-				continue
-			if faces == first_face:
-				color = world.get_render_color(base + Vector3i(local_x, local_y, local_z), packed)
-			faces += 1
-			var tile: int = AO.tile_id(solids, air_index, face)
-			tiles.append(tile)
-			directions.append(face)
-			var first := vertices.size()
-			for corner in range(4):
-				vertices.append(local_cell + CORNERS[face][corner])
-				normals.append(Vector3(DIRECTIONS[face]))
-				colors.append(Color(color.r, color.g, color.b, AO.face_corner(tile, face, corner)))
-				ao_uvs.append(AO.face_uv(tile, face, corner))
-			for corner in TRIANGLES:
-				indices.append(first + corner)
-		if faces != first_face:
-			spans[local_y + CHUNK_SIZE * (local_x + CHUNK_SIZE * local_z)] = (first_face << 3) | (faces - first_face)
+			var local_cell := Vector3(local_x, local_y, local_z)
+			var color := Color()
+			var render_voxel := not (water and base.y + local_y == 0 and blocks[index + 1] == 0)
+			var first_face := faces
+			for face in range(6):
+				var air_index := index + HALO_FACE_OFFSETS[face]
+				if blocks[air_index] != 0:
+					continue
+				if rebuild_collision:
+					var slice: int = local_x if face < 2 else (local_y if face < 4 else local_z)
+					var u: int = local_y if face < 2 else local_x
+					var v: int = local_z if face < 4 else local_y
+					var plane := face * CHUNK_SIZE + slice
+					collision_slices[plane] = 1
+					collision_mask[plane * CHUNK_SIZE * CHUNK_SIZE + u + CHUNK_SIZE * v] = 1
+				if not render_voxel:
+					continue
+				if faces == first_face:
+					color = world.get_render_color(base + Vector3i(local_x, local_y, local_z), packed)
+				faces += 1
+				var tile: int = AO.tile_id(solids, air_index, face)
+				tiles.append(tile)
+				directions.append(face)
+				var first := vertices.size()
+				for corner in range(4):
+					vertices.append(local_cell + CORNERS[face][corner])
+					normals.append(Vector3(DIRECTIONS[face]))
+					colors.append(Color(color.r, color.g, color.b, AO.face_corner(tile, face, corner)))
+					ao_uvs.append(AO.face_uv(tile, face, corner))
+				for corner in TRIANGLES:
+					indices.append(first + corner)
+			if faces != first_face:
+				spans[local_y + CHUNK_SIZE * (local_x + CHUNK_SIZE * local_z)] = (first_face << 3) | (faces - first_face)
+		job.cursor += 1
+		processed += 1
+		now = Time.get_ticks_usec()
+		max_unit = maxi(max_unit, now - unit_started)
 	job.vertices = vertices
 	job.normals = normals
 	job.colors = colors
@@ -236,6 +273,11 @@ func _build_mesh_column(world: Node3D) -> void:
 	job.collision_mask = collision_mask
 	job.collision_slices = collision_slices
 	job.faces = faces
+	if job.cursor == CHUNK_SIZE * CHUNK_SIZE:
+		job.stage = 2 if rebuild_collision else 3
+		job.cursor = 0
+	_batch_max_unit_usec = maxi(_batch_max_unit_usec, max_unit)
+	return processed
 
 func _publish(world: Node3D, material: Material, pending_colors: Dictionary) -> void:
 	# Hits/repaints arriving after a column was sampled must win at publication.
@@ -327,41 +369,56 @@ func update_color(world: Node3D, cell: Vector3i) -> int:
 func get_cached_color_bytes() -> int:
 	return _cell_spans.size() * 4 + _face_tiles.size() + _face_directions.size()
 
-func _merge_collision_plane(plane: int) -> void:
-	# Color/AO seams are irrelevant to collision. Merge exact coplanar exposed
-	# cells into rectangles, keeping holes, steps and outward triangle winding.
-	if _job.collision_slices[plane] == 0:
-		return
-	var mask := _job.collision_mask
-	var vertices := _job.collision_vertices
-	_job.collision_mask = PackedByteArray()
-	_job.collision_vertices = PackedVector3Array()
-	var face := plane / CHUNK_SIZE
-	var slice := plane % CHUNK_SIZE
-	var offset := plane * CHUNK_SIZE * CHUNK_SIZE
-	for v in range(CHUNK_SIZE):
-		for u in range(CHUNK_SIZE):
-			if mask[offset + u + CHUNK_SIZE * v] == 0:
-				continue
-			var width := 1
-			while u + width < CHUNK_SIZE and mask[offset + u + width + CHUNK_SIZE * v] != 0:
-				width += 1
-			var height := 1
-			while v + height < CHUNK_SIZE:
-				var complete := true
-				for x in range(u, u + width):
-					if mask[offset + x + CHUNK_SIZE * (v + height)] == 0:
-						complete = false
-						break
-				if not complete:
-					break
-				height += 1
-			for y in range(v, v + height):
-				for x in range(u, u + width):
-					mask[offset + x + CHUNK_SIZE * y] = 0
-			var origin := Vector3(slice, u, v) if face < 2 else (Vector3(u, slice, v) if face < 4 else Vector3(u, v, slice))
-			var scale := Vector3(1, width, height) if face < 2 else (Vector3(width, 1, height) if face < 4 else Vector3(width, height, 1))
-			for corner in TRIANGLES:
-				vertices.append(origin + CORNERS[face][corner] * scale)
-	_job.collision_mask = mask
-	_job.collision_vertices = vertices
+func _merge_collision_planes(max_units: int, deadline_usec: int) -> int:
+	# Keep exact coplanar rectangles, holes, steps and outward winding. Empty
+	# planes still count as units and skip the greedy merge.
+	var job := _job
+	var slices := job.collision_slices
+	var mask := job.collision_mask
+	var vertices := job.collision_vertices
+	job.collision_mask = PackedByteArray()
+	job.collision_vertices = PackedVector3Array()
+	var processed := 0
+	var max_unit := 0
+	var now := Time.get_ticks_usec()
+	while job.cursor < 6 * CHUNK_SIZE and (max_units <= 0 or processed < max_units) and (deadline_usec <= 0 or now < deadline_usec):
+		var unit_started := now
+		var plane := job.cursor
+		if slices[plane] != 0:
+			var face := plane / CHUNK_SIZE
+			var slice := plane % CHUNK_SIZE
+			var offset := plane * CHUNK_SIZE * CHUNK_SIZE
+			for v in range(CHUNK_SIZE):
+				for u in range(CHUNK_SIZE):
+					if mask[offset + u + CHUNK_SIZE * v] == 0:
+						continue
+					var width := 1
+					while u + width < CHUNK_SIZE and mask[offset + u + width + CHUNK_SIZE * v] != 0:
+						width += 1
+					var height := 1
+					while v + height < CHUNK_SIZE:
+						var complete := true
+						for x in range(u, u + width):
+							if mask[offset + x + CHUNK_SIZE * (v + height)] == 0:
+								complete = false
+								break
+						if not complete:
+							break
+						height += 1
+					for y in range(v, v + height):
+						for x in range(u, u + width):
+							mask[offset + x + CHUNK_SIZE * y] = 0
+					var origin := Vector3(slice, u, v) if face < 2 else (Vector3(u, slice, v) if face < 4 else Vector3(u, v, slice))
+					var scale := Vector3(1, width, height) if face < 2 else (Vector3(width, 1, height) if face < 4 else Vector3(width, height, 1))
+					for corner in TRIANGLES:
+						vertices.append(origin + CORNERS[face][corner] * scale)
+		job.cursor += 1
+		processed += 1
+		now = Time.get_ticks_usec()
+		max_unit = maxi(max_unit, now - unit_started)
+	job.collision_mask = mask
+	job.collision_vertices = vertices
+	if job.cursor == 6 * CHUNK_SIZE:
+		job.stage = 3
+	_batch_max_unit_usec = maxi(_batch_max_unit_usec, max_unit)
+	return processed

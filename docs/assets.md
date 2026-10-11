@@ -77,6 +77,24 @@ Godot does not import the original Opus format as its normal audio stream. The
 pipeline transcodes to Ogg Vorbis for native and browser imports; source hashes
 remain recorded. Resource playback and spatial mixing still require game code.
 
+For the frequently repeated49 fire/impact/block/casing sounds,
+`tools/predecode_impact_sounds.py --ffmpeg <local-libopus-ffmpeg>` creates additional
+`impact_pcm/` WAV derivatives directly from the pinned original Opus package.
+`--verify` checks the original/package hashes, Ogg OpusHead/EOS channel/frame
+metadata, generated WAV/PCM hashes and lossless Godot import settings without
+reconversion. The separate `impact_pcm_manifest.json` records decoder binary/version,
+source and output hashes and exact measurements. Repeated conversion retains all99
+generated file hashes. The original manifest/catalog is unchanged.
+
+Conversion follows native `ALDevice.cpp` float48kHz→floor(sample*32768)→int16,
+with no dithering, resampling, normalization or channel mix. All decoded samples
+are finite and none overflow int16. Total PCM7,442,462 bytes/WAV7,444,618 bytes,
+largest PCM618,976 bytes; caps8MiB aggregate/2MiB individual. WAV `.import` settings
+explicitly disable Godot's default QOA compression. Native acceptance separately
+requires `AudioStreamWAV.data` SHA256 to match each manifest PCM hash. These are
+bundled derivatives under the existing original license/credit notices, not
+standalone sound redistribution. Lookup/ZIP precedence: [audio contract](audio.md).
+
 - Rifle: `res://assets/openspades/sounds/Weapons/Rifle/FireLocal.ogg`.
 - SMG: `sounds/Weapons/SMG/V2Local1.ogg` through `V2Local4.ogg`.
 - Shotgun: `sounds/Weapons/Shotgun/FireLocal.ogg`, `CockLocal.ogg` and `ReloadLocal.ogg`.

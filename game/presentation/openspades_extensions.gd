@@ -8,6 +8,8 @@ const MAX_ARCHIVE := 32 * 1024 * 1024
 const MAX_TOTAL := 64 * 1024 * 1024
 const MAX_FILE := 16 * 1024 * 1024
 const MAX_FILES := 512
+const IMPACT_PCM_MANIFEST := ROOT + "impact_pcm_manifest.json"
+const MAX_IMPACT_PCM := 8 * 1024 * 1024
 const FIRST_METHODS := ["set_selection","is_changing_tool","update_pose","fire","reload","set_team",
 	"set_block_color","set_ammo","set_grenade_cook","set_spade_action","cancel_reload","reload_completed","get_muzzle_transform","refresh_resources"]
 const THIRD_METHODS := ["set_team","set_pose","set_weapon","animate_motion","set_aim","set_intel_carrier","refresh_resources"]
@@ -16,6 +18,9 @@ static var _catalog: Dictionary = {}
 static var _aliases: Dictionary = {}
 static var _factories: Dictionary = {}
 static var _generation := 0
+static var _impact_pcm_loaded: bool = false
+static var _impact_pcm_files: Dictionary[String, Dictionary] = {}
+static var _impact_pcm_streams: Dictionary[String, AudioStreamWAV] = {}
 
 static func get_generation() -> int:
 	return _generation
@@ -30,6 +35,9 @@ static func get_packs() -> Array[Dictionary]:
 static func clear() -> void:
 	_packs.clear()
 	_factories.clear()
+	_impact_pcm_streams.clear()
+	_impact_pcm_files.clear()
+	_impact_pcm_loaded = false
 	_generation += 1
 
 static func remove_pack(id: String) -> bool:
@@ -100,8 +108,70 @@ static func sound(path: String) -> AudioStream:
 		return replacement
 	var canonical := _canonical(path)
 	if _catalog.has(canonical) and _catalog[canonical].type == "sound":
+		var pcm := _impact_pcm_sound(canonical)
+		if pcm != null:
+			return pcm
 		return load(ROOT + _catalog[canonical].output) as AudioStream
 	return load(path) as AudioStream if path.begins_with(ROOT + "sounds/") else null
+
+static func _load_impact_pcm() -> void:
+	if _impact_pcm_loaded:
+		return
+	_impact_pcm_loaded = true
+	if not FileAccess.file_exists(IMPACT_PCM_MANIFEST):
+		return
+	var file := FileAccess.open(IMPACT_PCM_MANIFEST, FileAccess.READ)
+	if file == null or file.get_length() > 128 * 1024:
+		return
+	_impact_pcm_files = _validate_impact_pcm_manifest(JSON.parse_string(file.get_as_text()))
+
+static func _validate_impact_pcm_manifest(manifest: Variant) -> Dictionary[String, Dictionary]:
+	var result: Dictionary[String, Dictionary] = {}
+	if not manifest is Dictionary or manifest.get("format") != "blockfield-impact-pcm-v1" or not manifest.get("files") is Dictionary:
+		return result
+	var files: Dictionary = manifest.files
+	if files.is_empty() or files.size() > 128:
+		return result
+	_load_catalog()
+	var total: int = 0
+	for key: Variant in files:
+		if not key is String or not key.begins_with("Sounds/") or not key.ends_with(".opus") or not _catalog.has(key) or _catalog[key].type != "sound":
+			return {}
+		var entry: Variant = files[key]
+		if not entry is Dictionary or not entry.get("output") is String:
+			return {}
+		var output: String = entry.output
+		if not _safe_path(output) or not output.begins_with("impact_pcm/") or output.get_extension() != "wav":
+			return {}
+		if not _integer(entry.get("channels"), 2) or int(entry.channels) < 1 or not _integer(entry.get("mix_rate"), 48000) or int(entry.mix_rate) != 48000 or not _integer(entry.get("frames"), MAX_IMPACT_PCM) or int(entry.frames) < 1:
+			return {}
+		for field: String in ["source_sha256", "pcm_sha256", "output_sha256"]:
+			var digest: Variant = entry.get(field)
+			if not digest is String or digest.length() != 64 or not digest.is_valid_hex_number(false):
+				return {}
+		total += int(entry.frames) * int(entry.channels) * 2
+		if total > MAX_IMPACT_PCM:
+			return {}
+		result[key] = entry
+	return result
+
+static func _impact_pcm_sound(canonical: String) -> AudioStreamWAV:
+	_load_impact_pcm()
+	if not _impact_pcm_files.has(canonical):
+		return null
+	if _impact_pcm_streams.has(canonical):
+		return _impact_pcm_streams[canonical]
+	var entry: Dictionary = _impact_pcm_files[canonical]
+	var path: String = ROOT + entry.output
+	var stream: AudioStreamWAV
+	if ResourceLoader.exists(path):
+		stream = load(path) as AudioStreamWAV
+	if stream != null and (stream.format != AudioStreamWAV.FORMAT_16_BITS or stream.mix_rate != int(entry.mix_rate) or stream.stereo != (int(entry.channels) == 2) or stream.loop_mode != AudioStreamWAV.LOOP_DISABLED or stream.data.size() != int(entry.frames) * int(entry.channels) * 2):
+		stream = null
+	# Only the immutable bundled whitelist is retained (at most 8 MiB of PCM).
+	# Null also remembers an invalid/missing WAV, so its legacy fallback is cheap.
+	_impact_pcm_streams[canonical] = stream
+	return stream
 
 static func load_pack_file(path: String) -> Dictionary:
 	var file := FileAccess.open(path,FileAccess.READ)
