@@ -33,8 +33,20 @@ def main():
     build.ROOT = folder
     build.engine = lambda: engine_path
     build.source_state = lambda: {'source_commit': revision, 'source_dirty': False}
-    sys.argv = [str(folder / 'tools' / 'build.py'), '--export']
-    build.main()
+    # Fixtures exercise persisted settings. Give each freeze a private directory,
+    # then restore the exact archived project bytes before shipping the export.
+    config = folder / 'game' / 'project.godot'
+    original_config = config.read_bytes()
+    private_config = original_config.decode('utf-8').replace(
+        '[application]', '[application]\nconfig/use_custom_user_dir=true\n'
+        'config/custom_user_dir_name="blockfield-check-' + revision[:12] + '"', 1)
+    config.write_text(private_config, encoding='utf-8')
+    sys.argv = [str(folder / 'tools' / 'build.py')]
+    try:
+        build.main()
+    finally:
+        config.write_bytes(original_config)
+    build.export_web()
     if args.server:
         build_server.main()
         shutil.copytree(folder / 'build' / 'server', ROOT / 'build' / 'server', dirs_exist_ok=True)

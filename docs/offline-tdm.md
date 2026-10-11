@@ -62,6 +62,12 @@ override after ADR0019 added the optional blast-falloff argument. The override i
 `tests/audio/test_audio_optimization.gd` now matches the production signature;
 application audio behavior is unchanged. The failed archive/log is preserved.
 
+The `52bbc1d7ac8f` full-build attempt stopped on a pre-existing HDR settings
+assertion: a command already equal to a persisted setting reported no change.
+Frozen checkpoints now give fixtures their own per-revision user directory and
+restore the byte-exact archived project configuration before export. The failed
+log remains in that archive; production user-directory settings are unchanged.
+
 Reproduce with bundled Python `tools/build.py --export`; it registers AI,
 session and actual-scene fixtures and the existing regression suite. The scene
 fixture runs at `--fixed-fps 60` and verifies normal controller input, accepted

@@ -110,14 +110,16 @@ def main():
         raise SystemExit('Network latency engine diagnostics failed; see '+str(latency_report.with_suffix('.log')))
     run('runtime-smoke',['--quit-after','120'])
     run('server-launcher-smoke',['--quit-after','60','--','--server','--game-port=0','--map-port=0'])
-    if args.export:
-        folder=ROOT/'build'/'web';folder.mkdir(parents=True,exist_ok=True)
-        run('export',['--export-release','Web',str(folder/'index.html')])
-        (folder/'.nojekyll').write_text('')
-        (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961',**source_state()},indent=2)+'\n',encoding='utf-8')
-        shutil.copy2(ROOT/'LICENSE',folder/'LICENSE.txt')
-        shutil.copytree(ROOT/'game'/'assets'/'openspades'/'licenses',folder/'notices',dirs_exist_ok=True)
-        shutil.copytree(ROOT/'licenses',folder/'notices'/'engine',dirs_exist_ok=True)
-        print(f'Web build: {folder}',flush=True)
+    if args.export: export_web()
+
+def export_web():
+    folder=ROOT/'build'/'web';folder.mkdir(parents=True,exist_ok=True)
+    run('export',['--export-release','Web',str(folder/'index.html')])
+    (folder/'.nojekyll').write_text('')
+    (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961',**source_state()},indent=2)+'\n',encoding='utf-8')
+    shutil.copy2(ROOT/'LICENSE',folder/'LICENSE.txt')
+    shutil.copytree(ROOT/'game'/'assets'/'openspades'/'licenses',folder/'notices',dirs_exist_ok=True)
+    shutil.copytree(ROOT/'licenses',folder/'notices'/'engine',dirs_exist_ok=True)
+    print(f'Web build: {folder}',flush=True)
 
 if __name__=='__main__':main()
