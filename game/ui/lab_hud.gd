@@ -172,7 +172,10 @@ func _create_hud() -> void:
 	_status_effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_status_effects.setup(session,player)
 	_hud.add_child(_status_effects)
-	var top:=_ui_label("BLOCKFIELD  /  МУЛЬТИПЛЕЕР","BLOCKFIELD  /  MULTIPLAYER",18) if _is_network() else _label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
+	var top: Label
+	if _is_offline_tdm(): top=_ui_label("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE",18)
+	elif _is_network(): top=_ui_label("BLOCKFIELD  /  МУЛЬТИПЛЕЕР","BLOCKFIELD  /  MULTIPLAYER",18)
+	else: top=_label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
 	_hud_brand=top
 	top.position=Vector2(26,20)
 	_hud.add_child(top)
@@ -180,7 +183,6 @@ func _create_hud() -> void:
 	_mode.position=Vector2(27,48)
 	_hud.add_child(_mode)
 	if _is_offline_tdm():
-		_hud_brand.text=_ui("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE")
 		_tdm_score=_label("",22,Color("e4eddf"))
 		_tdm_score.add_theme_color_override("font_outline_color",Color("111819"))
 		_tdm_score.add_theme_constant_override("outline_size",4)
