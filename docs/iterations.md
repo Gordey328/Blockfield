@@ -25,3 +25,11 @@ damage and darkening until an actual replacement or explicit map/round reset;
 destroyed blocks remain air. Waiting, respawn and reconnect do not heal them.
 This overrides OpenSpades' ten-second recovery in both iterations; see
 [ADR0010](decisions/0010-persistent-block-damage.md).
+
+## Accepted gameplay addition — 2026-10-11
+
+The user requested offline team combat 3×3: one human and five bots. Add a separate
+playable match with shared movement, shooting, damage and respawn rules, cover and
+flanking behavior. Initial acceptance uses one authored compact arena; see
+[ADR0020](decisions/0020-offline-team-bots.md). This addition does not replace the
+full-port or multiplayer acceptance gates.

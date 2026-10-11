@@ -1,5 +1,8 @@
 extends Node3D
 @export var network_mode := false
+@export var offline_tdm_mode: bool = false
+const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
+const TDM_ARENA = preload("res://ai/tdm_arena.gd")
 const NETWORK_CLIENT = preload("res://network/client_replica.gd")
 const NETWORK_SESSION = preload("res://network/network_session.gd")
 var network_client: NETWORK_CLIENT
@@ -71,6 +74,9 @@ var _corpses: Array[OpenSpadesCorpse]=[]
 var _last_player_corpse: OpenSpadesCorpse
 
 func _ready() -> void:
+	if offline_tdm_mode:
+		var arena_data: VoxelData = TDM_ARENA.build()
+		world.set_map_data(arena_data,"Crossroads · 3×3",true)
 	if network_mode:
 		# Receive the latest authority/terminal event before the player's commands.
 		process_physics_priority = player.process_physics_priority-1
@@ -128,6 +134,11 @@ func _ready() -> void:
 	player.notice.connect(hud.show_notice)
 	player.build_error.connect(func(message: String):hud.show_alert(message,"warning"))
 	_load_settings()
+	if offline_tdm_mode:
+		var configured: Dictionary = (session as OFFLINE_TDM).configure_match(world.data,TDM_ARENA.metadata(),player_name)
+		if not configured.get("ok",false):
+			push_error("Offline TDM configuration failed: %s" % configured.get("error","unknown"))
+			return
 	_load_resource_packs()
 	if skin_id not in OpenSpadesExtensions.get_skins():skin_id="original"
 	player.skin_id=skin_id
@@ -150,7 +161,7 @@ func _ready() -> void:
 		JavaScriptBridge.get_interface("BlockfieldExports").setPointerCallback(_pointer_callback)
 	hud.ui_sound_requested.connect(func(kind: String):player._play_sound("Feedback/Limbo/"+kind.capitalize()))
 	session.player_respawned.connect(func():
-		if not network_mode: player.respawn_at(world.get_spawn_position())
+		if not network_mode and not offline_tdm_mode: player.respawn_at(world.get_spawn_position())
 		else: clear_corpses())
 	session.player_died.connect(_spawn_player_corpse)
 	session.reloaded.connect(func():hud.show_notice("Reload complete"))
@@ -160,9 +171,11 @@ func _ready() -> void:
 	session.match_event.connect(_match_event_audio)
 	_player_view=OpenSpadesExtensions.create_third_person_skin(skin_id,{"player":player,"session":session})
 	player.add_child(_player_view)
-	if not network_mode:
+	if not network_mode and not offline_tdm_mode:
 		_spawn_targets()
 		_setup_objectives()
+	elif offline_tdm_mode:
+		_update_shared_actor_views()
 	hud.set_menu_visible(true)
 
 func _physics_process(_delta: float) -> void:
@@ -173,6 +186,7 @@ func _process(delta: float) -> void:
 	if network_mode: _poll_network()
 	session.update(delta)
 	if network_mode: _network_update_views()
+	elif offline_tdm_mode: _update_shared_actor_views()
 	audio.positional=positional_audio
 	audio.environmental=environmental_audio
 	for corpse in _corpses:corpse.step(delta)
@@ -197,7 +211,7 @@ func _process(delta: float) -> void:
 	_update_objective_views()
 	_hurt_age+=delta
 	_update_graphics(delta)
-	if not network_mode: session.player_name=player_name
+	if not network_mode and not offline_tdm_mode: session.player_name=player_name
 
 func _setup_input() -> void:
 	var actions:={"forward":KEY_W,"back":KEY_S,"left":KEY_A,"right":KEY_D,"jump":KEY_SPACE,"crouch":KEY_CTRL,"sprint":KEY_SHIFT,"sneak":KEY_V,"reload":KEY_R,"tool_spade":KEY_1,"tool_block":KEY_2,"tool_weapon":KEY_3,"tool_grenade":KEY_4,"eyedropper":KEY_E,"view_toggle":KEY_F,"map":KEY_N,"scoreboard":KEY_TAB,"pause":KEY_ESCAPE,"chat":KEY_T,"last_tool":KEY_Q,"map_scale":KEY_M,"chat_team":KEY_Y,"chat_log":KEY_H,"hide_hud":KEY_F6,"stats":KEY_F7,"screenshot":KEY_0,"sceneshot":KEY_9,"save_map":KEY_8,"flashlight":KEY_L}
@@ -227,7 +241,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _spawn_targets() -> void:
-	if network_mode: return
+	if network_mode or offline_tdm_mode: return
 	for target in _target_nodes:
 		session.remove_target(target.target_id)
 		target.queue_free()
@@ -331,6 +345,9 @@ func _surface_position(x: float,z: float) -> Vector3:
 	return Vector3(cell.x+0.5,cell.y+1.0,cell.z+0.5)
 
 func reset_lab() -> void:
+	if offline_tdm_mode:
+		restart_offline_tdm()
+		return
 	if network_mode: return
 	_cancel_vxl_request()
 	clear_corpses()
@@ -349,6 +366,9 @@ func reset_lab() -> void:
 	hud.show_notice("Test grounds reset")
 
 func reset_match() -> void:
+	if offline_tdm_mode:
+		restart_offline_tdm()
+		return
 	if network_mode: return
 	if _map_baseline.is_empty():
 		reset_lab()
@@ -381,7 +401,7 @@ func spawn_tracer(start: Vector3, end: Vector3) -> void:
 	get_tree().create_timer(0.055).timeout.connect(visual.queue_free)
 
 func _grenade_thrown(data: Dictionary) -> void:
-	if network_mode: return # Authoritative projectiles are snapshot visuals.
+	if network_mode or offline_tdm_mode: return # Shared projectiles are authority visuals.
 	var forward: Vector3=player.get_aim_direction()
 	var point: Vector3=player.get_aim_origin()+forward*0.1
 	var speed: Vector3=player.velocity+forward*32.0
@@ -391,7 +411,7 @@ func _grenade_thrown(data: Dictionary) -> void:
 	session.set_grenade_position(int(data.id),point)
 
 func _grenade_exploded(data: Dictionary) -> void:
-	if network_mode:
+	if network_mode or offline_tdm_mode:
 		_explosion(data.position)
 		return
 	var grenade: LabGrenade=_grenade_nodes.get(int(data.id))
@@ -399,7 +419,7 @@ func _grenade_exploded(data: Dictionary) -> void:
 	_grenade_nodes.erase(int(data.id))
 
 func spawn_grenade(point: Vector3, speed: Vector3, fuse: float, identifier: int=-1) -> void:
-	if network_mode: return
+	if network_mode or offline_tdm_mode: return
 	var grenade:=LabGrenade.new()
 	grenade.world=world
 	grenade.session=session
@@ -965,6 +985,8 @@ func _match_event_audio(event: Dictionary) -> void:
 		"intel_capture":player._play_sound("Feedback/CTF/YourTeamCaptured" if int(event.team)==session.team else "Feedback/CTF/EnemyCaptured")
 		"territory_capture":player._play_sound("Feedback/TC/YourTeamCaptured" if int(event.team)==session.team else "Feedback/TC/EnemyCaptured")
 		"round_won":player._play_sound("Feedback/Win" if int(event.team)==session.team else "Feedback/Lose")
+		"tdm_finished":
+			if int(event.get("winner",-1))>=0: player._play_sound("Feedback/Win" if int(event.winner)==session.team else "Feedback/Lose")
 		"kill":
 			_spawn_target_corpse(event)
 
@@ -1031,8 +1053,41 @@ func _exit_tree() -> void:
 func open_network_game() -> void:
 	get_tree().change_scene_to_file("res://scenes/network.tscn")
 
+func open_offline_tdm() -> void:
+	LabInputBindings.release_actions()
+	get_tree().change_scene_to_file("res://scenes/offline_tdm.tscn")
+
 func open_offline_lab() -> void:
+	LabInputBindings.release_actions()
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+func restart_offline_tdm() -> void:
+	if not offline_tdm_mode: return
+	var result: Dictionary = (session as OFFLINE_TDM).restart_match()
+	if not result.get("ok",false):
+		hud.show_notice(str(result.get("error","Match restart failed")))
+		return
+	_clear_network_views()
+	world.set_map_data(result.data,"Crossroads · 3×3",true)
+	_update_shared_actor_views()
+	hud.set_menu_visible(true)
+
+func present_offline_tick(transactions: Array) -> void:
+	# Both authority and renderer share Data. Present each committed edit once;
+	# applying it again would corrupt the transaction sequence and collapse.
+	for transaction: Dictionary in transactions:
+		for change: Dictionary in transaction.changes:
+			if change.before != 0: _impact_colors[change.cell] = change.before
+			if change.after != 0: _network_block_edit_ticks[change.cell] = int(transaction.tick)
+			else: _network_block_edit_ticks.erase(change.cell)
+		world._present_transaction(transaction)
+	while _impact_colors.size() > 4096: _impact_colors.erase(_impact_colors.keys()[0])
+	for event: Dictionary in (session as OFFLINE_TDM).drain_presentation_events():
+		if str(event.get("type","")) == "tdm_finished":
+			hud.set_menu_visible(true)
+			continue
+		_network_present_event(event,false)
+	_update_shared_actor_views()
 
 func network_can_resume() -> bool:
 	return _network_resume.size() == 32 or (network_client != null and network_client.resume_token().size() == 32)
@@ -1138,6 +1193,10 @@ func _poll_network() -> void:
 func _network_update_views() -> void:
 	if network_client.status != "live": return
 	var owner := network_client.get_owner_state()
+	_update_shared_actor_views(owner)
+
+func _update_shared_actor_views(owner: SharedPlayerState = null) -> void:
+	if offline_tdm_mode: owner = (session as OFFLINE_TDM).get_owner_state()
 	if owner != null and owner.is_alive():
 		var key := "%d:%d:%d:%d" % [owner.match_epoch,owner.spawn_generation,owner.displayed_tool,owner.displayed_weapon]
 		if key != _network_raise_key:
@@ -1206,11 +1265,13 @@ func _network_present_event(event: Dictionary, already_played: bool) -> void:
 		player.apply_network_cosmetic(cosmetic)
 	match str(event.type):
 		"hit_confirmed":
-			player.hit_confirmed.emit(event.part,float(event.damage),event.friendly)
+			if own: player.hit_confirmed.emit(event.part,float(event.damage),event.friendly)
 			effects.blood(event.position)
 			if event.part == "melee": _play_spatial("Weapons/Spade/HitPlayer",event.position)
 			else: audio.flesh_hit(event.position,false)
-		"tracer": effects.tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
+		"tracer":
+			effects.tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
+			hud.add_map_tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
 		"block_hit", "spade_block_hit":
 			_network_mark_block_damage(event)
 			var color: int = world.get_block(event.cell)

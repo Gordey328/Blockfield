@@ -11,6 +11,7 @@ signal camera_mode_changed(mode: int)
 
 enum CameraMode { INTRO, FIRST_PERSON, THIRD_PERSON, DEATH, FREE, FOLLOW_FIRST_PERSON, FOLLOW_THIRD_PERSON }
 const NETWORK_SESSION = preload("res://network/network_session.gd")
+const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
 const NETWORK_CLIENT = preload("res://network/client_replica.gd")
 const SHARED_RULES = preload("res://simulation/player_rules.gd")
 ## NexQuake: 180deg over 75% of its 60%-width look zone, at default gain.
@@ -179,7 +180,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			block_color = VoxelWorld.block_color(world.get_block(cell))
 		elif lab != null and lab.world_environment != null:
 			block_color = lab.world_environment.environment.fog_light_color
-		if session is NETWORK_SESSION: session.request_block_color(VoxelWorld.pack_color(block_color))
+		if _uses_shared_rules(): session.request_block_color(VoxelWorld.pack_color(block_color))
 		notice.emit("Picked block color")
 	if event.is_action_pressed("view_toggle"):
 		third_person = not third_person
@@ -192,7 +193,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_play_sound("Weapons/AimDownSightLocal",.08,OpenSpadesAudio.LOCAL_ORIGIN)
 	# Inputs below invoke offline authority. In multiplayer their button edges
 	# reach the shared rules through the fixed input command instead.
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	if event.is_action("primary"):
 		_update_offline_grenade_input(event.is_action_pressed("primary"))
 	if event.is_action_pressed("secondary") and session.current_tool == 1 and can_use_tool():
@@ -208,7 +209,7 @@ func _process(_delta: float) -> void:
 		return
 	# A render callback can precede the physics adoption of a new network life.
 	# Its queued gesture still belongs to the previously adopted actor/life.
-	if session is NETWORK_SESSION and not _network_touch_owner_current():
+	if _uses_shared_rules() and not _network_touch_owner_current():
 		clear_touch_motion()
 		return
 	if session != null:
@@ -223,6 +224,9 @@ func _process(_delta: float) -> void:
 		camera.basis = camera.basis * _camera_effect_basis
 
 func _network_touch_owner_current() -> bool:
+	if session is OFFLINE_TDM:
+		var local_owner: SharedPlayerState = session.get_owner_state()
+		return local_owner != null and _network_owner != null and local_owner.match_epoch == _network_epoch and local_owner.spawn_generation == _network_generation
 	var replica := _network_replica()
 	if replica == null or replica.status != "live" or _network_owner == null:
 		return false
@@ -236,6 +240,9 @@ func _physics_process(delta: float) -> void:
 		clear_touch_motion()
 		return
 	_connect_simulation()
+	if session is OFFLINE_TDM:
+		_offline_match_physics(delta)
+		return
 	if session is NETWORK_SESSION:
 		_network_physics(delta)
 		return
@@ -374,6 +381,51 @@ func get_source_movement_axis() -> Vector2:
 func _network_replica() -> NETWORK_CLIENT:
 	return lab.get("network_client") as NETWORK_CLIENT if lab != null else null
 
+func _uses_shared_rules() -> bool:
+	return session is NETWORK_SESSION or session is OFFLINE_TDM
+
+func _offline_match_physics(delta: float) -> void:
+	var match_session: OFFLINE_TDM = session as OFFLINE_TDM
+	match_session.update(0)
+	var owner: SharedPlayerState = match_session.get_owner_state()
+	if owner == null: return
+	_network_adopt(owner,null,delta)
+	_sync_camera_mode()
+	flush_touch_motion()
+	if not match_session.paused and not match_session.finished:
+		var pending: Dictionary = match_session.drain_intent()
+		var buttons: int = 0
+		var move: Vector2 = Vector2.ZERO
+		if owner.is_alive() and controls_enabled:
+			move = get_source_movement_axis()
+			if Input.is_action_pressed("jump"): buttons |= SHARED_RULES.Buttons.JUMP
+			if Input.is_action_pressed("crouch"): buttons |= SHARED_RULES.Buttons.CROUCH
+			if Input.is_action_pressed("sprint"): buttons |= SHARED_RULES.Buttons.SPRINT
+			if Input.is_action_pressed("sneak"): buttons |= SHARED_RULES.Buttons.SNEAK
+			if Input.is_action_pressed("primary"): buttons |= SHARED_RULES.Buttons.PRIMARY
+			var secondary: bool = Input.is_action_pressed("secondary")
+			if session.current_tool == SHARED_RULES.Tool.WEAPON and not hold_aim_down_sight: secondary = _aim_toggled
+			if secondary: buttons |= SHARED_RULES.Buttons.SECONDARY
+			if bool(pending.reload): buttons |= SHARED_RULES.Buttons.RELOAD
+		else:
+			_aim_toggled = false
+		var yaw: float = wrapf(rotation.y,-PI,PI) if owner.is_alive() else owner.yaw
+		var pitch: float = clampf(head.rotation.x,-PI*.5,PI*.5) if owner.is_alive() else owner.pitch
+		var result: Dictionary = match_session.step_local(buttons,move,yaw,pitch,int(pending.tool),int(pending.weapon))
+		if result.get("ok",false):
+			_network_yaw = yaw
+			_network_pitch = pitch
+			match_session.update(0)
+			var next: SharedPlayerState = match_session.get_owner_state()
+			if next != null: _network_adopt(next,null,0)
+			if lab != null: lab.present_offline_tick(result.get("transactions",[]))
+	else:
+		_aim_toggled = false
+	if session.health <= 0 and session.team < 2: _death_elapsed += delta
+	_sync_camera_mode()
+	world.set_view_position(camera.global_position)
+	_update_view(delta)
+
 func _network_physics(delta: float) -> void:
 	var replica := _network_replica()
 	if replica == null or replica.status != "live":
@@ -473,7 +525,7 @@ func _network_adopt(owner: SharedPlayerState, replica: NETWORK_CLIENT, delta: fl
 	# Keep physics feet exact; the predictor's bounded position correction
 	# smooths only the eye presentation, never the authoritative query body.
 	var eye := owner.motion.eye_position
-	if owner.is_alive():
+	if owner.is_alive() and replica != null:
 		var presentation := replica.prediction.sample_local_presentation(delta)
 		if not presentation.is_empty(): eye = presentation.eye
 	head.position = eye-global_position
@@ -483,10 +535,14 @@ func _network_adopt(owner: SharedPlayerState, replica: NETWORK_CLIENT, delta: fl
 		shape.position.y = (shape.shape as BoxShape3D).size.y*.5
 
 func apply_network_cosmetic(event: Dictionary) -> void:
-	if not session is NETWORK_SESSION: return
-	var replica := _network_replica()
-	if replica == null or replica.status != "live": return
-	var owner := replica.get_owner_state()
+	if not _uses_shared_rules(): return
+	var owner: SharedPlayerState
+	if session is OFFLINE_TDM:
+		owner = session.get_owner_state()
+	else:
+		var replica := _network_replica()
+		if replica == null or replica.status != "live": return
+		owner = replica.get_owner_state()
 	if owner == null or event.get("epoch",0) != owner.match_epoch or event.get("owner_id",0) != owner.player_id or event.get("spawn_generation",-1) != owner.spawn_generation: return
 	var kind: String = event.get("kind","")
 	if kind == "shot":
@@ -517,7 +573,7 @@ func is_grounded() -> bool:
 
 func can_use_tool() -> bool:
 	if session==null or session.health<=0 or session.team>=2 or not controls_enabled:return false
-	if session is NETWORK_SESSION: return _network_owner != null and SHARED_RULES.can_use_tool(_network_owner)
+	if _uses_shared_rules(): return _network_owner != null and SHARED_RULES.can_use_tool(_network_owner)
 	if sprinting or _sprint_state>0.0:return false
 	if _weapon_view==null:return false
 	# Publish desired selection before reading the native lower/raise gate.
@@ -525,7 +581,7 @@ func can_use_tool() -> bool:
 	return not _weapon_view.is_changing_tool()
 
 func _sync_motion_state() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	if _motion==null:_motion=SourcePlayerMotion.create_state(global_position,crouching,false)
 	_motion.feet_position=global_position
 	_motion.native_velocity=_native_velocity
@@ -534,7 +590,7 @@ func _sync_motion_state() -> void:
 	_motion.front=-head.global_basis.z
 
 func _clip_motion(delta: float) -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	_sync_motion_state()
 	var incoming_speed: float=-_native_velocity.y
 	_motion=SourcePlayerMotion.finish_landing(SourcePlayerMotion.clip_move(world,_motion,delta,session.session_time),incoming_speed)
@@ -600,7 +656,7 @@ func get_tool_action() -> Dictionary:
 	var progress:=0.0
 	var ready:=1.0
 	if session==null:return {"type":type,"progress":progress,"ready":ready}
-	if session is NETWORK_SESSION and _network_owner != null:
+	if _uses_shared_rules() and _network_owner != null:
 		if session.current_tool == 0:
 			if _network_owner.input_buttons & SHARED_RULES.Buttons.PRIMARY != 0 and not _dig_held: type = 1;progress = 1-_tool_clock/.2
 			elif _dig_held: type = 2 if _dig_first else 3;progress = 1-_tool_clock
@@ -633,7 +689,7 @@ func get_camera_aim_down_state() -> float:
 
 func get_camera_tool() -> int:
 	if camera_mode==CameraMode.FOLLOW_FIRST_PERSON and _spectator_view!=null:return _spectator_view.get_displayed_tool()
-	if session is NETWORK_SESSION: return session.displayed_tool
+	if _uses_shared_rules(): return session.displayed_tool
 	if _weapon_view!=null and _weapon_view.has_method("get_displayed_tool"):return int(_weapon_view.get_displayed_tool())
 	return session.current_tool
 
@@ -740,7 +796,7 @@ func _connect_simulation() -> void:
 			_camera_yaw = rotation.y
 			_camera_pitch = -PI / 6.0)
 		session.grenade_thrown.connect(func(_data: Dictionary):
-			if session is NETWORK_SESSION and (_data.get("owner_id",0) != session.local_player_id() or bool(_data.get("predicted_already_played",false))): return
+			if _uses_shared_rules() and (_data.get("owner_id",0) != session.local_player_id() or bool(_data.get("predicted_already_played",false))): return
 			_grenade_cooking = false
 			_last_grenade_time=session.session_time
 			_weapon_view.fire())
@@ -768,7 +824,7 @@ func _connect_skin_signals() -> void:
 
 func _clear_action_state() -> void:
 	_block_health.clear()
-	if world != null and not session is NETWORK_SESSION:
+	if world != null and not _uses_shared_rules():
 		world.clear_block_damage()
 	_clear_input_state()
 
@@ -804,7 +860,7 @@ func _on_blocks_changed(changes: Array) -> void:
 		_block_health.erase(change.cell)
 
 func _shoot() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	if not session.fire():
 		# Weapon.cpp:144: play once on the transition into an empty trigger hold.
 		var slow_reload := bool(session.get_weapon_info().slow_reload)
@@ -897,7 +953,7 @@ func _horizontal_distance(first: Vector3, second: Vector3) -> float:
 	return Vector2(first.x - second.x, first.z - second.z).length()
 
 func _damage_block(cell: Vector3i, damage: float, allow_destroy: bool = true) -> bool:
-	if session is NETWORK_SESSION: return false
+	if _uses_shared_rules(): return false
 	if cell.y <= 1 or world.get_block(cell) == 0: return false
 	var health: float = float(_block_health.get(cell, {"health":100.0}).health) - damage
 	if health <= 0.0 and allow_destroy:
@@ -910,7 +966,7 @@ func _damage_block(cell: Vector3i, damage: float, allow_destroy: bool = true) ->
 	return false
 
 func _spade(dig: bool) -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	if _tool_clock > 0.0: return
 	_last_spade_fire_time=session.session_time
 	_tool_clock = 1.0 if dig else 0.2
@@ -1002,7 +1058,7 @@ func get_build_preview() -> Dictionary:
 	return result
 
 func _build_single() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	if _tool_clock > 0.0: return
 	var hit := world.cast_source_ray(get_aim_origin(),get_aim_direction(),12)
 	if not hit.hit: return
@@ -1014,7 +1070,7 @@ func _build_single() -> void:
 	if _place(cell): _tool_clock=0.5
 
 func _place(cell: Vector3i) -> bool:
-	if session is NETWORK_SESSION: return false
+	if _uses_shared_rules(): return false
 	if cell.y <= 1 or not world.is_in_bounds(cell) or world.get_block(cell)!=0 or not session.use_block(): return false
 	world.set_block(cell,VoxelWorld.pack_color(block_color))
 	if _weapon_view != null: _weapon_view.fire()
@@ -1022,7 +1078,7 @@ func _place(cell: Vector3i) -> bool:
 	return true
 
 func _build_line() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	if _line_start.x < 0 or session.block_cooldown > 0.0: return
 	var attached := false
 	for direction in [Vector3i.UP, Vector3i.DOWN, Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK]:
@@ -1052,7 +1108,7 @@ func _build_line() -> void:
 	_play_sound("Weapons/Block/Build")
 
 func _begin_block_line() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	var preview:=get_build_preview()
 	if not bool(preview.valid):
 		build_error.emit(str(preview.reason))
@@ -1089,7 +1145,7 @@ func _cube_line(start: Vector3i, end: Vector3i, limit: int) -> Array[Vector3i]:
 	return cells
 
 func _update_offline_grenade_input(primary: bool) -> void:
-	if session == null or session is NETWORK_SESSION:
+	if session == null or _uses_shared_rules():
 		return
 	var allowed: bool = session.current_tool == LocalSession.Tool.GRENADE and can_use_tool()
 	var next: bool = primary and allowed and session.grenade_cooldown <= 0.0 \
@@ -1110,17 +1166,17 @@ func _update_offline_grenade_input(primary: bool) -> void:
 	# press cannot pull the next pin. A release and a new press are required.
 
 func _begin_grenade_cook() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	_grenade_cooking=session.begin_grenade_cook()
 	if _grenade_cooking:_play_sound("Weapons/Grenade/Fire",1.0,OpenSpadesAudio.LOCAL_ORIGIN)
 
 func _throw_grenade() -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	_grenade_cooking=false
 	session.release_grenade()
 
 func _update_view(delta: float) -> void:
-	if session is NETWORK_SESSION:
+	if _uses_shared_rules():
 		_aim_down_state = _network_owner.aim_down_state if _network_owner != null else session.aim_down_state
 		_sprint_state = _network_owner.sprint_state if _network_owner != null else session.sprint_state
 	else:
@@ -1136,11 +1192,11 @@ func _update_view(delta: float) -> void:
 		_spectator_view.update_view(delta)
 	_update_camera_effects(delta)
 	if _weapon_view == null: return
-	if session is NETWORK_SESSION and _weapon_view.has_method("set_simulation_state"):
+	if _uses_shared_rules() and _weapon_view.has_method("set_simulation_state"):
 		var state := _network_owner
 		if state != null:
 			_weapon_view.set_simulation_state({"desired_tool":state.tool,"displayed_tool":state.displayed_tool,"weapon":state.weapon,"displayed_weapon":state.displayed_weapon,"tool_raise":state.tool_raise,"sprint_state":state.sprint_state,"aim_down_state":state.aim_down_state})
-	elif not session is NETWORK_SESSION and _weapon_view.has_method("clear_simulation_state"):
+	elif not _uses_shared_rules() and _weapon_view.has_method("clear_simulation_state"):
 		_weapon_view.clear_simulation_state()
 	_weapon_view.set_selection(session.current_tool, session.current_weapon)
 	_weapon_view.set_team(session.team,session.get_team_info(session.team).color)
@@ -1329,7 +1385,7 @@ func set_skin(id: String) -> void:
 	if session.is_reloading:_weapon_view.reload()
 
 func respawn_at(point: Vector3) -> void:
-	if session is NETWORK_SESSION: return
+	if _uses_shared_rules(): return
 	_clear_input_state()
 	global_position=point
 	crouching = false

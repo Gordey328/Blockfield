@@ -82,6 +82,10 @@ var _desktop_emulation:=true
 var _touch_mode_choice: OptionButton
 var _hud_brand: Label
 const NETWORK_MENU=preload("res://ui/network_menu.gd")
+const OFFLINE_TDM=preload("res://gameplay/offline_tdm_session.gd")
+var _tdm_score: Label
+var _tdm_menu_status: Label
+var _tdm_resume: Button
 var _team_metadata_cache: Array = []
 const LANGUAGE=preload("res://presentation/openspades_localization.gd")
 
@@ -175,6 +179,16 @@ func _create_hud() -> void:
 	_mode=_label("",13,Color("abc0c6"))
 	_mode.position=Vector2(27,48)
 	_hud.add_child(_mode)
+	if _is_offline_tdm():
+		_hud_brand.text=_ui("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE")
+		_tdm_score=_label("",22,Color("e4eddf"))
+		_tdm_score.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		_tdm_score.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+		_tdm_score.offset_left=-240
+		_tdm_score.offset_right=240
+		_tdm_score.offset_top=18
+		_tdm_score.offset_bottom=50
+		_hud.add_child(_tdm_score)
 	_stats=_label("",21)
 	_stats.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_stats.position=Vector2(28,-84)
@@ -305,6 +319,9 @@ func _create_menu() -> void:
 		margin.add_child(_network_menu)
 		_network_menu.setup(self,main,session,player)
 		return
+	if _is_offline_tdm():
+		_create_tdm_menu(margin)
+		return
 	var layout:=VBoxContainer.new()
 	layout.add_theme_constant_override("separation",14)
 	margin.add_child(layout)
@@ -321,6 +338,10 @@ func _create_menu() -> void:
 	var intro:=_label("Все оригинальные виды оружия и две команды. Локальная сессия — сервер не нужен.",15,Color("99b0b8"))
 	intro.set_meta("mobile_hide",true)
 	layout.add_child(intro)
+	var tdm_entry: Button=_ui_button("КОМАНДНЫЙ БОЙ 3×3 · ВЫ И ПЯТЬ БОТОВ →","TEAM BATTLE 3×3 · YOU AND FIVE BOTS →",func():main.open_offline_tdm())
+	tdm_entry.name="OfflineTDMEntry"
+	tdm_entry.set_meta("mobile_tdm_entry",true)
+	layout.add_child(tdm_entry)
 	var tabs:=TabContainer.new()
 	tabs.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	tabs.add_theme_font_size_override("font_size",17)
@@ -346,6 +367,71 @@ func _create_menu() -> void:
 	var fullscreen:=_ui_button("Полный экран","Fullscreen",func():main.toggle_fullscreen())
 	fullscreen.set_meta("lab_window","fullscreen")
 	footer.add_child(fullscreen)
+
+func _create_tdm_menu(margin: MarginContainer) -> void:
+	var layout: VBoxContainer=VBoxContainer.new()
+	layout.add_theme_constant_override("separation",12)
+	margin.add_child(layout)
+	var brand: Label=_ui_label("КОМАНДНЫЙ БОЙ 3×3","TEAM BATTLE 3×3",30)
+	brand.set_meta("mobile_brand",true)
+	layout.add_child(brand)
+	var tabs: TabContainer=TabContainer.new()
+	tabs.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	layout.add_child(tabs)
+	var match_tab: VBoxContainer=_tab(tabs,"Матч","Match")
+	_tdm_menu_status=_ui_label("","",20)
+	_tdm_menu_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	match_tab.add_child(_tdm_menu_status)
+	match_tab.add_child(_ui_label("Вы и два союзника против трёх ботов. До 25 убийств или 5 минут.","You and two allies against three bots. First to 25 kills, or 5 minutes.",17))
+	var description: Label=_ui_label("Занимайте укрытия, обходите по боковым проходам и меняйте поле боя. Блоки и повреждения сохраняются до нового матча. Меню приостанавливает бой.","Use cover and side routes, and reshape the battlefield. Block damage persists until a new match. The menu pauses the battle.")
+	description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	match_tab.add_child(description)
+	var supply_help: Label=_ui_label("Синие площадки у вашей базы восстанавливают здоровье и запас боеприпасов. Магазин нужно перезаряжать.","The blue pads at your base restore health and reserve ammunition. Reload your magazine normally.",14)
+	supply_help.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	match_tab.add_child(supply_help)
+	match_tab.add_child(_ui_label("Оружие на следующую жизнь","Weapon for your next life"))
+	var choices: GridContainer=GridContainer.new()
+	choices.columns=3
+	match_tab.add_child(choices)
+	for index in 3:
+		var selection: int=index
+		var names: Array[String]=["Винтовка","Пистолет-пулемёт","Дробовик"]
+		var english: Array[String]=["Rifle","SMG","Shotgun"]
+		var choice: Button=_ui_button(names[index],english[index],func():session.select_weapon(selection))
+		choice.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		choices.add_child(choice)
+	var help: Label=_ui_label("WASD — движение · ЛКМ — огонь · ПКМ — прицел\nR — перезарядка · 1–4 — инструменты · Tab — счёт · Esc — пауза","WASD — move · Left click — fire · Right click — aim\nR — reload · 1–4 — tools · Tab — scores · Esc — pause",14)
+	help.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	match_tab.add_child(help)
+	_build_settings(_tab(tabs,"Настройки","Settings"))
+	var footer: GridContainer=GridContainer.new()
+	footer.columns=3
+	layout.add_child(footer)
+	_tdm_resume=_ui_button("Начать матч 3×3","Start match 3×3",func():set_menu_visible(false))
+	_tdm_resume.name="TDMResume"
+	footer.add_child(_tdm_resume)
+	footer.add_child(_ui_button("Новый матч","New match",func():main.restart_offline_tdm()))
+	footer.add_child(_ui_button("На полигон","Back to lab",func():main.open_offline_lab()))
+	for button: Control in footer.get_children(): button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+
+func _is_offline_tdm() -> bool:
+	return main != null and main.get("offline_tdm_mode") == true
+
+func _update_tdm_status() -> void:
+	if not _is_offline_tdm(): return
+	var match_session: OFFLINE_TDM=session as OFFLINE_TDM
+	var seconds: int=ceili(maxf(0.0,float(match_session.match_duration_ticks-maxi(0,match_session.simulation.tick+1))/60.0))
+	var score_text: String="%d : %d   ·   %d:%02d"%[session.team_scores[0],session.team_scores[1],seconds/60,seconds%60]
+	if _tdm_score != null: _tdm_score.text=score_text
+	if _tdm_menu_status != null:
+		_tdm_menu_status.text=score_text
+		if match_session.finished:
+			_tdm_menu_status.text+= "\n"+(_ui("Ничья","Draw") if session.winning_team<0 else (_ui("Ваша команда победила","Your team won") if session.winning_team==session.team else _ui("Победа соперника","Opponents won")))
+		elif match_session.simulation.tick<1: _tdm_menu_status.text+= "\n"+_ui("Готовы к бою","Ready for battle")
+		else: _tdm_menu_status.text+= "\n"+_ui("Матч приостановлен","Match paused")
+	if _tdm_resume != null:
+		_tdm_resume.disabled=match_session.finished
+		_tdm_resume.text=_ui("Начать матч 3×3","Start match 3×3") if match_session.simulation.tick<1 else _ui("Продолжить","Resume")
 
 func _tab(tabs: TabContainer, title: String,english: String="") -> VBoxContainer:
 	var panel:=MarginContainer.new()
@@ -626,6 +712,7 @@ func _process(delta: float) -> void:
 		if session.is_cooking_grenade:_weapon_status.text=_ui("Фитиль: %.1f с","Fuse: %.1f s")%maxf(0,3-session.grenade_cook_time)
 		elif session.grenades==0:_weapon_status.text=OpenSpadesLocalization.text("Out of Grenade","Client")
 	_mode.text="%s   ·   %s"%[world.map_name,session.mode.to_upper()]
+	_update_tdm_status()
 	_performance.visible=_show_statistics
 	# Face totals walk every loaded chunk. Gather diagnostics only while their
 	# panel is visible, including the same callback that opens the panel.
@@ -647,6 +734,8 @@ func _process(delta: float) -> void:
 		if bool(preview.get("valid",false)):_build_status.text=_ui("Поставить: %d блоков","Place: %d blocks")%preview.get("cells",[]).size()
 		if bool(preview.get("pending",false)):_build_status.text=_ui("Строительство в прыжке · ожидание места","Jump build: waiting for space")
 	_results.text=_ui("Победа: %s","Winner: %s")%LabMap.team_name_for(session,session.winning_team) if session.winning_team>=0 else ""
+	if _is_offline_tdm() and (session as OFFLINE_TDM).finished and session.winning_team<0:
+		_results.text=_ui("Ничья","Draw")
 	_update_hottracked_name()
 	_update_feed()
 	if _large_map.visible:
@@ -748,6 +837,10 @@ func _input(event: InputEvent) -> void:
 
 func _sync_controls() -> void:
 	player.controls_enabled=_focused and visible and not is_menu_open() and not _chat.is_open and not _chat.expanded
+	if _is_offline_tdm():
+		var match_session: OFFLINE_TDM=session as OFFLINE_TDM
+		match_session.paused=not _focused or is_menu_open()
+		if match_session.finished: player.controls_enabled=false
 	var active:=uses_mobile_controls() and player.controls_enabled
 	if mobile_controls!=null:mobile_controls.set_enabled(active)
 	_set_mobile_mouse_bindings(active)
@@ -890,6 +983,12 @@ func _update_mobile_layout() -> void:
 	_adapt_mobile_menu(_menu,mobile,portrait)
 	_hud_brand.visible=not mobile
 	_mode.visible=not mobile
+	if _tdm_score != null:
+		_tdm_score.add_theme_font_size_override("font_size",16 if mobile else 22)
+		_tdm_score.offset_top=52 if mobile else 18
+		_tdm_score.offset_bottom=80 if mobile else 50
+		_tdm_score.offset_left=-160 if mobile else -240
+		_tdm_score.offset_right=160 if mobile else 240
 	_weapon_icon.visible=not mobile
 	_feed.offset_left=-minf(float(desired.x)-32,340) if mobile else -560
 	_feed.offset_right=-16 if mobile else -28
@@ -953,6 +1052,8 @@ func _adapt_mobile_menu(node: Node,mobile: bool,portrait: bool) -> void:
 		if node.has_meta("mobile_start"):
 			if mobile:node.custom_minimum_size.x=210
 			node.text=_ui("Играть  →","Play  →") if mobile else LANGUAGE.lab(str(node.get_meta("lab_text")))
+		if node.has_meta("mobile_tdm_entry"):
+			node.text=_ui("БОЙ 3×3 · С БОТАМИ →","BATTLE 3×3 · WITH BOTS →") if mobile else _ui("КОМАНДНЫЙ БОЙ 3×3 · ВЫ И ПЯТЬ БОТОВ →","TEAM BATTLE 3×3 · YOU AND FIVE BOTS →")
 		node.clip_text=mobile or bool(node.get_meta("desktop_clip"))
 		node.size_flags_horizontal=Control.SIZE_EXPAND_FILL if mobile else node.get_meta("desktop_horizontal")
 		for style_name in ["normal","hover","pressed"]:
@@ -980,6 +1081,7 @@ func _exit_tree() -> void:
 
 func set_menu_visible(enabled: bool) -> void:
 	if _menu==null:return
+	if _is_offline_tdm() and (session as OFFLINE_TDM).finished: enabled=true
 	_menu.visible=enabled
 	_hud.visible=not enabled and not _hud_hidden
 	if enabled:
@@ -987,6 +1089,7 @@ func set_menu_visible(enabled: bool) -> void:
 		_large_map.hide()
 		if _chat.is_open:_chat.cancel_input()
 		_chat.set_expanded(false)
+	_update_tdm_status()
 	_sync_controls()
 
 func is_menu_open() -> bool:return _menu!=null and _menu.visible

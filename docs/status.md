@@ -3,6 +3,56 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Offline 3×3 team combat — 2026-10-11 (implementation checkpoint)
+
+User authorized an offline match: one human, two allied bots and three opponents,
+with movement, shooting, cover and flanking. Coordinator owns Main/controller/HUD,
+the offline scene, build registration, ADR0020, documentation and release integration.
+Specialist `bot_research` owns only new game/ai and tests/ai; `mode_research` owns
+only OfflineTDMSession and its session fixture; `tdm_validation` owns only new
+actual-scene/browser fixtures and the diagnostic export helper. Contracts were
+agreed before edits; one serial Godot lease is used. Baseline HEAD fe843a1fa369670dea92ea15643639543e61d44b;
+Godot 4.7.2.stable.official.ed1daf0bf; upstream dcf449c845d509bbde9d79239b32d201c1389961.
+The adapter runs all six actors through existing shared rules; no transport/wire
+mode changes. Crossroads, finite ammo/supply, 25-kill/five-minute finish and frozen
+menu clock are specified in [ADR0020](decisions/0020-offline-team-bots.md).
+Command: bundled Python `-c "import sys; sys.path.insert(0,'tools'); import build;
+build.run('tdm-import',['--editor','--import','--quit'])"`: parser/import passed.
+All specialist engine leases are returned. AI4440/0, session81/0 and final
+actual-scene62/0 pass. The first WeakRef fixture parse failure and real spawn-floor
+boundary climb are retained in the logs; the latter is corrected with a 0.01-unit
+epsilon preserving support/overlap checks. Final scene at1222ticks has all five
+bots moving and attempting fire, 10cover/10flank decisions and score3:4.
+Commands/results and limits are retained in [offline TDM evidence](offline-tdm.md).
+Coordinator now owns the serial engine/release lease; frozen full regression,
+export and real browser acceptance are pending. Existing
+optimization-plan/Steam research edits are preserved. No original parity row is
+promoted by this checkpoint. Next: diagnose behavior, then freeze and verify the
+playable Web build before publication.
+
+## Game modes and bot design research — 2026-10-11
+
+User requests researched game-design recommendations and sources for enjoyable bots.
+Coordinator owns only new [modes and bots research](game-modes-and-bots.md) and this
+status insertion. Read-only specialists `mode_research` and `bot_research` return
+primary mode/code/license evidence with no file ownership or engine lease.
+Recommended additions: TDM, sequential Frontline, authored cooperative Fort Defense,
+then Babel; existing CTF/TC are IMPLEMENTED, not newly proposed original features.
+ABBS v55 pinned 332a5b7f947e80e514469ca31cc0a6f1e38536c5 is a behavior reference:
+its license exception and custom damage shortcuts preclude assuming direct reuse.
+Quake III team/combat sources, Luanti voxel paths and Valve's L4D AI talk supply
+separate design references. Proposed shared-command authority, bounded voxel
+navigation and initial bot counts are advisory, not an adopted ADR or benchmark.
+Inspected HEAD 4a522ceca4edb7b007397331403915a24e689bc6; pinned Godot remains
+4.7.2.stable.official.ed1daf0bf and upstream dcf449c845d509bbde9d79239b32d201c1389961.
+Commands: Get-Content on status/iterations/parity/architecture/match contracts and
+LocalSession/PlayerRules; rg; git status --short/rev-parse; primary web research;
+documentation git diff --check (existing status and new research: passed).
+Existing gameplay/mobile/audio/research changes
+are preserved. No engine/import/gameplay/browser/export/publication run and no
+parity promotion. Specialists are complete. Next proposed action: one prepared
+compact map and a shared-authority bot combat slice, followed by 3x3 TDM playtests.
+
 ## Grenade distance feedback — 2026-10-11
 
 User reports almost constant shake/loudness after a distant throw. Root owns

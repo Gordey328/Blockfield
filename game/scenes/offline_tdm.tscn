@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1"]
+[ext_resource type="Script" path="res://gameplay/offline_tdm_session.gd" id="2"]
+
+[node name="Blockfield" instance=ExtResource("1")]
+offline_tdm_mode = true
+
+[node name="LocalSession" parent="." index=1]
+script = ExtResource("2")
