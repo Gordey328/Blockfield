@@ -26,13 +26,22 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `4c051639e286b3ea4945c77cfa6d568c36bf39be`, committed/pushed.
-- Subsequent documentation records do not change the published binaries. Specialist
-  handoffs, effects repair and this release are complete; all file/engine/release
-  leases have been returned. Details are recorded below.
+- Published client source: `66e4b5b7eb89956657f97d7f623856080ea117b5`, committed/pushed.
+- Subsequent documentation records do not change the published binaries. Optimization
+  item4, specialist handoffs and publication are complete; root engine/release and
+  specialist leases have been returned. Concurrent mobile integration remains separate.
 
 ## Frozen validation
 
+- Optimization item4 (2026-10-11): frozen66e4b5b7eb89 passed all85 registered
+  native behavioral/latency invocations, import/runtime/Web/server export and PCK
+  smoke. Separate Web PCM113/0+DSP64/0 and JS lifecycle3/3 passed. Actual Main
+  cancel/restart/save downloads match exact raw/synchronous bytes; normal local
+  and public lab/Title rendering/input/progress checked. Independent public
+  HTML/JS/WASM/PCK and server ZIP hashes match. Earlier failure/benchmark chain,
+  fixture fixes and remaining stalls: [optimization evidence](optimization-audio-vxl-memory.md).
+  Current source is stable/pushed; all optimization leases returned. Full-port,
+  controlled device FPS/RSS and Linux/Docker/TLS acceptance remain open.
 - Permanent block damage (2026-10-11): implemented/published on frozen4c051639e286
   under [ADR0010](decisions/0010-persistent-block-damage.md). Offline/shared HP and
   darkening persist; joining/resumed clients receive flags and bounded loading hits.
@@ -80,20 +89,23 @@ the user's chosen deployment scope is Docker/configuration preparation.
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) serves the checked
-  clean4c051639e286 export. Bundle `db3932405f3f07217f83b6ca844286af71eed02e`.
-- Public `index.pck` equals the local export:16,180,848bytes, SHA256
-  `10be980d25073beab27914f28c6a709d4fea4fa4f571165d9dc96fa46437f518`.
-  HTML5568bytes SHA256 `ab716cba3f68e75c1c99a2ed48aca9945fccef500a37d29017a826e9ebcb7e5e`.
-  Report `.cache/previews/public-persistent-4c051639e286.json`.
-- Matching [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-4c051639e286)
-  ZIP independently downloaded/hash-verified:29,335,660bytes, SHA256
-  `eb6997de1cd726068fa31acd2ec4a2209138aab4a5b34e86b36805bbdf43241f`.
-  New client/server identities: network5 / authority5-no-block-regen. The old57
-  recovering server is rejected by handshake hashes and is no longer compatible.
-- Export/PCK smoke did not execute Linux. Docker/container/Linux execution and
-  deployed TLS/WSS remain unverified. See [server deployment](server-deployment.md).
-- Historical dcee15f/812b316 and mobile31 evidence remains in fidelity-repairs and
-  mobile-controls/history. Documentation commits after4c do not change binaries.
+  clean66e4b5b7eb89 export. Bundle `22fd63050e11fad69aa3b421a4e0b8a1c3a0caa7`, built.
+- Public metadata/HTML/JS/WASM/PCK independently match local frozen artifacts.
+  PCK16,200,448bytes SHA256
+  `8c54b5408d6f8d0055f9340fc4bd6685937a99af026bf2f8e9a730e13c53d5d8`;
+  HTML5568bytes SHA256 `96074516bd05e1f45968de943337ce2fa6568d52c15942825439dfe3dd5c8fde`.
+  Reports `.cache/previews/optimization-item4/{frozen-validation,public-hashes}.json`.
+- Matching [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
+  ZIP independently downloaded/hash-verified:29,344,396bytes SHA256
+  `76935d2fc59be4d5af6387266714001292a9c11a5adbf1c276a4e0a7799e168b`.
+  Network5 / authority5-no-block-regen remain; new client/server fingerprints share
+  the same frozen source. Previous4c/57 artifacts are historical checkpoints.
+- Windows exported-PCK smoke did not execute Linux. Docker/Linux execution and
+  deployed TLS/WSS remain unverified; see [server deployment](server-deployment.md).
+- Current ordinary local/public IAB lab/Title checks and retained pointer-lock
+  drag fallback are in [optimization evidence](optimization-audio-vxl-memory.md).
+  Historical4c/dcee15f/mobile31 evidence remains in their subsystem/history docs.
+  Documentation commits after66e4b5b do not change these binaries.
 
 ## Earlier frozen57 Web evidence
 
@@ -116,44 +128,106 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
-- NexQuake mobile camera (2026-10-11, isolated branch): user selected the reference
-  and requested checking the other chat to avoid overwrites. Implemented in managed
-  worktree `C:/Users/Gordey/.codex/worktrees/nexquake-mobile/Blockfield`, branch
-  `codex/nexquake-mobile`; incorporated optimizationafbd05a/eef2225. Changed only
-  MobileControls/PlayerController/HUD, their UI/integration fixtures, test-only
-  browser probe/export helper and mobile docs/ADR0014. Main/audio/world/model/build
-  remain owned by the active chat "Изучить проект и составить план".
-  Godot4.7.2 import and eight affected suites passed4635/0; actual Main/HUD repeated
-  on eef2225:208/0+284/0, runtime passed. Temporary native userdata keys were removed.
-  Real Web export synthetic-touch checks passed15/0 each at844×390/390×844; actual
-  movement and two weapon shots occurred in both. Harness failures1–4 are retained.
-  [Evidence/commands](nexquake-mobile-camera.md), [ADR0014](decisions/0014-nexquake-mobile-camera.md).
-  Physical phone aiming/OS safe areas remain unverified; parity stays IMPLEMENTED.
-  Clean normal source4af719a import/export passed; actual browser Mobile On,
-  mirrored mouse look/fire-drag and settings reload were exercised without captured
-  engine warnings/errors. Pushed [draft PR1](https://github.com/Gordey328/Blockfield/pull/1)
-  is attached; no shared Main/Pages publication was performed by this change.
-  Remote main does not yet contain the prerequisite local optimization commits,
-  so its current draft diff includes those commits until the other chat pushes.
-  Next: incorporate that chat's final source before shared integration/publication,
-  recheck actual Main/HUD on the combined source, then assess physical phone feel.
-  All specialist leases returned; our browser tabs closed to free render capacity.
+- NexQuake mobile integration (2026-10-11): the user requested checking the other
+  chat, merging into main and updating Pages while preserving all its changes.
+  Chat "Изучить проект и составить план" is idle/completed; optimization item4 is
+  published and all its leases are returned. Mobile branch now incorporates all
+  main commits through922f230, including browser staging774e506 and corrected
+  audio evidence66e4b5b. Implementation4af719a and documentation3e75233 remain in
+  history. Only the mobile controller/HUD/UI paths, their fixtures/probe and mobile
+  documents differ from that main source; optimization code is preserved exactly.
+  Reference: NexQuakef9fd869074f13f3ad6aad55dca95427f8935027e; Godot4.7.2 and
+  upstreamdcf449c845d509bbde9d79239b32d201c1389961 are unchanged. Previous isolated
+  validation passed4635/0 native and15/0 Web touch assertions in each orientation;
+  normal rendered Mobile On/mirrored look/fire/reload settings were checked.
+  [Evidence](nexquake-mobile-camera.md), [ADR0014](decisions/0014-nexquake-mobile-camera.md),
+  [PR1](https://github.com/Gordey328/Blockfield/pull/1). Main's pending research
+  records are incorporated; their original bytes and unrelated untracked
+  tools/inspect_aos_install.py are retained in .cache/nexquake-integration-backup-20261011.
+  Next: full frozen combined checks, real exported-browser check, main merge and
+  publication. Physical-phone feel remains pending; parity rows are not promoted.
 
-- Optimization item4 implementation (2026-10-11): user authorized the summary's
-  audio, VXL loading/saving and memory scope. Specialists returned all file leases;
-  coordinator owns integration/docs, including ADR0013, and engine/export/release.
-  Bounded exact-origin audio cache, complete workload counters, exact-color tint
-  LRU and cancellable private VXL jobs are integrated. Main guards progress,
-  baseline and download completion. Sync network interfaces/rules are unchanged.
-  Initial import, audio128/0, environment70/0, audio optimization46/0, tint1555/0,
-  VXL jobs53/0 then final padding62/0, actual Main VXL12/0, source parity194/0,
-  PCM134/0+81/0, source input35/0 and offline lifecycle19/0 passed. Stationary
-  audio rays5640->47 (moving unchanged); measured player allocation cost defers
-  pooling. Slow intermediate lab padding was measured, then refined. Evidence:
-  [optimization item4](optimization-audio-vxl-memory.md), [ADR0013](decisions/0013-audio-vxl-memory.md).
-  Concurrent mobile records/files remain under their separate ownership; release
-  will freeze only optimization files. Next: final COW/column benchmarks, exported
-  browser responsiveness/cancel/save, frozen registered suites and publication.
+- Optimization item4 completed/published (2026-10-11): user approved audio,
+  VXL loading/saving and memory. Frozen66e4b5b7eb89956657f97d7f623856080ea117b5
+  passed all85 registered native behavioral/latency checks, import/runtime,
+  Web/server export and exported-PCK smoke. New checks: ambience46/0, VXL62/0,
+  bounded materials1555/0, actual Main15/0. Native latency461/0, corrected PCM134/0
+  +81/0; exported AudioWorklet PCM113/0+DSP64/0; production JS lifecycle3/3.
+  Initial failed PCM fixtures are retained and corrected through full audio-frame
+  windows and actual27-ray DSP setup; production128/1.5ms budgets unchanged.
+  Exact stationary ambience rays5640->47 (moving unchanged); tint caches256 each.
+  Coherent private VXL jobs and bounded browser staging cancel stale work and keep
+  input callbacks available; raw/canonical downloaded bytes verified exactly.
+  Full85 ran on the same frozen source; earlier benchmarks/diagnostics are an
+  explicitly described validation chain. Normal local/public lab and Title render,
+  movement/tools/shot and progress checks passed; Chromium drag fallback remains.
+  Source and Pages/server package pushed; public metadata/HTML/JS/WASM/PCK and
+  independently downloaded ZIP match hashes. [Evidence](optimization-audio-vxl-memory.md),
+  [ADR0013](decisions/0013-audio-vxl-memory.md). First-write COW13-15ms/64MiB and
+  reset/initial allocation stalls remain; controlled FPS/phone/RSS/subjective audio
+  and Linux/Docker/TLS acceptance are open. Parity statuses are not promoted.
+  All specialists returned leases; root engine/release leases returned, owned
+  preview helpers stopped, public game tab retained. Concurrent mobile files and
+  records remain untouched by this task. Main source66e4b5b is stable/pushed for
+  separate mobile integration. Next optimization: controlled device baseline and
+  the remaining measured stages of the plan, rather than unmeasured pooling.
+
+- Mobile addon research (2026-10-11, examples/discussion only): root compared primary
+  Godot/GitHub sources with the existing touch contract; two read-only specialists
+  reviewed current routing and candidate libraries, with no file/engine leases.
+  Native VirtualJoystick/TouchScreenButton and MIT Virtual Joystick DX are the movement
+  shortlist; MIT Action Manager is a button-behavior reference. MarcoFazio's class_name
+  VirtualJoystick matches the new engine class and needs adaptation. Detailed pros,
+  cons, source links and Web limitations are in [candidate research](mobile-controls.md#open-source-control-candidates--2026-10-11).
+  Base HEAD556c6dce324f; pinned Godot4.7.2/upstream unchanged. Commands: Get-Content,
+  rg and git status/rev-parse plus primary-source browsing; documentation-only
+  git diff --check passed. Files changed: docs/mobile-controls.md and docs/status.md.
+  No game/test/export edits, addon installation or device verification. Specialists
+  returned read-only handoffs; next action is user selection/discussion of examples.
+  Camera-specific follow-up: user narrowed the target to rotation settings. Read-only
+  controller/HUD inspection confirms existing touch/ADS gain, inversion and fire-look;
+  recommend our native-event per-pointer swipe layer for camera rotation. DX remains
+  a movement reference. Optional separate X/Y gain/smoothing would need later work.
+  Root updated only the two research documents; documentation diff check passed;
+  no new engine/test/export run. Unrelated voxel/optimization documents belong to
+  concurrent work and were not edited. Next action: discuss desired camera tuning.
+  Expanded search follow-up: the user reports current camera control still feels
+  poor and requested a concrete refined reference. This supersedes the provisional
+  recommendation to retain the existing handler as sufficient. Released Android
+  FPS candidates now include Open Touch Gaming / MobileTouchControls (UX/source
+  correspondence explicitly limited), Xash3D FWGS (clearest open camera source)
+  and idTech4A++; Luanti covers voxel/tools, NexQuake and Ashworth cover runnable Web
+  comparisons. Exact inspected revisions, licensing, source links and caveats are in
+  [expanded camera research](mobile-controls.md#expanded-camera-reference-search--2026-10-11).
+  Two specialists returned read-only handoffs, with no file/engine leases. Root
+  inspected primary sources, used public git ls-remote to pin two references, opened
+  NexQuake's rendered server menu and launched/rendered Ashworth on desktop; physical
+  touch feel and multitouch remain unverified. Temporary tabs closed; no viewport
+  override or engine/test/export run. Only the two mobile research documents changed
+  under root ownership; unrelated optimization/voxel work is preserved.
+  Documentation-only git diff --check passed (exit0); no new gameplay validation.
+  Next action:
+  compare the chosen released-app reference against Blockfield on a physical phone,
+  then select camera response/layout changes from that evidence. No new architecture
+  or parity acceptance is claimed.
+
+- Previous mobile-control checkpoint96 returned specialist/engine leases to root;
+  its evidence is retained below separately from the current31 release.
+  New `game/ui/mobile_controls.gd` and `tests/ui/test_mobile_controls.gd` exercise real
+  touch ownership and source/network handoff; native component suite808/0 on Godot4.7.2.
+  Root owns HUD/controller/settings/scale integration and publication. Landscape844×390
+  and portrait390×844 exported-browser views were inspected; initial anchored HUD and
+  portrait minimap/palette overlaps are corrected. Final Main/HUD regression270/0 passed,
+  including preference/mode lifecycle, action bridges, chat/focus cleanup and desktop
+  input restoration. Frozen96 is published/hash-verified. Recorded browser previews
+  did not exercise physical-phone multitouch. See [mobile contract](mobile-controls.md).
+  Actual public844×390/390×844 preview exercised stick/look/fire/Jump/reload/block
+  selection, readable footer and palette/map separation. Mode On survived reload;
+  Auto restored desktop presentation. Screenshot/report under
+  `.cache/previews/public-mobile-96c36cdc740d.*`, portrait JPEG alongside it.
+  Temporary test servers/tabs stopped; viewport override reset. Root owns the
+  clean source and finished publication; no specialist or engine lease remains.
+
 
 - Optimization planning (2026-10-11): completed a read-only three-specialist audit
   of World, simulation/network and presentation/audio/UI, plus coordinator

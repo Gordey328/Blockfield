@@ -58,6 +58,8 @@ var _pointer_callback: JavaScriptObject
 var browser_pointer_fallback:=false
 var _export_menu_was_open:=false
 var _export_pending:=false
+var _export_transfer_request: int = -1
+var _export_transfer_stats: Dictionary = {}
 var _map_baseline := PackedByteArray()
 var _map_baseline_name := ""
 var _vxl_request_id: int = 0
@@ -618,7 +620,7 @@ func save_map() -> void:
 		hud.show_alert("Map encoding failed","error")
 		return
 	if OS.has_feature("web"):
-		_show_web_export(bytes,"blockfield-map.vxl","application/octet-stream")
+		if not await _show_web_export_incremental(bytes,"blockfield-map.vxl","application/octet-stream",request): return
 	else:
 		var file:=FileAccess.open("user://blockfield-map.vxl",FileAccess.WRITE)
 		if file==null:
@@ -643,6 +645,13 @@ func _cancel_vxl_request() -> void:
 	_vxl_notice_caption = ""
 	_vxl_notice_percent = -1
 	if is_instance_valid(world): world.cancel_vxl_jobs()
+	if _export_transfer_request >= 0:
+		_export_transfer_request = -1
+		_export_pending = false
+		_export_transfer_stats["active"] = false
+		_export_transfer_stats["cancelled"] = true
+		if OS.has_feature("web"): JavaScriptBridge.get_interface("BlockfieldExports").abort()
+		if is_inside_tree(): hud.set_menu_visible(_export_menu_was_open)
 
 func _vxl_request_current(request: int) -> bool:
 	return is_inside_tree() and request == _vxl_request_id
@@ -655,8 +664,19 @@ func _update_vxl_progress() -> void:
 	_vxl_notice_percent = percent
 	hud.show_notice("%s %d%%" % [_vxl_notice_caption,percent])
 
-func _show_web_export(bytes: PackedByteArray,filename: String,mime: String) -> void:
-	if _export_pending:return
+func _show_web_export(bytes: PackedByteArray,filename: String,mime: String) -> bool:
+	var exports := _begin_web_export(filename,mime)
+	if exports == null:return false
+	# Small PNG/JSON exports retain their synchronous path.
+	for offset in range(0,bytes.size(),49152):
+		exports.append(Marshalls.raw_to_base64(bytes.slice(offset,mini(bytes.size(),offset+49152))))
+	exports.finish(locale)
+	return true
+
+func _begin_web_export(filename: String,mime: String) -> JavaScriptObject:
+	if _export_pending:
+		hud.show_notice("Дождитесь завершения текущего экспорта" if locale == "ru" else "Wait for the current export to finish")
+		return null
 	_export_pending=true
 	_export_menu_was_open=hud.is_menu_open()
 	hud.set_menu_visible(true)
@@ -665,11 +685,39 @@ func _show_web_export(bytes: PackedByteArray,filename: String,mime: String) -> v
 		_export_callback=JavaScriptBridge.create_callback(_web_export_closed)
 	var exports:=JavaScriptBridge.get_interface("BlockfieldExports")
 	exports.begin(filename,mime,_export_callback)
-	# 48 KiB chunks bound transient base64 strings and avoid a single giant
-	# JavaScript source string. Bytes and filenames are passed as data.
-	for offset in range(0,bytes.size(),49152):
-		exports.append(Marshalls.raw_to_base64(bytes.slice(offset,mini(bytes.size(),offset+49152))))
+	return exports
+
+func _show_web_export_incremental(bytes: PackedByteArray,filename: String,mime: String,request: int) -> bool:
+	if not _vxl_request_current(request):return false
+	var exports := _begin_web_export(filename,mime)
+	if exports == null:return false
+	_export_transfer_request = request
+	_export_transfer_stats = {"active":true,"cancelled":false,"bytes":bytes.size(),"staged_bytes":0,"batches":0,"max_batch_usec":0}
+	var tree: SceneTree = get_tree()
+	var offset: int = 0
+	var caption := "Подготовка файла…" if locale == "ru" else "Preparing download…"
+	while offset < bytes.size():
+		if not _vxl_request_current(request):return false
+		var started: int = Time.get_ticks_usec()
+		var chunks: int = 0
+		while offset < bytes.size() and chunks < 2:
+			var end: int = mini(bytes.size(),offset+16384)
+			exports.append(Marshalls.raw_to_base64(bytes.slice(offset,end)))
+			offset = end
+			chunks += 1
+			if Time.get_ticks_usec()-started >= 2000:break
+		_export_transfer_stats["staged_bytes"] = offset
+		_export_transfer_stats["batches"] += 1
+		_export_transfer_stats["max_batch_usec"] = maxi(int(_export_transfer_stats.max_batch_usec),Time.get_ticks_usec()-started)
+		hud.show_notice("%s %d%%" % [caption,int(float(offset)/bytes.size()*100)])
+		if offset < bytes.size():await tree.process_frame
+	if not _vxl_request_current(request):return false
+	_export_transfer_request = -1
+	_export_transfer_stats["active"] = false
+	var finish_started: int = Time.get_ticks_usec()
 	exports.finish(locale)
+	_export_transfer_stats["finish_usec"] = Time.get_ticks_usec()-finish_started
+	return true
 
 func _ensure_web_exports() -> void:
 	JavaScriptBridge.eval("if(!window.BlockfieldExports){"+FileAccess.get_file_as_string("res://web/exports.js")+"}")
@@ -880,7 +928,10 @@ func screenshot(scene_only: bool=false) -> void:
 	if scene_only:hud.set_capture_visible(was_visible)
 	var bytes:=image.save_png_to_buffer()
 	var filename:="blockfield-%s-%d.png"%["scene" if scene_only else "screen",Time.get_unix_time_from_system()]
-	if OS.has_feature("web"):_show_web_export(bytes,filename,"image/png")
+	if OS.has_feature("web"):
+		if not _show_web_export(bytes,filename,"image/png"):
+			_capture_pending=false
+			return
 	else:
 		var file:=FileAccess.open("user://"+filename,FileAccess.WRITE)
 		if file==null:
@@ -895,7 +946,8 @@ func export_event_log() -> void:
 	var record: Dictionary={"format":"blockfield-session-log","version":1,"utc":Time.get_datetime_string_from_system(true),"profile":session.profile_version,"mode":session.mode,"events":session.event_log.duplicate(true),"chat":hud.get_chat_messages()}
 	var bytes:=JSON.stringify(record,"\t").to_utf8_buffer()
 	var filename:="blockfield-session-%d.json"%Time.get_unix_time_from_system()
-	if OS.has_feature("web"):_show_web_export(bytes,filename,"application/json")
+	if OS.has_feature("web"):
+		if not _show_web_export(bytes,filename,"application/json"):return
 	else:
 		var file:=FileAccess.open("user://"+filename,FileAccess.WRITE)
 		if file==null:

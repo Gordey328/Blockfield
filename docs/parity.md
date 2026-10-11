@@ -220,3 +220,18 @@ Alpha fragment sorting is a documented batch adaptation; other particle simulati
 audio and terrain costs remain. U12 stays IMPLEMENTED. Exact hashes, commands,
 failure/correction records and release handoff: [effects performance](effects-performance.md),
 [ADR0011](decisions/0011-effect-pools-and-fragment-batching.md).
+
+2026-10-11 optimization item4 evidence: bounded exact audio/tint caches and
+cooperative private VXL jobs/browser staging are checked on frozen66e4b5b7eb89.
+All85 registered native behavioral/latency checks, parser/runtime/Web/server
+export and PCK smoke pass; separate corrected Web PCM113/0+DSP64/0 and production
+JS lifecycle3/3 pass. Actual exported Main cancel/restart/save handled input;
+downloaded VXL bytes equal raw input or the unchanged synchronous encoder.
+Normal local/public browser rendered lab and Title, with movement/tools and
+the existing pointer-lock drag fallback. Public metadata/HTML/JS/WASM/PCK and
+server ZIP hashes match the frozen artifacts. This adds partial W01/W10/T06/
+U11/U13 evidence; these rows remain IMPLEMENTED. It does not establish controlled
+FPS/phone/RSS/subjective audio, Linux/Docker/TLS execution or full-port acceptance.
+Failures, fixture correction, residual reset/COW stalls and commands:
+[optimization item4](optimization-audio-vxl-memory.md),
+[ADR0013](decisions/0013-audio-vxl-memory.md).
