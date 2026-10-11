@@ -94,7 +94,7 @@ $godot = '.tools/godot/Godot_v4.7.2-stable_win64_console.exe'
 & $godot --headless --path game --script ../tests/world/test_vxl_jobs.gd
 & $godot --headless --path game --script ../tests/world/benchmark_vxl_jobs.gd
 & $godot --headless --path game --script ../tests/audio/benchmark_audio_optimization.gd -- --shots=120 --repeats=3 --output-name=audio-item4.json
-& $godot --headless --path game --script ../tests/integration/benchmark_optimization_memory.gd -- --full-vxl --vxl-cycles=2 --output-name=memory-item4.json
+& $godot --headless --path game --script ../tests/integration/benchmark_optimization_memory.gd -- --full-vxl --vxl-cycles=2 --output-name=memory-cow-item4.json
 ```
 
 Browser diagnostic export: `python tools/export_optimization_probe.py --name NAME
@@ -235,7 +235,7 @@ controller511/0, source194/0, mobile2381/0+144/0, socket damage42/0 and native
 shaped latency461/0. Manifest `.cache/previews/optimization-item4/frozen-validation.json`.
 Headless effects skip3 GPU assertions; actual browser rendering is separate.
 
-Normal frozen export served by `python tools/serve.py --port8083`: rendered lab,
+Normal frozen export served by `python tools/serve.py --port 8083`: rendered lab,
 movement, block palette/tool switching and rifle9/50 after a shot with unlimited
 ammo temporarily disabled. That option and rifle were restored. Original Title
 loaded through the normal menu with progress, rendered terrain, targets and
