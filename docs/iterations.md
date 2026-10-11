@@ -17,3 +17,11 @@ Release gate: parser/import pass; gameplay and voxel checks pass; all iteration-
 Dedicated authoritative simulation, compatible browser transport, movement prediction/reconciliation/interpolation, validated shooting/block operations, map snapshot + ordered changes, joining mid-round, respawn/team/spectator, chat/scoreboard/CTF/TC, disconnect/reconnect and latency tests. Hosting the game simulation requires a server host separate from static GitHub Pages.
 
 Old AoS server protocol compatibility is not required by the approved replacement-networking scope. If later requested, track it as additional work rather than silently replacing the chosen stack.
+
+## Accepted gameplay replacement — 2026-10-11
+
+The user explicitly removed automatic block regeneration. Surviving blocks retain
+damage and darkening until an actual replacement or explicit map/round reset;
+destroyed blocks remain air. Waiting, respawn and reconnect do not heal them.
+This overrides OpenSpades' ten-second recovery in both iterations; see
+[ADR0010](decisions/0010-persistent-block-damage.md).

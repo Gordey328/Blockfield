@@ -61,7 +61,7 @@ portrait/small-screen evidence, plus hardware limits, are recorded in
 | W04 | Right-button drag line, cube-line ordering, stock limit and invalid-line feedback | `Player.cpp:173`; `World.cpp:CubeLine`; `NetClient.cpp:1167` | 1+2 | IMPLEMENTED |
 | W05 | Delayed block placement while jumping; cancel after landing or loss of stock | `Player.cpp:436` | 1+2 | IMPLEMENTED |
 | W06 | Palette selection and eyedropper capture from existing map block | `PaletteView.cpp`; `Client_Input.cpp:374,534` | 1 | IMPLEMENTED |
-| W07 | Block health, weapon/spade damage, damaged-block darkening and 10-second health/color recovery | `Player.cpp:674,917`; `World.cpp:96,191`; `Sources/Draw/GLMapChunk.cpp:247-252` | 1+2 | IMPLEMENTED |
+| W07 | Block health, weapon/spade damage and damaged-block darkening; permanent damage replaces source recovery by user request ([ADR0010](decisions/0010-persistent-block-damage.md)) | `Player.cpp:674,917`; `World.cpp:96,191`; `Sources/Draw/GLMapChunk.cpp:247-252` | 1+2 | IMPLEMENTED |
 | W08 | Dig removes vertical 3 cells; grenade removes 3×3×3; bedrock rules match baseline | `NetClient.cpp:1122`; `World.cpp:328` | 1+2 | IMPLEMENTED |
 | W09 | Unsupported structures detach, fall as clusters, collide and generate fragments/sounds | `GameMapWrapper.cpp`; `World.cpp:281`; `FallingBlock.cpp`; `Client_LocalEnts.cpp` | 1+2 | IMPLEMENTED |
 | W10 | Save/export edited map as VXL | `GameMap.cpp:93`; `Client_Input.cpp:562`; `Client_Draw.cpp:TakeMapShot` | 1 | IMPLEMENTED |

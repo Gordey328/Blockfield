@@ -3,6 +3,16 @@ extends SceneTree
 const TRANSFER = preload("res://network/map_transfer.gd")
 const PROTOCOL = preload("res://network/protocol.gd")
 const DATA = preload("res://world/voxel_data.gd")
+const REPLICA = preload("res://network/client_replica.gd")
+const EVENTS = preload("res://network/events_codec.gd")
+const TRANSPORT = preload("res://network/ws_transport.gd")
+
+class ReadyTransport extends TRANSPORT:
+	var sent: Array[PROTOCOL.Packet] = []
+	func send(_connection_id: int, packet: PROTOCOL.Packet) -> Dictionary:
+		if not PROTOCOL.encode(packet).ok: return {"ok":false,"error":"invalid fixture packet"}
+		sent.append(packet)
+		return {"ok":true,"error":""}
 var assertions: int = 0
 var failures: int = 0
 
@@ -14,6 +24,9 @@ func _run() -> void:
 	if OS.get_cmdline_user_args().has("--benchmark-map-transfer"):
 		_benchmark_large_map(); quit(0); return
 	_test_baseline_golden()
+	_test_damage_baselines()
+	_test_damage_flag_failures()
+	_test_damage_replica_handoff()
 	_test_incremental_jobs()
 	_test_private_apply_jobs()
 	_test_two_replicas()
@@ -132,7 +145,7 @@ func _feed_chunks(receiver: TRANSFER, chunks: Array[PROTOCOL.Packet], now: int =
 	for chunk: PROTOCOL.Packet in chunks: check(_consume(receiver,chunk,now).ok,"ordered chunk accepted")
 func _cleared(receiver: TRANSFER) -> bool:
 	var stats: Dictionary = receiver.get_stats()
-	return stats.baseline_bytes==0 and stats.staged_map_bytes==0 and stats.ready_map_bytes==0 and stats.retained_changes==0 and stats.retained_wire_bytes==0 and stats.transactions==0 and not stats.partial_transaction
+	return stats.baseline_bytes==0 and stats.staged_map_bytes==0 and stats.ready_map_bytes==0 and stats.damage_cells==0 and stats.edit_cells==0 and stats.retained_changes==0 and stats.retained_wire_bytes==0 and stats.transactions==0 and not stats.partial_transaction
 
 func _consume(receiver: TRANSFER, packet: PROTOCOL.Packet, now: int) -> Dictionary:
 	var result: Dictionary = receiver.consume(packet,now)
@@ -198,6 +211,187 @@ func _test_incremental_jobs() -> void:
 	var sync: TRANSFER = _join(begin,{"incremental":false})
 	_feed_chunks(sync,chunks)
 	check(_consume(sync,end.packet,2).status=="ready","explicit small fixture/tool mode retains synchronous convenience")
+
+func _sha256(bytes: PackedByteArray) -> PackedByteArray:
+	var context: HashingContext = HashingContext.new()
+	context.start(HashingContext.HASH_SHA256); context.update(bytes)
+	return context.finish()
+
+func _damage_fixture() -> DATA:
+	var data: DATA = DATA.new()
+	check(data.clear(Vector3i(2,4,2),7)==OK,"damage baseline map initialized")
+	data.blocks[0]=0x01010203; data.blocks[1]=0x01445566
+	data.blocks[data.index(Vector3i(0,2,0))]=0x01aabbcc
+	data.blocks[data.index(Vector3i(1,2,0))]=0x01123456
+	data.blocks[data.index(Vector3i(1,2,1))]=0x01000000
+	data.last_tick=7
+	return data
+
+func _test_damage_baselines() -> void:
+	var data: DATA = _damage_fixture()
+	var canonical: PackedByteArray = data.snapshot_range(0,data.blocks.size()*4)
+	var frozen: DATA = data.frozen_copy() as DATA
+	var first: Vector3i = Vector3i(0,2,0)
+	var second: Vector3i = Vector3i(1,2,1)
+	var damaged: Dictionary[Vector3i,bool] = {first:true,second:true}
+	var expected: PackedByteArray = canonical.duplicate()
+	expected[data.index(first)*4]=3; expected[data.index(second)*4]=3
+	var prep: Dictionary = TRANSFER.prepare_sender(data,9,damaged,20)
+	check(prep.ok and prep.job.get_stats().processed_chunks==0 and prep.job.get_stats().damage_cells==2,"damage capture keeps bounded lazy hashing")
+	damaged.clear(); data.blocks[data.index(first)]=0x01112233
+	check(data.last_tick==7,"capture tick does not rewrite intrinsic authority terrain tick")
+	check(prep.job.advance().done,"small flagged baseline hash finishes in one bounded range")
+	var sender: TRANSFER.BaselineSender = prep.job.take_sender().sender
+	var begin: PROTOCOL.Packet = sender.begin_packet()
+	var chunks: Array[PROTOCOL.Packet] = _chunks(sender)
+	check(begin.tick==20 and begin.payload.hash==_sha256(expected) and chunks[0].payload.data==expected,"frozen flag bytes and BEGIN SHA match independent BE expectation after caller mutation")
+	check(begin.payload.uncompressed_size==canonical.size() and begin.payload.compressed_size==canonical.size(),"persistent damage adds no baseline bytes")
+	check(not DATA.valid_color(0x03aabbcc) and not DATA.valid_color(0x03000000),"wire flag never becomes an accepted canonical RGB/occupancy color")
+	var end_job: Dictionary = sender.prepare_end(frozen,25)
+	check(end_job.ok and end_job.job.advance().done,"barrier prepares at real tick using a frozen canonical copy")
+	var end: PROTOCOL.Packet = end_job.job.take_packet().packet
+	check(end.tick==25 and frozen.last_tick==7 and end.payload.hash==_sha256(canonical) and end.payload.hash!=begin.payload.hash,"END stays canonical and never mutates intrinsic map tick")
+	var receiver: TRANSFER = _join(begin)
+	for chunk: PROTOCOL.Packet in chunks: check(receiver.consume(chunk,1).ok,"flagged chunks remain codec-valid")
+	check(not receiver.take_ready().ok and receiver.get_stats().decoded_cells==0,"raw damage mask cannot be adopted before bounded decode and barrier")
+	check(_consume(receiver,end,2).ok,"canonical END verifies after stripping wire-only flag")
+	var ready: Dictionary = receiver.take_ready()
+	check(ready.ok and ready.damage_cells=={first:true,second:true} and ready.damage_tick==20 and ready.tick==25,"ready mask includes black solid and preserves capture fence separately from barrier")
+	check(ready.data.snapshot_range(0,canonical.size())==canonical and ready.data.blocks==frozen.blocks,"adopted terrain bytes and RGB remain exactly canonical")
+	var replaced: TRANSFER = _join(begin)
+	var transaction: Dictionary = {"epoch":7,"map_sequence":1,"transaction_id":1,"tick":22,"actor_id":4,"action_id":1,"dimensions":frozen.dimensions,"changes":[{"cell":first,"before":0x01aabbcc,"after":0x01123456,"flags":0}]}
+	for fragment: PROTOCOL.Packet in _fragments(transaction): check(_consume(replaced,fragment,1).ok,"replacement may arrive before flagged baseline chunks")
+	frozen.read_only=false
+	check(frozen.apply_transaction(transaction).ok,"canonical replacement fixture commits")
+	_feed_chunks(replaced,chunks,2)
+	var replaced_end: Dictionary = sender.prepare_end(frozen,26)
+	check(replaced_end.ok and replaced_end.job.advance().done,"changed terrain barrier prepares")
+	check(_consume(replaced,replaced_end.job.take_packet().packet,3).ok,"replacement barrier verifies independently of flags")
+	var after: Dictionary = replaced.take_ready()
+	check(after.ok and after.damage_cells=={second:true} and after.edit_ticks=={first:22} and after.data.blocks==frozen.blocks,"catch-up replacement removes only its old damage and retains exact edit-tick fence")
+	sender.cancel(); check(sender.get_stats().damage_cells==0,"sender cancel releases frozen damage mask")
+	var large: DATA = _data(Vector3i(64,16,64))
+	var boundary: int = PROTOCOL.CHUNK_BYTES/4
+	var boundary_mask: Dictionary[Vector3i,bool] = {}
+	for index: int in [boundary,boundary+1]:
+		var column: int = index/large.dimensions.y
+		var cell: Vector3i = Vector3i(column%large.dimensions.x,index%large.dimensions.y,column/large.dimensions.x)
+		large.blocks[index]=0x01abcdef; boundary_mask[cell]=true
+	var large_raw: PackedByteArray = large.snapshot_range(0,large.blocks.size()*4)
+	var large_expected: PackedByteArray = large_raw.duplicate()
+	large_expected[boundary*4]=3; large_expected[(boundary+1)*4]=3
+	var large_sender: TRANSFER.BaselineSender = TRANSFER.make_sender(large,10,boundary_mask).sender
+	var large_chunks: Array[PROTOCOL.Packet] = _chunks(large_sender)
+	var assembled: PackedByteArray = PackedByteArray()
+	for chunk: PROTOCOL.Packet in large_chunks: assembled.append_array(chunk.payload.data)
+	check(assembled==large_expected,"flags preserve exact BE bytes when chunk boundary splits one cell")
+	var bounded: TRANSFER = _join(large_sender.begin_packet())
+	for chunk: PROTOCOL.Packet in large_chunks: check(bounded.consume(chunk,1).ok,"large flagged transfer retains bounded decode work")
+	check(bounded.poll(2,1).ok and bounded.get_stats().decoded_cells==PROTOCOL.CHUNK_BYTES/4 and not bounded.take_ready().ok,"one damage-aware decode poll handles only its original cell budget")
+	check(_consume(bounded,large_sender.end_packet(large).packet,3).ok,"large canonical barrier converges")
+	var large_ready: Dictionary = bounded.take_ready()
+	check(large_ready.ok and large_ready.damage_cells==boundary_mask and large_ready.data.snapshot_range(0,large_raw.size())==large_raw,"boundary mask decodes without ever contaminating canonical bytes")
+
+func _test_damage_flag_failures() -> void:
+	var data: DATA = _damage_fixture()
+	for bad: Dictionary in [{Vector3i(0,0,0):true},{Vector3i(0,1,0):true},{Vector3i(1,3,1):true},{Vector3i(0,2,0):false},{Vector3i(0,2,0):1},{"cell":true}]:
+		check(not TRANSFER.make_sender(data,9,bad).ok and not TRANSFER.prepare_sender(data,9,bad).ok,"sender rejects flags on bedrock/air or malformed mask identities")
+	var sender: TRANSFER.BaselineSender = _sender(data)
+	var base: PackedByteArray = data.snapshot_range(0,data.blocks.size()*4)
+	for bad: String in ["unknown","air","floor_zero","floor_one"]:
+		var raw: PackedByteArray = base.duplicate()
+		match bad:
+			"unknown": raw[data.index(Vector3i(0,2,0))*4]=5
+			"air": raw[data.index(Vector3i(1,3,1))*4]=2
+			"floor_zero": raw[0]=3
+			"floor_one": raw[4]=3
+		var begin: PROTOCOL.Packet = sender.begin_packet(); begin.payload.hash=_sha256(raw)
+		var receiver: TRANSFER = _join(begin)
+		var chunk: PROTOCOL.Packet = PROTOCOL.make_packet(PROTOCOL.Kind.MAP_CHUNK,{"snapshot_id":9,"index":0,"total_size":raw.size(),"data":raw},7,7,0)
+		check(not _consume(receiver,_wire(chunk),1).ok and _cleared(receiver),"valid raw hash cannot admit %s damage flag" % bad)
+	var damaged_sender: TRANSFER.BaselineSender = TRANSFER.make_sender(data,9,{Vector3i(0,2,0):true}).sender
+	var original: PROTOCOL.Packet = damaged_sender.next_chunk().packet
+	original.payload.data[data.index(Vector3i(0,2,0))*4]=1
+	var mismatch: TRANSFER = _join(damaged_sender.begin_packet())
+	check(not _consume(mismatch,original,1).ok and _cleared(mismatch),"clearing only damage flag still fails BEGIN SHA")
+	check(data.snapshot_range(0,base.size())==base,"hostile wire flag failures never mutate original canonical map")
+	var large: DATA = _data(Vector3i(64,16,64))
+	var edits: Dictionary[Vector3i,int] = {}
+	for index: int in range(2,large.blocks.size()):
+		var column: int = index/large.dimensions.y
+		var cell: Vector3i = Vector3i(column%large.dimensions.x,index%large.dimensions.y,column/large.dimensions.x)
+		if cell.y==0: continue
+		edits[cell]=7
+		if edits.size()==TRANSFER.MAX_BUFFERED_CHANGES: break
+	var full: TRANSFER.TransactionApplyJob = TRANSFER.TransactionApplyJob.new()
+	var before: PackedInt32Array = large.blocks.duplicate()
+	check(full._start(large,_large_transaction(large,1),{},edits,true).ok and not full.advance().ok and large.blocks==before,"join edit-tick history is capped before new private writes instead of growing across slow transfer")
+
+func _damage_event(cell: Vector3i, tick: int, sequence: int, spade: bool = false) -> Dictionary:
+	var event: Dictionary = {"type":"spade_block_hit" if spade else "block_hit","epoch":7,"tick":tick,"owner_id":4,"spawn_generation":1,"action_sequence":1,"match_sequence":sequence,"event_id":"7:4:1:%d" % sequence,"source_event_id":"7:4:1:1","cell":cell,"position":Vector3(cell)+Vector3.ONE*.5,"normal":Vector3i.BACK}
+	if spade: event["dig"]=false
+	else: event["pellet"]=0
+	return event
+
+func _test_damage_replica_handoff() -> void:
+	var data: DATA = _damage_fixture()
+	var first: Vector3i = Vector3i(0,2,0)
+	var second: Vector3i = Vector3i(1,2,1)
+	var third: Vector3i = Vector3i(1,2,0)
+	var sender: TRANSFER.BaselineSender = TRANSFER.make_sender(data,9,{first:true,second:true},10).sender
+	var receiver: TRANSFER = _join(sender.begin_packet())
+	var transaction: Dictionary = {"epoch":7,"map_sequence":1,"transaction_id":1,"tick":12,"actor_id":4,"action_id":1,"dimensions":data.dimensions,"changes":[{"cell":first,"before":0x01aabbcc,"after":0x01abcdef,"flags":0}]}
+	for fragment: PROTOCOL.Packet in _fragments(transaction): _consume(receiver,fragment,1)
+	check(data.apply_transaction(transaction).ok,"replica damage replacement fixture committed")
+	_feed_chunks(receiver,_chunks(sender),2)
+	var end: Dictionary = sender.prepare_end(data,13); end.job.advance(32)
+	check(_consume(receiver,end.job.take_packet().packet,3).ok,"replica fixture has verified barrier")
+	var replica: REPLICA = REPLICA.new()
+	var sink: ReadyTransport = ReadyTransport.new()
+	replica.game=sink; replica.transfer=receiver; replica.epoch=7; replica.actor_id=8
+	var installed: Array[bool] = [false]
+	var install: Callable = func(map_data: DATA) -> bool:
+		installed[0]=map_data.get_block(first)==0x01abcdef and replica.baseline_damage_cells=={second:true} and replica.baseline_damage_tick==10
+		return installed[0]
+	replica.set_map_callbacks(install,Callable())
+	replica._install_ready()
+	check(installed[0] and replica.status=="synchronizing" and sink.sent.size()==1 and sink.sent[0].kind==PROTOCOL.Kind.MAP_READY,"one-argument install callback receives canonical terrain after public damage mask/tick are set")
+	replica.set_map_callbacks(Callable(),Callable()) # Release the fixture's captured Replica reference.
+	replica.drain_events()
+	var events: Array[Dictionary] = [_damage_event(first,11,1),_damage_event(first,12,2),_damage_event(third,14,3,true)]
+	var converted: Dictionary = EVENTS.from_events(7,events)
+	check(converted.ok,"post-baseline hit replay uses unchanged real event schemas and actor IDs")
+	if converted.ok:
+		replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,converted.payload,7,14,3)))
+		var replay: Array[Dictionary] = replica.drain_events()
+		check(replay.size()==1 and replay[0].cell==third and replay[0].baseline_damage_only and replay[0].owner_id==4,"old and same-tick replacement hits are suppressed; surviving spade hit replays only damage without synthesized identity")
+		check(replica.baseline_damage_cells=={second:true,third:true} and replica._event_cursor==3,"presentation mask and normal monotonic event cursor advance before initial state")
+		replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,converted.payload,7,14,3)))
+		check(replica.drain_events().is_empty() and replica._event_cursor==3,"duplicate replay packet never emits damage or cosmetics twice")
+		var private_event: Dictionary = {"type":"hurt","epoch":7,"tick":15,"owner_id":8,"spawn_generation":1,"action_sequence":1,"match_sequence":4,"event_id":"7:8:1:1","amount":10,"attacker_id":4,"cause":"weapon","action_id":"7:4:1:1"}
+		var private_events: Array[Dictionary] = [private_event]
+		var private_frame: Dictionary = EVENTS.from_events(7,private_events)
+		check(private_frame.ok,"owned private event fixture retains original schema")
+		if private_frame.ok:
+			replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,private_frame.payload,7,15,4)))
+			var owner_events: Array[Dictionary] = replica.drain_events()
+			check(owner_events.size()==1 and owner_events[0].type=="hurt" and not owner_events[0].has("baseline_damage_only"),"synchronizing private events keep normal owner visibility and presentation")
+		replica.status="live"
+		var live_events: Array[Dictionary] = [_damage_event(first,16,5)]
+		var live_frame: Dictionary = EVENTS.from_events(7,live_events)
+		check(live_frame.ok,"live damage event fixture validates")
+		if live_frame.ok:
+			replica._game_packet(_wire(PROTOCOL.make_packet(PROTOCOL.Kind.GAME_EVENTS,live_frame.payload,7,16,5)))
+			var live: Array[Dictionary] = replica.drain_events()
+			check(live.size()==1 and live[0].cell==first and not live[0].has("baseline_damage_only") and replica._event_cursor==5,"normal live effects and monotonic cursor stay unchanged after joining")
+	replica.close()
+	check(replica.baseline_damage_cells.is_empty() and replica.baseline_damage_tick==0 and replica._baseline_edit_ticks.is_empty(),"close clears masks and edit fences before reconnect")
+	replica.baseline_damage_cells[second]=true; replica.baseline_damage_tick=10
+	replica._discard_epoch_stream(8)
+	check(replica.baseline_damage_cells.is_empty() and replica.baseline_damage_tick==0,"map reset cannot retain prior epoch damage")
+	replica.baseline_damage_cells[second]=true; replica.baseline_damage_tick=10
+	replica._fail("fixture failure")
+	check(replica.status=="failed" and replica.baseline_damage_cells.is_empty() and replica.baseline_damage_tick==0,"failure clears baseline presentation before a retry")
 
 func _test_private_apply_jobs() -> void:
 	var data: DATA = _data()

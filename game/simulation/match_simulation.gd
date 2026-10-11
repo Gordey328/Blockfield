@@ -41,7 +41,7 @@ var _colors: Dictionary[int,int] = {}
 var _line_start: Dictionary[int,Vector3i] = {}
 var _pending_cell: Dictionary[int,Vector3i] = {}
 var _secondary: Dictionary[int,bool] = {}
-var _block_health: Dictionary[Vector3i,Dictionary] = {}
+var _block_health: Dictionary[Vector3i,Dictionary] = {} # Persists until terrain edit/destruction or match reset.
 var _grenade_team: Dictionary[int,int] = {}
 var _rewind_query_factory: Callable
 var _rewind_enabled: bool = false
@@ -263,7 +263,6 @@ func step_fixed(commands: Dictionary = {}, admitted_shot_ticks: Dictionary = {})
 	var current: Array[Dictionary] = []
 	if data == null or data.epoch != epoch or tick >= RULES.MAX_UINT32 or data.read_only: return RULES.frozen(current)
 	tick += 1
-	_restore_block_health()
 	var ordered := _ordered()
 	var block_gates: Dictionary[int,bool] = {}
 	var shot_fronts: Dictionary[int,Vector3] = {}
@@ -604,11 +603,6 @@ func _damage_block(owner: SharedPlayerState, cell: Vector3i, damage: float, allo
 	_block_health[cell] = {"health":maxf(0,health),"tick":tick,"color":color}
 	return false
 
-func _restore_block_health() -> void:
-	for cell: Vector3i in _block_health.keys():
-		var state: Dictionary = _block_health[cell]
-		if tick > int(state.tick)+600 or data.get_block(cell) != int(state.color): _block_health.erase(cell)
-
 static func in_reach(actor: SharedPlayerState, cell: Vector3i) -> bool:
 	var delta := (Vector3(cell)+Vector3.ONE*.5-actor.motion.physics_eye()).abs()
 	return maxf(delta.x,maxf(delta.y,delta.z)) < 3
@@ -804,7 +798,19 @@ func drain_events() -> Array[Dictionary]:
 	RULES.freeze_value(result)
 	return result
 
-func snapshot_for(id: int) -> Dictionary:
+func get_damaged_blocks() -> Dictionary[Vector3i,bool]:
+	# Freeze this presentation-only copy with the joining map barrier. Live
+	# wire snapshots need no private HP copy or periodic damaged-cell scan.
+	var damaged: Dictionary[Vector3i,bool] = {}
+	if data == null: return damaged
+	for cell: Vector3i in _block_health:
+		var state: Dictionary = _block_health[cell]
+		var color: int = data.get_block(cell)
+		if color != 0 and color == int(state.color) and float(state.health) < 100.0:
+			damaged[cell] = true
+	return damaged
+
+func snapshot_for(id: int, include_block_health: bool = true) -> Dictionary:
 	if data == null or not actors.has(id): return {}
 	var copied: Array[SharedPlayerState] = []
 	for actor: SharedPlayerState in _ordered(): copied.append(actor.copy())
@@ -813,7 +819,8 @@ func snapshot_for(id: int) -> Dictionary:
 	ids.sort()
 	for grenade_id: int in ids: projectiles.append(grenades[grenade_id].copy())
 	# Copied objects are owned by the caller; this is NOT a wire serializer.
-	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":_block_health.duplicate(true),"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate()}
+	var block_health: Dictionary = _block_health.duplicate(true) if include_block_health else {}
+	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":block_health,"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate()}
 
 func _system_event(type: String, details: Dictionary = {}) -> Dictionary:
 	var event := details.duplicate(true)

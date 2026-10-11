@@ -16,8 +16,8 @@
 Methods: generate_lab(), get_spawn_position()->Vector3, get_block(Vector3i)->int, set_block(Vector3i,int), cast_voxel(origin,direction,max_dist)->Dictionary, explode(position,radius), load_vxl(path)->Error.
 Air is 0; solid colors are 0x01RRGGBB. Block coordinates are Godot Y-up. VXL maps original (x,y,z) to (x,63-z,y).
 Transient damage uses World's `set_block_damaged`/`is_block_damaged`/`clear_block_damage`
-mask and `get_render_color` mesh adapter. The controller or confirmed network-event
-adapter owns expiry; VoxelData colors, collision and journals stay intrinsic.
+mask and `get_render_color` mesh adapter. The controller or shared authority owns
+persistent health; no timer restores it. VoxelData colors, collision and journals stay intrinsic.
 Edits/reset clear marks. See [ADR0009](decisions/0009-block-damage-presentation.md).
 Ray result: hit, cell, normal, position. blocks_changed signal array contains cell/before/after (optional collapsed).
 Lab bounds 96x32x96; bedrock y=0, floor y=1..3; player spawn uses get_spawn_position().

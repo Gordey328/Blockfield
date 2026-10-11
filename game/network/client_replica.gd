@@ -17,6 +17,9 @@ var transfer := TRANSFER.new()
 var assembler := TRANSFER.TransactionAssembler.new()
 var prediction := PREDICTION.new()
 var data: VoxelData
+var baseline_damage_cells: Dictionary[Vector3i,bool] = {}
+var baseline_damage_tick: int = 0
+var _baseline_edit_ticks: Dictionary[Vector3i,int] = {}
 var status := "idle"
 var last_error := ""
 var actor_id := 0
@@ -86,6 +89,7 @@ func close() -> void:
 	_confirmed.clear()
 	prediction = PREDICTION.new()
 	data = null
+	baseline_damage_cells={}; baseline_damage_tick=0; _baseline_edit_ticks={}
 	actor_id = 0
 	epoch = 0
 	_welcome = null
@@ -195,7 +199,16 @@ func _game_packet(packet: P.Packet) -> void:
 				if not assembled.ok: _fail(assembled.error)
 				elif assembled.get("complete",false):
 					var applied: bool = bool(_apply_map.call(assembled.transaction)) if _apply_map.is_valid() else bool(data.apply_transaction(assembled.transaction).ok)
-					if not applied or data.map_sequence != assembled.transaction.map_sequence: _fail("live transaction needs baseline")
+					if not applied or data.map_sequence != assembled.transaction.map_sequence:
+						_fail("live transaction needs baseline")
+						return
+					for change: Dictionary in assembled.transaction.changes:
+						baseline_damage_cells.erase(change.cell)
+						if status=="synchronizing":
+							if not _baseline_edit_ticks.has(change.cell) and _baseline_edit_ticks.size()>=TRANSFER.MAX_BUFFERED_CHANGES:
+								_fail("join edit history requires baseline")
+								return
+							_baseline_edit_ticks[change.cell]=assembled.transaction.tick
 			else: _fail("unexpected map transaction")
 		P.Kind.CHAT:
 			if status != "live" or packet.epoch != epoch or packet.payload.sender_id <= 0 or packet.payload.message_id <= _chat_sequence:
@@ -219,6 +232,7 @@ func _discard_epoch_stream(new_epoch: int) -> void:
 	_remote.clear(); _events.clear(); _confirmed.clear()
 	prediction = PREDICTION.new()
 	data = null
+	baseline_damage_cells={}; baseline_damage_tick=0; _baseline_edit_ticks={}
 	_chat_intent = 0; _chat_sequence = 0; _request_sequence = 0; _event_cursor = 0
 	_predicted_effects.clear(); _predicted_order.clear()
 	_last_snapshot_tick = -1; _snapshot_time_ms = 0
@@ -286,6 +300,13 @@ func _apply_events(packet: P.Packet) -> void:
 			_fail("foreign private event")
 			return
 		var event := source.duplicate(true)
+		if status=="synchronizing" and (source.type=="block_hit" or (source.type=="spade_block_hit" and not source.dig)):
+			var cell: Vector3i = source.cell
+			# Retained loading hits precede the initial state cursor. A catch-up
+			# replacement wins even when the old hit and edit share one tick.
+			if source.tick<=baseline_damage_tick or source.tick<=int(_baseline_edit_ticks.get(cell,baseline_damage_tick)) or cell.y<=1 or not data.is_in_bounds(cell) or data.get_block(cell)==0: continue
+			baseline_damage_cells[cell]=true
+			event.baseline_damage_only=true
 		var key := _effect_identity(event)
 		event.predicted_already_played = _predicted_effects.has(key)
 		if event.predicted_already_played:
@@ -301,6 +322,9 @@ func _install_ready() -> void:
 		_fail("ready map unavailable")
 		return
 	data = ready.data
+	baseline_damage_cells=ready.damage_cells
+	baseline_damage_tick=ready.damage_tick
+	_baseline_edit_ticks=ready.edit_ticks
 	if _install_map.is_valid() and not bool(_install_map.call(data)):
 		_fail("map presentation installation failed")
 		return
@@ -342,6 +366,7 @@ func _apply_snapshot(packet: P.Packet) -> void:
 		return
 	_confirmed = p
 	_event_cursor = maxi(_event_cursor,p.event_sequence)
+	_baseline_edit_ticks={}
 	_last_snapshot_tick = packet.tick
 	_input_clock.observe(packet.tick,Time.get_ticks_usec())
 	_snapshot_time_ms = Time.get_ticks_msec()

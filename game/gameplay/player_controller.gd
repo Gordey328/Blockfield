@@ -209,7 +209,6 @@ func _physics_process(delta: float) -> void:
 	shape.rotation.y = -rotation.y
 	_tool_clock = maxf(0.0, _tool_clock - delta)
 	_kick = lerpf(_kick, 0.0, minf(delta * 12.0, 1.0))
-	_restore_block_health()
 	if session.health <= 0.0 and session.team < 2: _death_elapsed += delta
 	_sync_camera_mode()
 	if session.team >= 2:
@@ -734,12 +733,6 @@ func _on_blocks_changed(changes: Array) -> void:
 	for change in changes:
 		_block_health.erase(change.cell)
 
-func _restore_block_health() -> void:
-	for cell in _block_health.keys():
-		if session.session_time - float(_block_health[cell].time) >= 10.0:
-			_block_health.erase(cell)
-			world.set_block_damaged(cell,false)
-
 func _shoot() -> void:
 	if session is NETWORK_SESSION: return
 	if not session.fire():
@@ -842,7 +835,7 @@ func _damage_block(cell: Vector3i, damage: float, allow_destroy: bool = true) ->
 		_block_health.erase(cell)
 		return true
 	else:
-		_block_health[cell] = {"health":maxf(0.0, health),"time":session.session_time}
+		_block_health[cell] = {"health":maxf(0.0, health)}
 		world.set_block_damaged(cell,health < 100.0)
 	return false
 

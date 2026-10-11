@@ -38,7 +38,7 @@ func _run() -> void:
 	app.set_process(false)
 	player.set_physics_process(false)
 	app.hud.set_menu_visible(false)
-	for scenario in ["test_jump_order", "test_movement_friction", "test_build_contracts", "test_block_recovery", "test_offline_grenade_input", "test_tool_depletion", "test_ray_occlusion", "test_melee_contract", "test_match_reset"]:
+	for scenario in ["test_jump_order", "test_movement_friction", "test_build_contracts", "test_persistent_block_damage", "test_offline_grenade_input", "test_tool_depletion", "test_ray_occlusion", "test_melee_contract", "test_match_reset"]:
 		var completed: Variant = await call(scenario)
 		check(completed == true, "scenario reaches completion: " + scenario)
 	release_actions()
@@ -323,9 +323,13 @@ func test_build_contracts() -> bool:
 	check(player._cube_line(Vector3i(8,9,9),Vector3i(20,20,20),4) == reverse_expected, "reversed cube-line preserves native odd crossing asymmetry")
 	return true
 
-func test_block_recovery() -> bool:
+func test_persistent_block_damage() -> bool:
+	# User-approved gameplay policy: surviving damage has no automatic recovery.
+	# Actual map edits/reset clear it; an unchanged RGB write is not replacement.
+	release_actions()
 	app.reset_lab()
 	player.set_physics_process(false)
+	player.controls_enabled = true
 	var cell := Vector3i(40,4,40)
 	var color := VoxelWorld.pack_color(Color8(255,128,65))
 	world.set_block(cell,color)
@@ -334,24 +338,29 @@ func test_block_recovery() -> bool:
 		"first surviving hit marks visual damage without modifying canonical RGB")
 	check(world.get_render_color(cell,color).is_equal_approx(Color8(127,64,32)),
 		"damaged color uses the source byte mask and integer half on every RGB channel")
-	session.update(9.0)
-	player._damage_block(cell,35)
-	session.update(2.0)
-	player._restore_block_health()
-	check(world.is_block_damaged(cell), "latest hit refreshes both damage appearance and recovery deadline")
-	player._damage_block(cell,50)
-	check(world.get_block(cell) == 0, "block recovery deadline is refreshed by latest hit rather than first hit")
-	check(not world.is_block_damaged(cell), "destruction clears the damaged-block appearance")
+	session.update(10.01)
+	player._physics_process(1.0/60.0)
+	check(world.is_block_damaged(cell) and world.get_render_color(cell,color).is_equal_approx(Color8(127,64,32)),
+		"actual controller retains the damaged appearance beyond the former ten-second deadline")
 	world.set_block(cell,color)
-	player._damage_block(cell,35)
-	session.update(10.0)
-	player._restore_block_health()
-	check(not world.is_block_damaged(cell) and world.get_render_color(cell,color).is_equal_approx(Color8(255,128,65)),
-		"exact ten-second recovery restores the original appearance")
+	check(world.is_block_damaged(cell), "identical RGB write is a no-op and cannot heal a damaged voxel")
+	session.update(3600.0)
+	player._physics_process(1.0/60.0)
+	check(world.is_block_damaged(cell) and world.get_block(cell) == color,
+		"long idle retains damaged appearance and canonical RGB")
 	player._damage_block(cell,70)
-	check(world.get_block(cell) != 0, "surviving damaged block regains full100HP after ten seconds")
+	check(world.get_block(cell) == 0, "later hit uses the previous65HP even after long idle and an unchanged-color write")
+	check(not world.is_block_damaged(cell), "destruction clears the damaged-block appearance")
+	session.update(3600.0)
+	player._physics_process(1.0/60.0)
+	check(world.get_block(cell) == 0 and not world.is_block_damaged(cell), "destroyed cells remain air after long idle")
+	world.set_block(cell,color)
+	check(not world.is_block_damaged(cell) and world.get_render_color(cell,color).is_equal_approx(Color8(255,128,65)),
+		"actual recreation with the same RGB starts with healthy appearance")
+	player._damage_block(cell,70)
+	check(world.get_block(cell) != 0 and world.is_block_damaged(cell), "same-color recreated voxel starts with fresh100HP")
 	player._damage_block(cell,35)
-	check(world.get_block(cell) == 0, "post-recovery damage still accumulates normally")
+	check(world.get_block(cell) == 0, "damage accumulates independently on the recreated voxel")
 	world.set_block(cell,color)
 	player._damage_block(cell,35)
 	world.set_block(cell,VoxelWorld.pack_color(Color.RED))
@@ -359,11 +368,19 @@ func test_block_recovery() -> bool:
 	player._damage_block(cell,70)
 	check(world.get_block(cell) != 0, "external cell replacement clears stale health from previous voxel")
 	check(world.is_block_damaged(cell), "new replacement voxel gets its own damaged state")
-	player._clear_action_state()
-	check(not world.is_block_damaged(cell) and world.get_block(cell) == VoxelWorld.pack_color(Color.RED),
-		"offline action reset clears damage appearance while retaining base voxel color")
-	player._damage_block(cell,70)
-	check(world.get_block(cell) != 0, "offline reset clears the previous logical damage as well as appearance")
+	app.reset_lab()
+	player.set_physics_process(false)
+	var reset_cell := Vector3i(40,3,40)
+	var reset_color: int = world.get_block(reset_cell)
+	check(reset_color != 0, "explicit reset fixture selects a real baseline terrain voxel")
+	player._damage_block(reset_cell,70)
+	check(world.is_block_damaged(reset_cell), "baseline terrain is damaged before explicit map/session reset")
+	app.reset_lab()
+	player.set_physics_process(false)
+	check(not world.is_block_damaged(reset_cell) and world.get_block(reset_cell) == reset_color,
+		"explicit map/session reset restores the baseline healthy appearance")
+	player._damage_block(reset_cell,70)
+	check(world.get_block(reset_cell) != 0, "explicit map/session reset clears logical damage and starts with100HP")
 	return true
 
 func grenade_action(pressed: bool) -> void:

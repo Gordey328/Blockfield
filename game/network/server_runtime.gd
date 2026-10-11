@@ -144,7 +144,7 @@ func _new_stream(job: RefCounted, welcome: P.Packet, phase: String = "prepare") 
 	return {"phase":phase,"started":Time.get_ticks_msec(),"queued_at":Time.get_ticks_msec(),"job":job,"sender":null,"end_job":null,
 		"welcome":welcome,"pending":[],"changes":0,"bytes":0,"delta_sender":null,"delta_packet":null,
 		"map_sequence":simulation.data.map_sequence,"barrier_sequence":-1,"end_packet":null,"bulk_packet":null,"latest_snapshot":null,
-		"event_packets":[],"event_bytes":0,"bulk_window":TRANSFER.BulkWindow.new()}
+		"event_packets":[],"event_bytes":0,"baseline_tick":simulation.tick,"bulk_window":TRANSFER.BulkWindow.new()}
 
 func start(game_port: int = 0, map_port: int = 0, bind_address: String = "127.0.0.1") -> Dictionary:
 	if running or simulation == null: return {"ok":false,"error":"runtime not configured or already active"}
@@ -258,7 +258,7 @@ func _game_packet(connection: int, packet: BlockfieldProtocol.Packet, now: int) 
 		_inputs[id] = queue
 		_shot_ticks.erase(id)
 		simulation.clear_controls(id)
-		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id)
+		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id,simulation.get_damaged_blocks(),simulation.tick)
 		_next_snapshot_id += 1
 		if not prepared.ok:
 			_close_game(connection,"map preparation failed",now)
@@ -387,7 +387,7 @@ func _poll_stream(id: int, now: int) -> void:
 	if s.phase == "queued":
 		if _loading_count() >= MAX_JOINS: return
 		s.started = now
-		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id)
+		var prepared := TRANSFER.prepare_sender(simulation.data,_next_snapshot_id,simulation.get_damaged_blocks(),simulation.tick)
 		_next_snapshot_id += 1
 		if not prepared.ok:
 			_close_game(view.game,"reset map preparation failed",now)
@@ -395,6 +395,7 @@ func _poll_stream(id: int, now: int) -> void:
 		s.job = prepared.job
 		s.phase = "prepare"
 		s.map_sequence = simulation.data.map_sequence
+		s.baseline_tick = simulation.tick
 	if s.phase == "prepare":
 		var progress: Dictionary = s.job.advance(2)
 		if not progress.ok:
@@ -428,7 +429,7 @@ func _poll_stream(id: int, now: int) -> void:
 					_close_game(view.game,"map chunk failed",now)
 					return
 				if chunk.done:
-					var prepared: Dictionary = s.sender.prepare_end(simulation.data)
+					var prepared: Dictionary = s.sender.prepare_end(simulation.data,simulation.tick)
 					if not prepared.ok:
 						_close_game(view.game,"map barrier preparation failed",now)
 						return
@@ -531,7 +532,6 @@ func step_once() -> bool:
 			_shot_ticks[id] = mini(taken.input_tick,simulation.tick)
 	simulation.step_fixed(commands,_shot_ticks)
 	if simulation.tick != next_tick: return false
-	simulation.data.last_tick = simulation.tick
 	for id: int in _inputs:
 		var actor := simulation.get_actor(id)
 		if actor != null and actor.spawn_generation != _inputs[id].generation:
@@ -569,13 +569,13 @@ func step_once() -> bool:
 		if not _snapshot_factory.is_valid():
 			for id: int in _streams:
 				if _streams[id].phase != "live": continue
-				var prepared := CODEC.prepare_shared(simulation.snapshot_for(id))
+				var prepared := CODEC.prepare_shared(simulation.snapshot_for(id,false))
 				if prepared.ok: shared = prepared.frame
 				break
 		for id: int in _streams.keys():
 			if _streams[id].phase != "live": continue
 			var packet: Variant = null
-			if _snapshot_factory.is_valid(): packet = _snapshot_factory.call(simulation.snapshot_for(id))
+			if _snapshot_factory.is_valid(): packet = _snapshot_factory.call(simulation.snapshot_for(id,false))
 			else:
 				var prepared := P.prepare_state(shared,simulation.get_actor(id))
 				if prepared.ok: packet = prepared.frame
@@ -610,8 +610,20 @@ func _route_events(events: Array[Dictionary], now: int) -> void:
 		return
 	for id: int in _streams.keys():
 		var s: Dictionary = _streams[id]
-		if s.phase != "live": continue
-		var prepared := P.prepare_events(common.events,id)
+		if s.phase=="queued": continue # No frozen baseline exists yet.
+		var stream_events: EVENTS.SharedEvents = common.events
+		if s.phase!="live":
+			var loading_hits: Array[Dictionary] = []
+			for event: Dictionary in events:
+				if event.tick>s.baseline_tick and (event.type=="block_hit" or (event.type=="spade_block_hit" and not event.dig)):
+					loading_hits.append(event)
+			if loading_hits.is_empty(): continue
+			var retained: Dictionary = EVENTS.prepare_shared(simulation.epoch,loading_hits)
+			if not retained.ok:
+				_close_game(registry.session_view(id).game,"event serialization failed",now)
+				continue
+			stream_events=retained.events
+		var prepared := P.prepare_events(stream_events,id)
 		if not prepared.ok:
 			_close_game(registry.session_view(id).game,"event serialization failed",now)
 			continue
@@ -624,7 +636,7 @@ func _route_events(events: Array[Dictionary], now: int) -> void:
 			s.event_bytes += bytes
 
 func _full_snapshot(id: int) -> BlockfieldProtocol.Packet:
-	var converted := CODEC.from_snapshot(simulation.snapshot_for(id))
+	var converted := CODEC.from_snapshot(simulation.snapshot_for(id,false))
 	if not converted.ok:
 		_close_game(registry.session_view(id).game,"state serialization failed",Time.get_ticks_msec())
 		return null

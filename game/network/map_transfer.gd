@@ -9,6 +9,7 @@ const MAX_TRANSACTIONS: int = 128
 const BULK_WINDOW_CHUNKS: int = 8
 const MAX_CLOCK_MS: int = 0x7ffffffffffe0000
 const APPLY_RECORDS: int = 512
+const DAMAGE_FLAG: int = 0x02000000
 
 class Helpers extends RefCounted:
 	static func result(ok: bool, error: String = "", status: String = "") -> Dictionary:
@@ -22,13 +23,31 @@ class Helpers extends RefCounted:
 		var accepted: Dictionary = result(true); accepted["now"] = now; return accepted
 	static func map_valid(data: DATA) -> bool:
 		return data!=null and DATA.valid_dimensions(data.dimensions) and data.blocks.size()==data.dimensions.x*data.dimensions.y*data.dimensions.z and u32(data.epoch,true) and u32(data.map_sequence) and u32(data.last_tick)
-	static func hash_map(data: DATA) -> Dictionary:
+	static func copy_damage(data: DATA, damaged: Dictionary) -> Dictionary:
+		var cells: Dictionary[Vector3i,bool] = {}
+		for cell: Variant in damaged:
+			if typeof(cell)!=TYPE_VECTOR3I or typeof(damaged[cell])!=TYPE_BOOL or not damaged[cell] or cell.y<=1 or not data.is_in_bounds(cell) or data.get_block(cell)==0:
+				return result(false,"invalid baseline damage cell")
+			cells[cell]=true
+		var accepted: Dictionary = result(true); accepted["damage_cells"]=cells; return accepted
+	static func snapshot_range(data: DATA, offset: int, count: int, damaged: Dictionary[Vector3i,bool]) -> PackedByteArray:
+		var bytes: PackedByteArray = data.snapshot_range(offset,count)
+		if bytes.is_empty() or damaged.is_empty(): return bytes
+		# Chunk boundaries may split a BE cell. Only its first byte carries the flag.
+		var first: int = ceili(float(offset)/4.0)
+		var last: int = ceili(float(offset+count)/4.0)
+		for index: int in range(first,last):
+			var column: int = index/data.dimensions.y
+			var cell: Vector3i = Vector3i(column%data.dimensions.x,index%data.dimensions.y,column/data.dimensions.x)
+			if damaged.has(cell): bytes[index*4-offset]|=DAMAGE_FLAG>>24
+		return bytes
+	static func hash_map(data: DATA, damaged: Dictionary[Vector3i,bool] = {}) -> Dictionary:
 		if not map_valid(data): return result(false,"invalid map state")
 		var context: HashingContext = HashingContext.new()
 		if context.start(HashingContext.HASH_SHA256)!=OK: return result(false,"hash initialization failed")
 		var count: int = data.blocks.size()*4
 		for offset: int in range(0,count,PROTOCOL.CHUNK_BYTES):
-			var bytes: PackedByteArray = data.snapshot_range(offset,mini(PROTOCOL.CHUNK_BYTES,count-offset))
+			var bytes: PackedByteArray = snapshot_range(data,offset,mini(PROTOCOL.CHUNK_BYTES,count-offset),damaged)
 			if bytes.is_empty() or context.update(bytes)!=OK: return result(false,"invalid baseline color or hash update")
 		var accepted: Dictionary = result(true); accepted["hash"] = context.finish(); return accepted
 	static func change_valid(change: Dictionary, dimensions: Vector3i) -> bool:
@@ -159,6 +178,7 @@ class BulkWindow extends RefCounted:
 
 class BaselineSender extends RefCounted:
 	var _data: DATA
+	var _damage_cells: Dictionary[Vector3i,bool] = {}
 	var _snapshot_id: int
 	var _hash: PackedByteArray
 	var _index: int = 0
@@ -172,7 +192,7 @@ class BaselineSender extends RefCounted:
 		var offset: int = _index*PROTOCOL.CHUNK_BYTES
 		if offset>=total:
 			var done: Dictionary = Helpers.result(true); done["done"]=true; return done
-		var bytes: PackedByteArray = _data.snapshot_range(offset,mini(PROTOCOL.CHUNK_BYTES,total-offset))
+		var bytes: PackedByteArray = Helpers.snapshot_range(_data,offset,mini(PROTOCOL.CHUNK_BYTES,total-offset),_damage_cells)
 		if bytes.is_empty(): return Helpers.result(false,"frozen map changed or invalid")
 		var packet: PROTOCOL.Packet = PROTOCOL.make_packet(PROTOCOL.Kind.MAP_CHUNK,{"snapshot_id":_snapshot_id,"index":_index,"total_size":total,"data":bytes},_data.epoch,_data.last_tick,_data.map_sequence)
 		_index+=1
@@ -184,19 +204,21 @@ class BaselineSender extends RefCounted:
 		var accepted: Dictionary = Helpers.result(true)
 		accepted["packet"]=PROTOCOL.make_packet(PROTOCOL.Kind.MAP_END,{"snapshot_id":_snapshot_id,"map_sequence":barrier.map_sequence,"hash":hashed.hash},barrier.epoch,barrier.last_tick,barrier.map_sequence)
 		return accepted
-	func prepare_end(barrier: DATA) -> Dictionary:
-		if _data==null or not Helpers.map_valid(barrier) or barrier.epoch!=_data.epoch or barrier.dimensions!=_data.dimensions or barrier.map_sequence<_data.map_sequence or barrier.last_tick<_data.last_tick: return Helpers.result(false,"invalid barrier identity")
+	func prepare_end(barrier: DATA, snapshot_tick: int = -1) -> Dictionary:
+		var tick: int = barrier.last_tick if snapshot_tick==-1 and barrier!=null else snapshot_tick
+		if _data==null or not Helpers.map_valid(barrier) or barrier.epoch!=_data.epoch or barrier.dimensions!=_data.dimensions or barrier.map_sequence<_data.map_sequence or tick<_data.last_tick: return Helpers.result(false,"invalid barrier identity")
 		var job: HashPreparationJob = HashPreparationJob.new()
-		var started: Dictionary = job._start(barrier,_snapshot_id,"end",true)
+		var started: Dictionary = job._start(barrier,_snapshot_id,"end",true,{},tick)
 		if not started.ok: return started
 		var accepted: Dictionary = Helpers.result(true); accepted["job"]=job; return accepted
-	func cancel() -> void: _data=null; _hash=PackedByteArray()
+	func cancel() -> void: _data=null; _damage_cells={}; _hash=PackedByteArray()
 	func get_stats() -> Dictionary:
-		return {"retained_map_bytes":_data.blocks.size()*4 if _data!=null else 0,"next_chunk":_index,"snapshot_id":_snapshot_id}
+		return {"retained_map_bytes":_data.blocks.size()*4 if _data!=null else 0,"damage_cells":_damage_cells.size(),"baseline_tick":_data.last_tick if _data!=null else 0,"next_chunk":_index,"snapshot_id":_snapshot_id}
 
 class HashPreparationJob extends RefCounted:
 	## Explicit bounded work between frames. Frozen container setup is synchronous.
 	var _data: DATA
+	var _damage_cells: Dictionary[Vector3i,bool] = {}
 	var _context: HashingContext
 	var _hash: PackedByteArray = PackedByteArray()
 	var _index: int = 0
@@ -205,10 +227,16 @@ class HashPreparationJob extends RefCounted:
 	var _state: String = "idle"
 	var _error: String = ""
 	var _freeze_usec: int = 0
-	func _start(data: DATA, snapshot_id: int, purpose: String, freeze: bool) -> Dictionary:
+	func _start(data: DATA, snapshot_id: int, purpose: String, freeze: bool, damaged: Dictionary = {}, snapshot_tick: int = -1) -> Dictionary:
 		if not Helpers.map_valid(data) or not Helpers.u32(snapshot_id,true) or purpose not in ["sender","end","hash"]: return Helpers.result(false,"invalid hash preparation identity")
+		if snapshot_tick!=-1 and (not freeze or not Helpers.u32(snapshot_tick) or snapshot_tick<data.last_tick): return Helpers.result(false,"invalid frozen snapshot tick")
 		var started: int = Time.get_ticks_usec()
 		_data=data.frozen_copy() as DATA if freeze else data
+		if snapshot_tick!=-1: _data.last_tick=snapshot_tick
+		if purpose=="sender":
+			var copied: Dictionary = Helpers.copy_damage(_data,damaged)
+			if not copied.ok: return _fail(copied.error)
+			_damage_cells=copied.damage_cells
 		_freeze_usec=Time.get_ticks_usec()-started
 		_snapshot_id=snapshot_id; _purpose=purpose; _context=HashingContext.new()
 		if _context.start(HashingContext.HASH_SHA256)!=OK: return _fail("hash initialization failed")
@@ -224,14 +252,14 @@ class HashPreparationJob extends RefCounted:
 		for work: int in range(max_chunks):
 			var offset: int = _index*PROTOCOL.CHUNK_BYTES
 			if offset>=total: break
-			var bytes: PackedByteArray = _data.snapshot_range(offset,mini(PROTOCOL.CHUNK_BYTES,total-offset))
+			var bytes: PackedByteArray = Helpers.snapshot_range(_data,offset,mini(PROTOCOL.CHUNK_BYTES,total-offset),_damage_cells)
 			if bytes.is_empty() or _context.update(bytes)!=OK: return _fail("invalid baseline color or hash update")
 			_index+=1
 		if _index*PROTOCOL.CHUNK_BYTES>=total: _hash=_context.finish(); _context=null; _state="ready"
 		return _progress()
 	func take_sender() -> Dictionary:
 		if _state!="ready" or _purpose!="sender": return Helpers.result(false,"no prepared sender")
-		var sender: BaselineSender = BaselineSender.new(); sender._data=_data; sender._snapshot_id=_snapshot_id; sender._hash=_hash
+		var sender: BaselineSender = BaselineSender.new(); sender._data=_data; sender._damage_cells=_damage_cells; sender._snapshot_id=_snapshot_id; sender._hash=_hash
 		var accepted: Dictionary = Helpers.result(true); accepted["sender"]=sender; _release(); _state="consumed"; return accepted
 	func take_packet() -> Dictionary:
 		if _state!="ready" or _purpose!="end": return Helpers.result(false,"no prepared barrier")
@@ -240,15 +268,16 @@ class HashPreparationJob extends RefCounted:
 	func take_hash() -> Dictionary:
 		if _state!="ready" or _purpose!="hash": return Helpers.result(false,"no prepared hash")
 		var accepted: Dictionary = Helpers.result(true); accepted["hash"]=_hash; _release(); _state="consumed"; return accepted
-	func _release() -> void: _data=null; _context=null; _hash=PackedByteArray()
+	func _release() -> void: _data=null; _damage_cells={}; _context=null; _hash=PackedByteArray()
 	func cancel() -> void: _release(); _state="cancelled"
 	func get_stats() -> Dictionary:
-		return {"status":_state,"processed_chunks":_index,"retained_map_bytes":_data.blocks.size()*4 if _data!=null else 0,"freeze_usec":_freeze_usec}
+		return {"status":_state,"processed_chunks":_index,"retained_map_bytes":_data.blocks.size()*4 if _data!=null else 0,"damage_cells":_damage_cells.size(),"baseline_tick":_data.last_tick if _data!=null else 0,"freeze_usec":_freeze_usec}
 
 class SnapshotDecodeJob extends RefCounted:
 	## Private byte->packed decode. No map is returned until every color validates.
 	var _bytes: PackedByteArray = PackedByteArray()
 	var _data: DATA
+	var _damage_cells: Dictionary[Vector3i,bool] = {}
 	var _descriptor: Dictionary = {}
 	var _index: int = 0
 	var _state: String = "idle"
@@ -278,9 +307,18 @@ class SnapshotDecodeJob extends RefCounted:
 			for index: int in range(_index,last):
 				var offset: int = index*4
 				decoded[index-_index]=(_bytes[offset]<<24)|(_bytes[offset+1]<<16)|(_bytes[offset+2]<<8)|_bytes[offset+3]
-		# Native conversion never bypasses canonical color validation.
-		for value: int in decoded:
-			if not DATA.valid_color(value): return _fail("invalid canonical baseline colors")
+		# Wire-only flag is stripped before canonical data is ever exposed.
+		for local: int in range(decoded.size()):
+			var value: int = decoded[local]
+			var canonical: int = value & ~DAMAGE_FLAG
+			if not DATA.valid_color(canonical): return _fail("invalid canonical baseline colors")
+			if value&DAMAGE_FLAG:
+				var index: int = _index+local
+				var column: int = index/_data.dimensions.y
+				var cell: Vector3i = Vector3i(column%_data.dimensions.x,index%_data.dimensions.y,column/_data.dimensions.x)
+				if canonical==0 or cell.y<=1: return _fail("damage flag requires a solid editable baseline cell")
+				_damage_cells[cell]=true
+			decoded[local]=canonical
 		_data.blocks.append_array(decoded)
 		_index=last
 		if _index==total: _bytes=PackedByteArray(); _descriptor={}; _state="ready"
@@ -289,10 +327,10 @@ class SnapshotDecodeJob extends RefCounted:
 		cancel(); _state="failed"; _error=reason; return _progress()
 	func take_data() -> Dictionary:
 		if _state!="ready": return Helpers.result(false,"no decoded map")
-		var accepted: Dictionary = Helpers.result(true); accepted["data"]=_data; _data=null; _state="consumed"; return accepted
-	func cancel() -> void: _bytes=PackedByteArray(); _data=null; _descriptor={}; _state="cancelled"
+		var accepted: Dictionary = Helpers.result(true); accepted["data"]=_data; accepted["damage_cells"]=_damage_cells; _data=null; _damage_cells={}; _state="consumed"; return accepted
+	func cancel() -> void: _bytes=PackedByteArray(); _data=null; _damage_cells={}; _descriptor={}; _state="cancelled"
 	func get_stats() -> Dictionary:
-		return {"status":_state,"decoded_cells":_index,"baseline_bytes":_bytes.size(),"allocated_map_bytes":_data.blocks.size()*4 if _data!=null else 0}
+		return {"status":_state,"decoded_cells":_index,"damage_cells":_damage_cells.size(),"baseline_bytes":_bytes.size(),"allocated_map_bytes":_data.blocks.size()*4 if _data!=null else 0}
 
 class TransactionApplyJob extends RefCounted:
 	## Joining stage only: all validation precedes bounded private writes.
@@ -301,16 +339,21 @@ class TransactionApplyJob extends RefCounted:
 	var _identity: Dictionary = {}
 	var _changes: Array = []
 	var _seen: Dictionary[Vector3i,bool] = {}
+	var _damage_cells: Dictionary[Vector3i,bool] = {}
+	var _edit_ticks: Dictionary[Vector3i,int] = {}
+	var _track_edits: bool = false
+	var _new_edit_cells: int = 0
 	var _index: int = 0
 	var _state: String = "idle"
 	var _error: String = ""
-	func _start(data: DATA, transaction: Dictionary) -> Dictionary:
+	func _start(data: DATA, transaction: Dictionary, damage_cells: Dictionary[Vector3i,bool] = {}, edit_ticks: Dictionary[Vector3i,int] = {}, track_edits: bool = false) -> Dictionary:
 		if not Helpers.map_valid(data) or data.read_only: return Helpers.result(false,"private map is not writable")
 		for key: String in ["epoch","map_sequence","transaction_id","tick","actor_id","action_id"]:
 			if not Helpers.u32(transaction.get(key),key in ["epoch","map_sequence","transaction_id"]): return Helpers.result(false,"invalid private transaction identity")
 		if data.map_sequence==PROTOCOL.U32_MAX or transaction.epoch!=data.epoch or transaction.map_sequence!=data.map_sequence+1 or transaction.tick<data.last_tick or typeof(transaction.get("dimensions"))!=TYPE_VECTOR3I or transaction.dimensions!=data.dimensions: return Helpers.result(false,"private transaction baseline mismatch")
 		if typeof(transaction.get("changes"))!=TYPE_ARRAY or transaction.changes.is_empty() or transaction.changes.size()>MAX_BUFFERED_CHANGES or transaction.changes.size()>data.blocks.size(): return Helpers.result(false,"invalid private transaction count")
 		_data=data; _changes=transaction.changes
+		_damage_cells=damage_cells; _edit_ticks=edit_ticks; _track_edits=track_edits
 		_identity={"epoch":transaction.epoch,"map_sequence":transaction.map_sequence,"tick":transaction.tick,"dimensions":transaction.dimensions}
 		_state="validate"; return _progress()
 	func _progress() -> Dictionary:
@@ -326,6 +369,9 @@ class TransactionApplyJob extends RefCounted:
 				if typeof(value)!=TYPE_DICTIONARY or not Helpers.change_valid(value,_data.dimensions): return _fail("invalid private transaction change")
 				if _seen.has(value.cell): return _fail("duplicate private transaction cell")
 				if _data.get_block(value.cell)!=value.before: return _fail("private before-color conflict; resync")
+				if _track_edits and not _edit_ticks.has(value.cell):
+					_new_edit_cells+=1
+					if _edit_ticks.size()+_new_edit_cells>MAX_BUFFERED_CHANGES: return _fail("join edit history requires baseline")
 				_seen[value.cell]=true
 			_index=last
 			if _index==_changes.size(): _state="write"; _index=0
@@ -333,16 +379,18 @@ class TransactionApplyJob extends RefCounted:
 		for index: int in range(_index,last):
 			var change: Dictionary = _changes[index]
 			_data.blocks[_data.index(change.cell)]=change.after
+			_damage_cells.erase(change.cell)
+			if _track_edits: _edit_ticks[change.cell]=_identity.tick
 			_seen.erase(change.cell)
 		_index=last
 		if _index==_changes.size():
 			_data.map_sequence=_identity.map_sequence; _data.last_tick=_identity.tick
-			_data=null; _changes=[]; _identity={}; _state="ready"
+			_data=null; _changes=[]; _identity={}; _damage_cells={}; _edit_ticks={}; _state="ready"
 		return _progress()
 	func _fail(reason: String) -> Dictionary:
 		cancel(); _state="failed"; _error=reason; return _progress()
 	func cancel() -> void:
-		_data=null; _changes=[]; _identity={}; _seen.clear(); _state="cancelled"
+		_data=null; _changes=[]; _identity={}; _damage_cells={}; _edit_ticks={}; _seen.clear(); _state="cancelled"
 	func get_stats() -> Dictionary:
 		return {"status":_state,"processed_records":_index,"retained_records":_changes.size(),"validation_cells":_seen.size()}
 
@@ -373,6 +421,8 @@ var _bytes: PackedByteArray = PackedByteArray()
 var _hash_context: HashingContext
 var _next_chunk: int = 0
 var _stage: DATA
+var _damage_cells: Dictionary[Vector3i,bool] = {}
+var _edit_ticks: Dictionary[Vector3i,int] = {}
 var _decode_job: SnapshotDecodeJob
 var _final_hash_job: HashPreparationJob
 var _apply_job: TransactionApplyJob
@@ -408,6 +458,7 @@ func cancel(reason: String = "cancelled") -> void:
 
 func _clear() -> void:
 	_descriptor={}; _bytes=PackedByteArray(); _hash_context=null; _next_chunk=0; _stage=null; _chunk_ack=null
+	_damage_cells={}; _edit_ticks={}
 	if _decode_job!=null: _decode_job.cancel()
 	if _final_hash_job!=null: _final_hash_job.cancel()
 	if _apply_job!=null: _apply_job.cancel()
@@ -514,7 +565,9 @@ func _advance(max_chunks: int) -> Dictionary:
 	if _decode_job!=null:
 		var decoded: Dictionary = _decode_job.advance(max_chunks)
 		if not decoded.ok: return _fail(decoded.error)
-		if decoded.done: _stage=_decode_job.take_data().data; _decode_job=null
+		if decoded.done:
+			var completed: Dictionary = _decode_job.take_data()
+			_stage=completed.data; _damage_cells=completed.damage_cells; _decode_job=null
 		return Helpers.result(true,"",_state)
 	if _stage==null: return Helpers.result(true,"",_state)
 	if not _transactions.is_empty():
@@ -522,7 +575,7 @@ func _advance(max_chunks: int) -> Dictionary:
 		if not _end.is_empty() and (transaction.map_sequence>_end.map_sequence or transaction.tick>_end.tick): return _fail("buffered delta exceeds barrier")
 		if _apply_job==null:
 			_apply_job=TransactionApplyJob.new()
-			var started: Dictionary = _apply_job._start(_stage,transaction)
+			var started: Dictionary = _apply_job._start(_stage,transaction,_damage_cells,_edit_ticks,true)
 			if not started.ok: return _fail(started.error)
 		var applied: Dictionary = _apply_job.advance(max_chunks)
 		if not applied.ok: return _fail(applied.error)
@@ -542,7 +595,8 @@ func _advance(max_chunks: int) -> Dictionary:
 	if _final_hash_job.take_hash().hash!=_end.hash: return _fail("barrier SHA256 mismatch")
 	_final_hash_job=null
 	_stage.last_tick=_end.tick
-	_ready={"ok":true,"error":"","data":_stage,"epoch":_descriptor.epoch,"snapshot_id":_descriptor.snapshot_id,"map_sequence":_end.map_sequence,"tick":_end.tick,"hash":_end.hash.duplicate()}
+	_ready={"ok":true,"error":"","data":_stage,"damage_cells":_damage_cells,"damage_tick":_descriptor.tick,"edit_ticks":_edit_ticks,"epoch":_descriptor.epoch,"snapshot_id":_descriptor.snapshot_id,"map_sequence":_end.map_sequence,"tick":_end.tick,"hash":_end.hash.duplicate()}
+	_damage_cells={}; _edit_ticks={}
 	_stage=null; _assembler.cancel(); _assembler=null; _transactions.clear(); _bytes=PackedByteArray(); _hash_context=null; _descriptor={}; _end={}; _buffered_bytes=0; _buffered_changes=0; _started_ms=-1
 	_state="ready"; return Helpers.result(true,"",_state)
 
@@ -562,25 +616,26 @@ func get_chunk_ack() -> Dictionary:
 func get_stats() -> Dictionary:
 	var partial: Dictionary = _assembler.get_stats() if _assembler!=null else {}
 	var decoded: Dictionary = _decode_job.get_stats() if _decode_job!=null else {}
-	return {"status":_state,"error":_error,"expected_epoch":_expected_epoch,"snapshot_id":_descriptor.get("snapshot_id",0),"baseline_bytes":_bytes.size()+decoded.get("baseline_bytes",0),"staged_map_bytes":(_stage.blocks.size()*4 if _stage!=null else 0)+decoded.get("allocated_map_bytes",0),"ready_map_bytes":_ready.data.blocks.size()*4 if not _ready.is_empty() else 0,"next_chunk":_next_chunk,"transactions":_transactions.size(),"retained_wire_bytes":_buffered_bytes+partial.get("wire_bytes",0),"retained_changes":_buffered_changes+partial.get("changes",0),"partial_transaction":partial.get("partial",false),"pending_work":_has_work(),"work_phase":"decode" if _decode_job!=null else ("hash" if _final_hash_job!=null else ("apply_"+_apply_job.get_stats().status if _apply_job!=null else ("apply" if not _transactions.is_empty() and _stage!=null else "waiting"))),"decoded_cells":decoded.get("decoded_cells",0),"apply_records":_apply_job.get_stats().processed_records if _apply_job!=null else 0,"hash_chunks":_final_hash_job.get_stats().processed_chunks if _final_hash_job!=null else 0}
+	var damage_cells: int = _damage_cells.size()+int(decoded.get("damage_cells",0))+(_ready.damage_cells.size() if not _ready.is_empty() else 0)
+	var edit_cells: int = _edit_ticks.size()+(_ready.edit_ticks.size() if not _ready.is_empty() else 0)
+	return {"status":_state,"error":_error,"expected_epoch":_expected_epoch,"damage_cells":damage_cells,"edit_cells":edit_cells,"snapshot_id":_descriptor.get("snapshot_id",0),"baseline_bytes":_bytes.size()+decoded.get("baseline_bytes",0),"staged_map_bytes":(_stage.blocks.size()*4 if _stage!=null else 0)+decoded.get("allocated_map_bytes",0),"ready_map_bytes":_ready.data.blocks.size()*4 if not _ready.is_empty() else 0,"next_chunk":_next_chunk,"transactions":_transactions.size(),"retained_wire_bytes":_buffered_bytes+partial.get("wire_bytes",0),"retained_changes":_buffered_changes+partial.get("changes",0),"partial_transaction":partial.get("partial",false),"pending_work":_has_work(),"work_phase":"decode" if _decode_job!=null else ("hash" if _final_hash_job!=null else ("apply_"+_apply_job.get_stats().status if _apply_job!=null else ("apply" if not _transactions.is_empty() and _stage!=null else "waiting"))),"decoded_cells":decoded.get("decoded_cells",0),"apply_records":_apply_job.get_stats().processed_records if _apply_job!=null else 0,"hash_chunks":_final_hash_job.get_stats().processed_chunks if _final_hash_job!=null else 0}
 
 static func hash_data(data: DATA) -> Dictionary: return Helpers.hash_map(data)
 
-static func prepare_sender(data: DATA, snapshot_id: int) -> Dictionary:
+static func prepare_sender(data: DATA, snapshot_id: int, damaged: Dictionary = {}, snapshot_tick: int = -1) -> Dictionary:
 	var job: HashPreparationJob = HashPreparationJob.new()
-	var started: Dictionary = job._start(data,snapshot_id,"sender",true)
+	var started: Dictionary = job._start(data,snapshot_id,"sender",true,damaged,snapshot_tick)
 	if not started.ok: return started
 	var accepted: Dictionary = Helpers.result(true); accepted["job"]=job; return accepted
 
-static func make_sender(data: DATA, snapshot_id: int) -> Dictionary:
-	if not Helpers.map_valid(data) or not Helpers.u32(snapshot_id,true): return Helpers.result(false,"invalid baseline sender identity")
-	var sender: BaselineSender = BaselineSender.new()
-	# Explicit independent packed container; physical copy cost may occur on write.
-	sender._data=data.frozen_copy() as DATA; sender._snapshot_id=snapshot_id
-	var hashed: Dictionary = Helpers.hash_map(sender._data)
-	if not hashed.ok: sender.cancel(); return hashed
-	sender._hash=hashed.hash
-	var accepted: Dictionary = Helpers.result(true); accepted["sender"]=sender; return accepted
+static func make_sender(data: DATA, snapshot_id: int, damaged: Dictionary = {}, snapshot_tick: int = -1) -> Dictionary:
+	var prepared: Dictionary = prepare_sender(data,snapshot_id,damaged,snapshot_tick)
+	if not prepared.ok: return prepared
+	while true:
+		var progress: Dictionary = prepared.job.advance(32)
+		if not progress.ok: return progress
+		if progress.done: return prepared.job.take_sender()
+	return Helpers.result(false,"baseline preparation did not complete")
 
 static func make_delta_sender(transaction: Dictionary) -> Dictionary:
 	var validated: Dictionary = Helpers.transaction_valid(transaction)

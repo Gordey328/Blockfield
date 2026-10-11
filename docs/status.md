@@ -33,6 +33,19 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Frozen validation
 
+- Active change (2026-10-11): user requests permanent damage, removing source
+  automatic ten-second regeneration. [ADR0010](decisions/0010-persistent-block-damage.md)
+  replaces that policy. Root owns Main/compatibility/socket+browser tests/docs,
+  integration, sole engine/release lease. Gameplay specialist owns Controller/source
+  fixture; renderer specialist owns MatchSimulation/match fixture; UI specialist
+  owns bounded damaged-baseline MapTransfer/Replica/Runtime and transfer fixture.
+  Mobile/grenade/scoreboard changes remain intact. All three confirmed file ownership;
+  specialists do not run the engine/publish. New client/server identity is network5 /
+  authority5-no-block-regen. Current published dcee15f remains the previous source
+  recovery behavior until the new validated release is published. Specialist handoffs
+  are complete; MatchSimulation226/0 passed. Next: frozen parser/affected checks,
+  Web+server export, interactive/public verification. Unrelated effects/pooling work
+  in another chat stays outside this change's staged files and frozen release.
 - Fidelity repairs: recorded frozen0898d6c successful full prefix through mobile-controls;
   dcee15f import/mobile-look144/0/damage31/0; test-only07b3a1b socket-damage32/0;
   dcee15f shaped latency459/0, runtime/server-launcher smoke and Web export. `game/`
@@ -260,6 +273,28 @@ the user's chosen deployment scope is Docker/configuration preparation.
   validation/publication works. No billing settings changed. [Publication decision](decisions/0003-pages-publication.md).
 
 ## Commands and durable records
+
+### Active camera/effects repair (2026-10-11)
+
+Chat `01a1290b-3aaf-79f3-bc3d-a98e264cf7f5` owns only
+`game/presentation/openspades_effects.gd`, `tests/presentation/test_effects.gd`,
+new `tests/browser/effects_probe.gd` and `tools/export_effects_probe.py`, plus its
+effects evidence document. Specialist `effects_pool` owns those first two files;
+`grenade_audit` and `shot_hotspots` completed read-only source audits.
+Main/controller/world/network/persistent-block-damage changes belong to the other
+active chat; this repair does not edit or publish those files. Engine checks use
+isolated `.cache/effects-probe-*` projects, not the shared import cache.
+
+Confirmed: grenade kick precedes the source170m cutoff; clamped0.1s effect time
+prolongs shake and particle lifetime during hitches. Native near-amplitude saturation
+is intentional source behavior. Effects have active caps but no reuse pools.
+Actual-Main baseline WebGL held-SMG wall scenario reached512 particles and571 draw
+calls. Pooling, fragment MultiMesh batching and elapsed-time repair are in progress;
+no final validation or publication claim yet. An early stale-pool-snapshot test
+failed3 assertions after the fixture advanced to the newer reload contract; preserve
+`.cache/effects-probe-pooled/.cache/logs/effects-pool.log` and rerun matching files.
+Next action: freeze matching effects/fixture, run parser/behavioral/GPU/Web checks,
+record results and return specialist leases.
 
 Python: `C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`.
 Godot: `.tools/godot/Godot_v4.7.2-stable_win64_console.exe`.

@@ -134,7 +134,7 @@ func get_block(cell: Vector3i) -> int:
 
 func set_block_damaged(cell: Vector3i, damaged: bool) -> void:
 	# Damage is a presentation state; authoritative RGB/occupancy and map history
-	# remain unchanged. The adapter owns health and the source recovery deadline.
+	# remain unchanged. Health persists until an explicit edit/reset; no timer.
 	if damaged and get_block(cell) == 0:
 		return
 	if damaged == _damaged_blocks.has(cell):

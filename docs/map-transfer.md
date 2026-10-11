@@ -11,7 +11,7 @@
 | `consume(packet: Protocol.Packet, now_ms=-1)` | `{ok,error,status}`; accepts BEGIN/CHUNK/DELTA/END and validates with codec. Default incremental mode retains work for later polls. |
 | `poll(now_ms=-1,max_chunks=1)` | Checks monotonic clock and join/partial-transaction deadlines, then performs one work phase with budget `1..32`. Caller must invoke regularly. |
 | `cancel(reason="cancelled")` | Releases baseline, staging, complete/partial deltas, barrier and unclaimed ready data. Use on disconnect. Explicit reset required afterwards. |
-| `take_ready()` | Once: `{ok,error,data:VoxelData,epoch,snapshot_id,map_sequence,tick,hash}`. Does not adopt into a World or spawn a player. |
+| `take_ready()` | Once: `{ok,error,data:VoxelData,damage_cells,damage_tick,edit_ticks,epoch,snapshot_id,map_sequence,tick,hash}`. Damage is a separate cell mask; `damage_tick` is the captured baseline tick and `edit_ticks` tracks catch-up replacements. Does not adopt into a World or spawn a player. |
 | `get_chunk_ack()` | `{ok,error,packet?}`: owned copy of the latest accepted cumulative MAP_CHUNK_ACK. Tiny metadata survives ready handoff, and clears on failure/cancel/reset. Caller sends once per drained bulk batch. |
 | `get_stats()` | Status/error, expected epoch/snapshot, baseline/staged/ready map bytes, next chunk, retained encoded-delta counts, `pending_work`, `work_phase`, decoded cells, apply records and final hash chunks. |
 
@@ -27,7 +27,7 @@ The helper adds family semantics to the existing 24-byte protocol header; it doe
 
 | Family | Header epoch | Header tick | Header sequence |
 |---|---|---|---|
-| BEGIN | Positive match epoch | Frozen baseline `last_tick` | Baseline `map_sequence` |
+| BEGIN | Positive match epoch | Captured simulation tick (frozen copy's `last_tick`) | Baseline `map_sequence` |
 | CHUNK | Same as BEGIN | Same as BEGIN | Same as BEGIN |
 | CHUNK_ACK | Same as BEGIN | Same as BEGIN | Same as BEGIN |
 | DELTA | Bound match epoch | Transaction tick | Transaction `map_sequence`, identical across fragments |
@@ -45,7 +45,7 @@ Once END is known, deltas above its target sequence/tick are rejected by this lo
 
 ## Baseline representation, hashes and compression
 
-Only compression enum **0 (raw)** is implemented. Each cell is exactly four big-endian bytes: air `0`, solid `0x01RRGGBB`. Cell order is Godot-axis Y-fast:
+Only compression enum **0 (raw)** is implemented. Each cell is exactly four big-endian bytes: air `0`, healthy solid `0x01RRGGBB`, damaged solid `0x03RRGGBB`. Wire-only bit `0x02000000` marks partial damage above bedrock and is removed during bounded decoding. Flagged air/bedrock and unknown color flags fail. `VoxelData` always contains canonical air/solid values. Cell order is Godot-axis Y-fast:
 
 ```text
 index = y + dimensions.y * (x + dimensions.x * z)
@@ -61,7 +61,18 @@ The loading job does not rerun terrain support or reconstruct historical falling
 
 Compression enum **1 (reserved Zstandard)** returns an explicit unsupported error before baseline buffer allocation. Godot's [PackedByteArray documentation](https://docs.godotengine.org/en/4.7/classes/class_packedbytearray.html) provides fixed-size `decompress(buffer_size, mode)`, but bounded `decompress_dynamic(max_output_size, mode)` accepts only brotli/gzip/deflate. This slice does not claim validated handling of hostile/truncated Zstandard frames, consume arbitrary Variant serialization, or call an unbounded decompressor. Raw transfer is usable; compressed throughput remains a later, separately verified optimization.
 
-The baseline currently carries only cells/dimensions/epoch/sequence/tick. Custom water/wade metadata, map title, actors, projectiles, block-health state and objectives are not encoded here; standard `VoxelData` water defaults apply until a future metadata contract exists.
+BEGIN hashes the encoded flagged baseline; END hashes canonical terrain. They can
+differ even without terrain edits. Sender freezes the damage mask and map at the
+actual simulation tick without rewriting authority terrain's last-edit tick.
+Catch-up edits remove masks and record their latest per-cell ticks under a32768-cell
+cap. Replica exposes damage before its existing map-install callback, then accepts
+bounded loading-hit replay before the initial state, filtering baseline/stale edits.
+Those replayed hits update tint without historical sounds/particles. Failure,
+cancel, disconnect and epoch reset release masks/edit guards with the map.
+
+The baseline carries cells/damage mask/dimensions/epoch/sequence/tick. Exact HP stays
+on the authority. Custom water/wade metadata, map title, actors, projectiles and
+objectives are not encoded here; standard `VoxelData` water defaults apply.
 
 ## Budgets and lifecycle
 
@@ -99,9 +110,9 @@ Apply only once. `World.set_map_data(ready.data,title)` adopts the same writable
 
 ## Lazy sender helpers
 
-Production `prepare_sender(data,snapshot_id)` validates metadata, obtains an independent `frozen_copy()` packed container, then returns `{ok,error,job:HashPreparationJob}` without scanning the entire map. `job.advance(max_chunks=1)` hashes `1..32` ranges and returns `{ok,error,status,done}`. Only `done=true` permits `job.take_sender()`; the once-only result is `{ok,error,sender:BaselineSender}`. `cancel()` releases the map/context; `get_stats()` includes processed chunks, retained logical map bytes and frozen-container setup microseconds. No full serialized baseline or array of all chunks is created.
+Production `prepare_sender(data,snapshot_id,damaged={},snapshot_tick=-1)` validates metadata, obtains an independent `frozen_copy()` packed container and validates/copies the sparse damage mask. An explicit tick changes only the frozen copy. It then returns `{ok,error,job:HashPreparationJob}` without scanning the entire map. `job.advance(max_chunks=1)` hashes `1..32` ranges and returns `{ok,error,status,done}`. Only `done=true` permits `job.take_sender()`; the once-only result is `{ok,error,sender:BaselineSender}`. `cancel()` releases the map/context; `get_stats()` includes processed chunks, retained logical map bytes and frozen-container setup microseconds. No full serialized baseline or array of all chunks is created.
 
-`BaselineSender.begin_packet()` returns BEGIN. `next_chunk()` returns `{ok,error,done,packet?}` and serializes one range only; the caller sends or queues that packet before requesting more. `prepare_end(barrier_data)` validates epoch/dimensions/nonregressing sequence/tick, freezes the barrier and returns a preparation job; advance it over subsequent frames and call `take_packet()` once to obtain `{ok,error,packet:MAP_END}`. The barrier snapshot captures its sequence/tick at preparation time even if the authority keeps editing. End may be prepared before all chunks have been emitted. `cancel()` releases the sender's frozen map, and `get_stats()` reports retained map bytes/next index. A cancelled sender returns null BEGIN and failed chunk calls.
+`BaselineSender.begin_packet()` returns BEGIN. `next_chunk()` returns `{ok,error,done,packet?}` and serializes one range only; the caller sends or queues that packet before requesting more. `prepare_end(barrier_data,snapshot_tick=-1)` validates epoch/dimensions/nonregressing sequence/tick, freezes the barrier and returns a preparation job; advance it over subsequent frames and call `take_packet()` once to obtain `{ok,error,packet:MAP_END}`. The barrier snapshot captures its sequence/tick at preparation time even if the authority keeps editing. End may be prepared before all chunks have been emitted. `cancel()` releases the sender's frozen map, and `get_stats()` reports retained map bytes/next index. A cancelled sender returns null BEGIN and failed chunk calls.
 
 `make_sender(data,snapshot_id)`, `BaselineSender.end_packet(barrier_data)` and `hash_data(data)` remain explicit synchronous tools for small fixtures/offline work. They scan all map ranges in the calling operation and must not be used in a production fixed-tick/poll loop.
 

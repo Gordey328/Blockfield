@@ -2,6 +2,9 @@
 
 Accepted 2026-10-10 for the authorized W07 fidelity repair.
 
+The ten-second recovery policy below is superseded by the user's2026-10-11
+request for permanent damage; see [ADR0010](0010-persistent-block-damage.md).
+
 OpenSpades v0.1.3 `GLMapChunk.cpp:247-252` halves terrain RGB channels, rounding
 down, whenever the packed block health is below100. `World.cpp:102-115,190-195`
 restores health ten seconds after the latest hit. RGB, occupancy and map edits

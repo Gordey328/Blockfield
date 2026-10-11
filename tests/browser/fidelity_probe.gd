@@ -34,7 +34,7 @@ func _ready() -> void:
 	panel.position = Vector2(12,90)
 	panel.size = Vector2(280,160)
 	overlay.add_child(panel)
-	for spec in [["Block damage +10s recovery",_block],["Held grenade regression",_grenade],["Scoreboard colors ON",_colors.bind(true)],["Scoreboard colors OFF",_colors.bind(false)]]:
+	for spec in [["Block damage: no regeneration",_block],["Held grenade regression",_grenade],["Scoreboard colors ON",_colors.bind(true)],["Scoreboard colors OFF",_colors.bind(false)]]:
 		var button := Button.new()
 		button.text = spec[0]
 		button.focus_mode = Control.FOCUS_NONE
@@ -96,10 +96,22 @@ func _block() -> void:
 	await get_tree().create_timer(.05).timeout
 	Input.action_release("primary")
 	check(app.world.is_block_damaged(CELL) and app.world.get_block(CELL)==0x01ff8041,"real controller shot darkens surviving block")
-	phase = "Block: damaged (wait10 seconds)"
-	await get_tree().create_timer(10.2).timeout
-	check(not app.world.is_block_damaged(CELL) and app.world.get_block(CELL)==0x01ff8041,"latest-hit ten-second recovery preserves original RGB")
-	phase = "Block: recovered"
+	phase = "Block: damaged (wait12 seconds)"
+	await get_tree().create_timer(12.0).timeout
+	check(app.world.is_block_damaged(CELL) and app.world.get_block(CELL)==0x01ff8041,"twelve idle seconds keep damage and darkening")
+	phase = "Block: still damaged after12 seconds"
+	await get_tree().create_timer(5.0).timeout
+	phase = "Block: next shot"
+	Input.action_press("primary")
+	await get_tree().create_timer(.05).timeout
+	Input.action_release("primary")
+	check(app.world.get_block(CELL)==0 and not app.world.is_block_damaged(CELL),"second real rifle shot destroys block using retained damage")
+	phase = "Block: destroyed (wait12 seconds)"
+	await get_tree().create_timer(12.0).timeout
+	check(app.world.get_block(CELL)==0,"destroyed block stays air after twelve seconds")
+	app.world.set_block(CELL,0x01ff8041)
+	check(not app.world.is_block_damaged(CELL),"explicit same-color replacement starts healthy")
+	phase = "Block: explicit replacement healthy"
 	busy = false
 
 func _grenade() -> void:

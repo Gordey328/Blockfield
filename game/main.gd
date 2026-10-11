@@ -7,8 +7,6 @@ var _network_resume := PackedByteArray()
 var _network_objective_signature := ""
 var _network_status := ""
 var _impact_colors: Dictionary[Vector3i,int] = {}
-const BLOCK_DAMAGE_RECOVERY_TICKS := 600
-var _network_block_damage_ticks: Dictionary[Vector3i,int] = {}
 var _network_block_edit_ticks: Dictionary[Vector3i,int] = {}
 var _network_damage_baseline_tick := -1
 var _network_raise_key := ""
@@ -966,7 +964,6 @@ func _clear_network_views() -> void:
 	for node: Node3D in _grenade_nodes.values(): node.queue_free()
 	_grenade_nodes.clear()
 	_impact_colors.clear()
-	_network_block_damage_ticks.clear()
 	_network_block_edit_ticks.clear()
 	_network_damage_baseline_tick = -1
 	if world != null: world.clear_block_damage()
@@ -979,14 +976,15 @@ func _clear_network_views() -> void:
 func _network_install_map(data: VoxelData) -> bool:
 	_clear_network_views()
 	if world.set_map_data(data,"Network map",true) != OK: return false
-	_network_damage_baseline_tick = data.last_tick
+	_network_damage_baseline_tick = network_client.baseline_damage_tick
+	for cell: Vector3i in network_client.baseline_damage_cells:
+		world.set_block_damaged(cell,true)
 	return true
 
 func _network_apply_map(transaction: Dictionary) -> bool:
 	if not world.apply_map_transaction(transaction).ok: return false
 	for change: Dictionary in transaction.changes:
 		if change.before != 0: _impact_colors[change.cell] = change.before
-		_network_block_damage_ticks.erase(change.cell)
 		# Deltas precede queued effects. A hit on an earlier incarnation of this
 		# voxel must not darken a replacement, including edits in the same tick.
 		if change.after != 0: _network_block_edit_ticks[change.cell] = int(transaction.tick)
@@ -998,30 +996,19 @@ func _network_mark_block_damage(event: Dictionary) -> void:
 	if event.get("dig",false) or event.get("predicted",false): return
 	var cell: Vector3i = event.cell
 	var hit_tick: int = event.tick
-	var confirmed_tick: int = (session as NETWORK_SESSION).confirmed_tick
 	if cell.y <= 1 or world.get_block(cell) == 0 \
 			or hit_tick <= _network_damage_baseline_tick \
-			or hit_tick <= _network_block_edit_ticks.get(cell,-1) \
-			or confirmed_tick > hit_tick + BLOCK_DAMAGE_RECOVERY_TICKS: return
-	_network_block_damage_ticks[cell] = maxi(hit_tick,_network_block_damage_ticks.get(cell,-1))
+			or hit_tick <= _network_block_edit_ticks.get(cell,-1): return
 	world.set_block_damaged(cell,true)
-
-func _network_restore_block_colors() -> void:
-	var confirmed_tick: int = (session as NETWORK_SESSION).confirmed_tick
-	for cell: Vector3i in _network_block_damage_ticks.keys():
-		if confirmed_tick > _network_block_damage_ticks[cell] + BLOCK_DAMAGE_RECOVERY_TICKS \
-				or world.get_block(cell) == 0:
-			world.set_block_damaged(cell,false)
-			_network_block_damage_ticks.erase(cell)
-	for cell: Vector3i in _network_block_edit_ticks.keys():
-		if confirmed_tick > _network_block_edit_ticks[cell] + BLOCK_DAMAGE_RECOVERY_TICKS:
-			_network_block_edit_ticks.erase(cell)
 
 func _poll_network() -> void:
 	network_client.poll()
 	(session as NETWORK_SESSION).update(0)
 	for event: Dictionary in network_client.drain_events():
-		if event.get("predicted",false):
+		if event.get("baseline_damage_only",false):
+			# Joining catch-up restores persistent tint without replaying hit FX.
+			_network_mark_block_damage(event)
+		elif event.get("predicted",false):
 			(session as NETWORK_SESSION).ingest_cosmetic(event)
 			player.apply_network_cosmetic(event)
 			_network_cosmetic_audio(str(event.kind),event,true)
@@ -1047,7 +1034,6 @@ func _poll_network() -> void:
 
 func _network_update_views() -> void:
 	if network_client.status != "live": return
-	_network_restore_block_colors()
 	var owner := network_client.get_owner_state()
 	if owner != null and owner.is_alive():
 		var key := "%d:%d:%d:%d" % [owner.match_epoch,owner.spawn_generation,owner.displayed_tool,owner.displayed_weapon]

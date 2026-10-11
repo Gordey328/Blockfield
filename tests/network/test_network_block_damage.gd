@@ -8,6 +8,7 @@ const DATA = preload("res://world/voxel_data.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const COMPAT = preload("res://network/compatibility.gd")
 const CELL := Vector3i(12,6,12)
+const LOADING_CELL := Vector3i(14,6,12)
 const RGB := 0x01ff8041
 var assertions := 0
 var failures := 0
@@ -40,9 +41,9 @@ func wait_for(predicate: Callable,message: String) -> bool:
 	var result: bool = predicate.call()
 	check(result,message+" ("+app.network_client.status+", "+app.network_client.last_error+")")
 	return result
-func event_at(actor: SharedPlayerState, tick: int, type: String = "block_hit", dig: bool = false) -> Dictionary:
+func event_at(actor: SharedPlayerState, tick: int, type: String = "block_hit", dig: bool = false, cell: Vector3i = CELL) -> Dictionary:
 	var source_id := "%d:%d:%d:%d"%[actor.match_epoch,actor.player_id,actor.spawn_generation,maxi(1,actor.event_sequence)]
-	var details := {"cell":CELL,"position":Vector3(CELL)+Vector3(.5,.5,1),"normal":Vector3i.BACK,"source_event_id":source_id}
+	var details := {"cell":cell,"position":Vector3(cell)+Vector3(.5,.5,1),"normal":Vector3i.BACK,"source_event_id":source_id}
 	if type == "spade_block_hit": details.dig = dig
 	else: details.pellet = 0
 	return RULES.event(actor,tick,type,details).duplicate(true)
@@ -53,8 +54,9 @@ func _run() -> void:
 	check(data.clear(Vector3i(32,16,32),1909)==OK,"canonical small map")
 	data.seed_box(Vector3i.ZERO,Vector3i(32,4,32),0x01608070)
 	data.seed_box(Vector3i(12,4,12),Vector3i(13,8,13),RGB)
+	data.seed_box(Vector3i(14,4,12),Vector3i(15,8,13),RGB)
 	check(simulation.configure(data,"0.75","ctf").ok,"source-shaped authority")
-	check(server.configure(simulation,COMPAT.build_hash(),COMPAT.rules_hash()),"unchanged wire/rules identity")
+	check(server.configure(simulation,COMPAT.build_hash(),COMPAT.rules_hash()),"matching no-regeneration wire/rules identity")
 	var ports := server.start()
 	check(ports.ok,"real WebSocket listener")
 	app = SCENE.instantiate()
@@ -87,35 +89,55 @@ func _run() -> void:
 	check(not simulation._damage_block(actor,CELL,20.0),"second surviving authority hit")
 	var last_hit: int = simulation.tick
 	simulation._record_events([event_at(actor,last_hit)])
-	await wait_for(func():return app._network_block_damage_ticks.get(CELL,-1)==last_hit,"repeated confirmed firearm hit extends timer")
-	var recovery_deadline := Time.get_ticks_msec()+20000
-	while simulation.tick<=first_hit+603 and Time.get_ticks_msec()<recovery_deadline: await pump()
-	check(simulation.tick>first_hit+603,"authority recovery probe reaches its bounded deadline")
-	check(app.world.is_block_damaged(CELL) and simulation._block_health.has(CELL),"first-hit ten seconds cannot clear a more recent hit")
-	await wait_for(func():return not app.world.is_block_damaged(CELL),"confirmed latest-hit ten-second recovery")
-	check(not simulation._block_health.has(CELL) and app.world.get_render_color(CELL,RGB).is_equal_approx(Color8(255,128,65)),"authority recovery and displayed source RGB agree")
-	# Exact tick boundary and late/replacement policy are exercised directly on
-	# the same Main adapter, independently of20Hz snapshot quantization.
-	var tick: int = simulation.tick+10
-	app.session.confirmed_tick = tick+600
-	app._network_mark_block_damage(event_at(actor,tick))
-	app._network_restore_block_colors()
-	check(app.world.is_block_damaged(CELL),"600th tick retains damage like MatchSimulation")
-	app.session.confirmed_tick = tick+601
-	app._network_restore_block_colors()
-	check(not app.world.is_block_damaged(CELL),"601st confirmed tick restores")
-	app._network_mark_block_damage(event_at(actor,tick))
-	check(not app.world.is_block_damaged(CELL),"already expired queued effect cannot re-darken")
-	app.session.confirmed_tick = simulation.tick
-	check(not simulation._damage_block(actor,CELL,35.0),"new source damage after recovery")
+	await wait_for(func():return app.world.is_block_damaged(CELL),"repeated surviving hit keeps darkened presentation")
+	var idle_deadline := Time.get_ticks_msec()+22000
+	while simulation.tick<=last_hit+660 and Time.get_ticks_msec()<idle_deadline: await pump()
+	check(simulation.tick>last_hit+660,"real authority crosses the former ten-second recovery window")
+	check(app.world.is_block_damaged(CELL) and simulation._block_health.get(CELL,{}).get("health")==25.0,"idle preserves both displayed damage and authoritative25HP")
+	check(app.world.get_render_color(CELL,RGB).is_equal_approx(Color8(127,64,32)),"source darkened RGB persists after long idle")
+	# Late delivery on the current incarnation must not expire with time.
+	var confirmed: int = app.session.confirmed_tick
+	app.session.confirmed_tick = last_hit+60000
+	app.world.set_block_damaged(CELL,false)
+	app._network_mark_block_damage(event_at(actor,last_hit))
+	app._network_update_views()
+	check(app.world.is_block_damaged(CELL),"valid old surviving-hit effect still darkens at an hour-later confirmed clock")
+	app.session.confirmed_tick = confirmed
+	# A resumed map baseline carries permanent damage without replaying old FX.
+	var owner_id: int = app.session.local_player_id()
+	app.network_disconnect()
+	await pump(2)
+	check(app.network_connect("ws://127.0.0.1:%d/play"%ports.game_port,"ws://127.0.0.1:%d/map"%ports.map_port,"Damage observer",false,true).ok,"same-actor resume starts fresh damage baseline")
+	if not await wait_for(func():return server._streams.has(owner_id) and server._streams[owner_id].phase=="baseline","resumed immutable baseline is in flight"):
+		await cleanup(); return
+	check(not simulation._damage_block(actor,LOADING_CELL,35.0),"new surviving damage occurs after baseline was frozen")
+	simulation._record_events([event_at(actor,simulation.tick,"block_hit",false,LOADING_CELL)])
+	if not await wait_for(func():return app.network_client.status=="live","resumed map/state barrier"):
+		await cleanup(); return
+	check(app.session.local_player_id()==owner_id and app.world.is_block_damaged(CELL),"resume preserves owner and restores permanent baseline darkening")
+	check(app.world.is_block_damaged(LOADING_CELL),"damage acquired during map loading is restored without healing")
+	check(simulation._block_health.get(CELL,{}).get("health")==25.0,"reconnect cannot heal authority health")
+	check(simulation._damage_block(actor,CELL,25.0),"later strike destroys using retained damage after idle and resume")
+	await wait_for(func():return app.world.get_block(CELL)==0,"authoritative destruction reaches real client")
+	check(not app.world.is_block_damaged(CELL) and not simulation._block_health.has(CELL),"destroyed cell clears health and mask")
+	await pump(8)
+	check(app.world.get_block(CELL)==0,"destroyed block stays air while authority keeps stepping")
+	simulation._commit(data.set_block(CELL,RGB,{"tick":simulation.tick,"actor_id":actor.player_id}))
+	await wait_for(func():return app.world.get_block(CELL)==RGB,"explicit same-color recreation reaches client")
+	check(not app.world.is_block_damaged(CELL),"new incarnation starts healthy")
+	check(not simulation._damage_block(actor,CELL,35.0),"recreated voxel starts100HP")
 	simulation._record_events([event_at(actor,simulation.tick)])
-	await wait_for(func():return app.world.is_block_damaged(CELL),"new damage after recovery crosses real wire")
+	await wait_for(func():return app.world.is_block_damaged(CELL),"new incarnation displays its own damage")
 	var old_tick: int = simulation.tick
 	simulation._commit(data.set_block(CELL,0x014080e0,{"tick":simulation.tick,"actor_id":actor.player_id}))
 	await wait_for(func():return app.world.get_block(CELL)==0x014080e0,"replacement delta adopted")
-	check(not app.world.is_block_damaged(CELL) and not app._network_block_damage_ticks.has(CELL),"replacement clears damage and timer")
+	check(not app.world.is_block_damaged(CELL) and not simulation._block_health.has(CELL),"replacement clears presentation and old health")
+	confirmed = app.session.confirmed_tick
+	app.session.confirmed_tick = old_tick+60000
+	app._network_update_views()
 	app._network_mark_block_damage(event_at(actor,old_tick))
-	check(not app.world.is_block_damaged(CELL),"queued old-incarnation hit cannot darken replacement")
+	check(not app.world.is_block_damaged(CELL),"old-incarnation guard does not expire and cannot darken replacement")
+	app.session.confirmed_tick = confirmed
 	await pump(2)
 	var predicted := event_at(actor,simulation.tick)
 	predicted.predicted = true
@@ -130,7 +152,7 @@ func _run() -> void:
 	simulation._record_events([event_at(actor,simulation.tick)])
 	await wait_for(func():return app.world.is_block_damaged(CELL),"new-incarnation hit is displayed")
 	app.network_disconnect()
-	check(not app.world.is_block_damaged(CELL) and app._network_block_damage_ticks.is_empty() and app._network_block_edit_ticks.is_empty(),"disconnect clears all transient presentation")
+	check(not app.world.is_block_damaged(CELL) and app._network_block_edit_ticks.is_empty(),"disconnect clears old-world presentation before a new baseline")
 	await cleanup()
 func cleanup() -> void:
 	app.network_disconnect()

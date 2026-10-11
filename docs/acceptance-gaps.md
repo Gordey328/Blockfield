@@ -120,3 +120,12 @@ The matching [Linux export and Docker/Caddy package](https://github.com/Gordey32
 Iteration2 still requires two independent exported browser clients through the chosen public WSS host: join during destruction, event/audio deduplication and private routing, team/class/spectator/follow, CTF/TC wins/automatic rounds, reconnect/reset while joining, and background-tab behavior. Current dirty diagnostic Web PCK `4581f1740b767e459158b29a2c15b42ed12a5f413374eeaac7bea8346600241b` passed partial two-browser/local-native scenarios: both73/73-chunk baselines, CTF rendering, cross-client chat, tool selection, spectator/class/respawn and same-actor reconnect. Four stale commands were retired without execution; no input rejection, heartbeat timeout or backpressure occurred before deliberate cleanup. Two clients showed10–11FPS here; this does not establish acceptable performance. The historical authority3 shaped test intentionally rejected350ms input backlog; authority4 now retires validated stale input up to120 ticks without extending executable history beyond15. See network-latency.md for separately measured revisions. Sustained capacity on original-size maps remains open. The capacity benchmark's zero failures do not establish a32-player60Hz service. Count-bounded codecs/history/transfers can still cause long synchronous pauses. Native loopback and trusted fixture edits are not WAN/browser/capacity acceptance. The user selected Docker/configuration preparation; public DNS/WSS cannot be accepted until a host is selected.
 
 The review deliberately does not invent server creation, remote chat recipients, AI combat or old AoS protocol compatibility as iteration-1 requirements. Multiplayer rows remain iteration 2.
+
+## Accepted block-damage override — 2026-10-11
+
+The user explicitly removed automatic regeneration after discussing its presence
+in the source. Permanent HP and darkening replace the original ten-second rule in
+both offline and shared network simulation. This is an accepted gameplay decision,
+not a missing recovery implementation. See [ADR0010](decisions/0010-persistent-block-damage.md).
+Current verification/release evidence is recorded separately from the historical
+2026-10-10 source-fidelity audit below.
