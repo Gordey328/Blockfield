@@ -28,7 +28,10 @@ Defaults are gain1, ADS gain1, normal Y, floating stick, size1 and fire-and-look
 
 `BlockfieldMobileControls.setup(player, hud)` accepts null HUD/player for isolated component use. `set_enabled`, `release_all`, `handle_touch` and `handle_drag` are the public lifecycle/input APIs. `get_hit_regions()` returns a copied dictionary of local logical-pixel rectangles: `move`, `look`, `primary`, `secondary`, `jump`, `crouch`, `sprint`, `reload`, four `tool_*` buttons, `map`, `view_toggle`, and `menu`.
 
-Public touch indices must be nonnegative. Nonfinite coordinates/deltas are rejected.
+Public touch indices accept the complete signed32 range used by Godot's Web
+`Touch.identifier` bridge. Each is normalized with `index & 0xffffffff` before
+ownership lookup, keeping native negative IDs distinct from internal mouse/no-owner
+markers. Nonfinite coordinates/deltas and out-of-range indices are rejected.
 The real `_input` adapter converts viewport positions through the inverse canvas
 transform. Each accepted DOWN initializes its owner's absolute-position history;
 look uses the difference between this pointer's consecutive positions and ignores
@@ -58,7 +61,9 @@ ordinary action behavior. Roles never change mid-gesture; look crossing buttons
 does not press them, and unclaimed drags cannot rotate the camera.
 
 Touch up/cancel releases that finger. Normal UP retains already queued look;
-cancel clears it. `release_all`, disable, viewport resize, application/window
+an engine event with `canceled=true` clears it. Pinned Godot maps browser DOM
+`touchcancel` to ordinary UP, so browser cancellation currently releases ownership
+without the stronger queued-look cancellation guarantee. `release_all`, disable, viewport resize, application/window
 focus loss and pause clear every claim, held action, movement vector and pending
 look. Pressing menu releases all controls before emitting `menu_requested`. The
 player permission gate also releases ownership when controls become disabled;

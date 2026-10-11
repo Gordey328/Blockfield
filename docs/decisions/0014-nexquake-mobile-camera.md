@@ -59,3 +59,13 @@ Concurrent optimization owns Main/audio/world/model/build files in the main
 checkout. This change is developed in `codex/nexquake-mobile` worktree. Integration
 must recheck its current checkpoint, preserve unrelated changes and validate the
 combined source before publication. Exact outcomes belong in status/mobile evidence.
+
+## iOS touch identifier boundary — 2026-10-11
+
+Godot Web forwards signed32 DOM touch identifiers unchanged. WebKit's iOS
+identifier generator starts from a random unsigned32 value, so valid native IDs
+can be negative after conversion. MobileControls accepts the entire signed32
+range and normalizes it to a nonnegative64 ownership key with `index & 0xffffffff`.
+Internal mouse `-1` and no-owner `-2` markers remain separate. The browser fixture
+dispatches authored DOM TouchEvents through JS/WASM rather than bypassing this
+boundary with only `Input.parse_input_event`; physical phone acceptance is separate.

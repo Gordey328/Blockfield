@@ -187,3 +187,34 @@ pending status insertion and left its helper/documents untouched. That insertion
 remains pending under its owning chat rather than being committed into this release.
 All own diagnostic/normal/public browser tabs and preview servers8877/8878 closed;
 other chats' tabs/processes were retained. Engine/release leases are returned.
+
+## iPhone combat input failure — 2026-10-11
+
+The user reports that Chrome on iPhone accepts main-menu taps but every combat
+control is dead. The prior positive-ID `Input.parse_input_event` probe and desktop
+preview did not cover native browser identifiers. The production public touch
+handlers rejected all negative indices. WebKit's iOS identifier generator seeds
+an unsigned32 counter with `arc4random()`, and DOM Touch/Godot Web carry signed32
+identifiers. High-bit IDs therefore hit that rejection. This is a proved input
+compatibility defect and a concrete explanation of the report; matching the
+individual phone still requires the user's retry.
+
+Primary source chain:
+
+- [WebKit random identifier seed](https://github.com/WebKit/WebKit/blob/5366911032cc8110a316535db51be0c961f9a708/Source/WebKit/UIProcess/ios/WKTouchEventsGestureRecognizer.mm#L67).
+- [Signed DOM Touch IDL](https://github.com/WebKit/WebKit/blob/5366911032cc8110a316535db51be0c961f9a708/Source/WebCore/dom/Touch.idl#L40).
+- [Pinned Godot JS i32 write](https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/platform/web/js/libs/library_godot_input.js#L593)
+  and [ScreenTouch index assignment](https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/platform/web/display_server_web.cpp#L713).
+
+The fix accepts signed32 IDs and maps each to its unsigned32 value in a Godot64-bit
+integer before owner lookup. Real IDs `-1/-2` cannot collide with internal mouse
+and no-owner markers. Finite-coordinate validation and immutable gesture roles
+remain intact. Only MobileControls changes in production; HUD, PlayerController,
+authority, world, audio and all completed optimization work retain their bytes.
+The browser fixture now dispatches DOM TouchEvents with IDs `-1`, `-2`, INT_MIN,
+INT_MAX and0 through the actual JS/WASM boundary. Engine-native cancellation and
+DOM cancellation are distinguished because pinned Godot maps DOM cancel to UP.
+
+Validation and publication are in progress in the existing managed mobile
+worktree. Specialist owns only the native mobile fixture; root owns the production
+fix, browser fixture, docs and release. Concurrent AoS research remains untouched.

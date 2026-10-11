@@ -34,6 +34,11 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Frozen validation
 
+- iPhone combat-input repair in progress: real browser DOM signed-ID probe
+  reproduced five failures/15 checks on baseline; native regression3090/13.
+  MobileControls now separates signed32 native IDs from internal mouse/empty
+  markers. Validation/publication run in the managed mobile worktree; AoS research
+  remains untouched. Details: [mobile evidence](nexquake-mobile-camera.md).
 - Integrated NexQuake mobile release (2026-10-11): clean frozen1c046655fef2 passed
   all85 registered native behavioral/latency invocations, import/parser, runtime,
   server-launcher smoke and Web export on pinned Godot4.7.2. Actual-Main exported
