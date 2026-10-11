@@ -27,6 +27,19 @@ shots/1 removal, p9560.3ms; this shallow-ground case includes protected terrain.
 Failed initial typed-array CPU fixture and zero-shot focus Web attempt are retained.
 Next: paired benchmark/export, frozen full checks and public verification.
 No new acceptance claims yet; [evidence](block-impact-performance.md).
+Second pass: first staged version reduced peak native slices but increased
+aggregate destruction CPU; Web wall p9549.5/64.6/85.2ms did not establish a
+consistent frame improvement. `impact_world` now owns an additional hot-loop
+optimization in Chunk; `impact_rules` owns only batched-fragment substep writes
+in `game/presentation/openspades_effects.gd` and a new regression fixture. The
+earlier Main probe remains byte-identical. Root retains engine/release ownership;
+specialists returned stable files and engine leases after serial validation.
+Final native destruction peaks11.867→4.636ms lab/10.032→4.049ms Title;
+aggregate CPU retains14–15% median overhead after eliminating the initial
+75–95% increase. Import/RGB4441/0/preparation53/0 and fragment29/0 plus
+existing effects32588/0 pass (three headless GPU skips). Frozen full validation
+and final Web comparison/publication follow. These measurements are diagnostic limits,
+not a claimed physical-device FPS result.
 
 ## Recover context
 

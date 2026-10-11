@@ -47,6 +47,10 @@ var _fragment_multimesh: MultiMesh
 var _fragment_material: StandardMaterial3D
 var _fragment_count := 0
 var _fragment_aspect := 1.0
+var _fragment_substeps: int = 0
+var _fragment_position_writes: int = 0
+var _fragment_scale_writes: int = 0
+var _fragment_color_writes: int = 0
 var _fast_shake := 0.0
 var _slow_shake := 0.0
 var _time := 0.0
@@ -127,7 +131,11 @@ func stats() -> Dictionary:
 		"pooled_particles": _particle_pool.size(),
 		"pooled_casings": _rifle_casing_pool.size() + _smg_casing_pool.size(),
 		"pooled_tracers": _tracer_pool.size(), "pooled_lights": _light_pool.size(),
-		"created_nodes": _created_nodes, "batched_particles": _fragment_count}
+		"created_nodes": _created_nodes, "batched_particles": _fragment_count,
+		"fragment_substeps": _fragment_substeps,
+		"fragment_position_writes": _fragment_position_writes,
+		"fragment_scale_writes": _fragment_scale_writes,
+		"fragment_color_writes": _fragment_color_writes}
 
 func clear() -> void:
 	stop_audio()
@@ -375,6 +383,10 @@ func update_effects(delta: float) -> void:
 	var steps := maxi(1, ceili(duration * 60.0))
 	for entry in _particles:
 		entry.frame_age = entry.age
+		if entry.batched:
+			# Respect external node/manager movement at the frame boundary. White
+			# fragments render through the MultiMesh; substeps need no sprite writes.
+			entry.frame_position = entry.node.global_position
 	for entry in _casings:
 		entry.frame_age = entry.age
 	var consumed := 0.0
@@ -429,7 +441,8 @@ func _spawn(position: Vector3, velocity: Vector3, color: Color, radius: float, l
 		"radius_damping": options.get("radius_damping", 1.0),
 		"fade_in": options.get("fade_in", 0.0), "fade_out": options.get("fade_out", 1.0),
 		"collision": options.get("collision", DELETE), "smoke": smoke,
-		"fps": options.get("fps", 60.0), "frame": 0, "batched": batched})
+		"fps": options.get("fps", 60.0), "frame": 0, "batched": batched,
+		"frame_position": node.global_position, "frame_color": color})
 
 func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float) -> void:
 	for index in range(_particles.size() - 1, -1, -1):
@@ -441,7 +454,9 @@ func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float
 			_particles.remove_at(index)
 			continue
 		var node: Sprite3D = entry.node
-		var previous := node.global_position
+		if entry.batched:
+			_fragment_substeps += 1
+		var previous: Vector3 = entry.frame_position if entry.batched else node.global_position
 		var next: Vector3 = previous + entry.velocity * delta
 		entry.velocity.y -= 32.0 * entry.gravity * delta
 		if entry.collision != IGNORE and _solid(next):
@@ -451,11 +466,15 @@ func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float
 				continue
 			entry.velocity = _bounce(previous, next, entry.velocity) * 0.36
 			next = previous
-		node.global_position = next
+		if entry.batched:
+			entry.frame_position = next
+		else:
+			node.global_position = next
 		entry.velocity *= pow(entry.damping, lifetime_delta)
 		entry.radius = maxf(0.0001, entry.radius + entry.growth * lifetime_delta)
 		entry.growth *= pow(entry.radius_damping, lifetime_delta)
-		node.scale = Vector3.ONE * entry.radius * 2.0
+		if not entry.batched:
+			node.scale = Vector3.ONE * entry.radius * 2.0
 		var fade := 1.0
 		if entry.fade_in > 0.0:
 			fade *= minf(entry.age / entry.fade_in, 1.0)
@@ -463,7 +482,10 @@ func _update_particles(delta: float, lifetime_delta: float, frame_elapsed: float
 			fade *= minf((entry.life - entry.age) / entry.fade_out, 1.0)
 		var color: Color = entry.color
 		color.a *= clampf(fade, 0.0, 1.0)
-		node.modulate = color
+		if entry.batched:
+			entry.frame_color = color
+		else:
+			node.modulate = color
 		if entry.smoke > 0:
 			frame = frame % (180 if entry.smoke == 1 else 48)
 			if frame != entry.frame:
@@ -690,6 +712,18 @@ func _sync_fragment_batch() -> void:
 	var to_local := _fragment_batch.global_transform.affine_inverse()
 	for entry in _particles:
 		if entry.batched and _fragment_count < _fragment_multimesh.instance_count:
+			# Mirror the final state once, preserving post-update node inspection
+			# and inherited transforms while eliminating invisible substep work.
+			var node: Sprite3D = entry.node
+			node.global_position = entry.frame_position
+			_fragment_position_writes += 1
+			var target_scale: Vector3 = Vector3.ONE * entry.radius * 2.0
+			if node.scale != target_scale:
+				node.scale = target_scale
+				_fragment_scale_writes += 1
+			if node.modulate != entry.frame_color:
+				node.modulate = entry.frame_color
+				_fragment_color_writes += 1
 			_write_fragment(_fragment_count, entry, billboard, to_local)
 			_fragment_count += 1
 	_fragment_multimesh.visible_instance_count = _fragment_count

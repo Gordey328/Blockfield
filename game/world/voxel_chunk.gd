@@ -126,63 +126,116 @@ func advance_rebuild(world: Node3D, material: Material, pending_colors: Dictiona
 	return false
 
 func _build_halo_column(world: Node3D) -> void:
-	var x := _job.base.x + _job.cursor % AO.HALO_SIZE - 1
-	var z := _job.base.z + _job.cursor / AO.HALO_SIZE - 1
-	var valid := x >= 0 and x < _job.size.x and z >= 0 and z < _job.size.z
-	var column := _job.size.y * (x + _job.size.x * z)
-	var ao_column := _job.size.y * (posmod(x, _job.size.x) + _job.size.x * posmod(z, _job.size.z)) if _job.native else column
-	var blocks: PackedInt32Array = world._blocks
-	var first := _job.cursor * AO.HALO_SIZE
+	var job := _job
+	var base := job.base
+	var size := job.size
+	var water := job.water
+	var native := job.native
+	var x := base.x + job.cursor % AO.HALO_SIZE - 1
+	var z := base.z + job.cursor / AO.HALO_SIZE - 1
+	var valid := x >= 0 and x < size.x and z >= 0 and z < size.z
+	var column := size.y * (x + size.x * z)
+	var ao_column := size.y * (posmod(x, size.x) + size.x * posmod(z, size.z)) if native else column
+	var map_blocks: PackedInt32Array = world._blocks
+	# Move ownership into locals before mutating. Merely assigning a packed
+	# member to a local would retain two references and copy it on each unit.
+	var blocks := job.blocks
+	var solids := job.solids
+	job.blocks = PackedInt32Array()
+	job.solids = PackedByteArray()
+	var first := job.cursor * AO.HALO_SIZE
 	for hy in range(AO.HALO_SIZE):
-		var y := _job.base.y + hy - 1
-		if valid and y >= 0 and y < _job.size.y:
-			_job.blocks[first + hy] = blocks[column + y]
+		var y := base.y + hy - 1
+		if valid and y >= 0 and y < size.y:
+			blocks[first + hy] = map_blocks[column + y]
 		if y < 0:
-			_job.solids[first + hy] = 1
-		elif y < _job.size.y and (valid or _job.native):
-			var sample_y := 1 if _job.water and y == 0 and _job.size.y > 1 else y
-			_job.solids[first + hy] = 1 if blocks[ao_column + sample_y] != 0 else 0
+			solids[first + hy] = 1
+		elif y < size.y and (valid or native):
+			var sample_y := 1 if water and y == 0 and size.y > 1 else y
+			solids[first + hy] = 1 if map_blocks[ao_column + sample_y] != 0 else 0
+	job.blocks = blocks
+	job.solids = solids
 
 func _build_mesh_column(world: Node3D) -> void:
-	var local_x := _job.cursor % CHUNK_SIZE
-	var local_z := _job.cursor / CHUNK_SIZE
+	var job := _job
+	var base := job.base
+	var water := job.water
+	var rebuild_collision := job.rebuild_collision
+	var blocks := job.blocks
+	var solids := job.solids
+	var vertices := job.vertices
+	var normals := job.normals
+	var colors := job.colors
+	var ao_uvs := job.ao_uvs
+	var indices := job.indices
+	var spans := job.spans
+	var tiles := job.tiles
+	var directions := job.directions
+	var collision_mask := job.collision_mask
+	var collision_slices := job.collision_slices
+	job.vertices = PackedVector3Array()
+	job.normals = PackedVector3Array()
+	job.colors = PackedColorArray()
+	job.ao_uvs = PackedVector2Array()
+	job.indices = PackedInt32Array()
+	job.spans = PackedInt32Array()
+	job.tiles = PackedByteArray()
+	job.directions = PackedByteArray()
+	job.collision_mask = PackedByteArray()
+	job.collision_slices = PackedByteArray()
+	var faces := job.faces
+	var local_x := job.cursor % CHUNK_SIZE
+	var local_z := job.cursor / CHUNK_SIZE
 	var column := AO.HALO_SIZE * (local_x + 1 + AO.HALO_SIZE * (local_z + 1))
 	for local_y in range(CHUNK_SIZE):
 		var index := column + local_y + 1
-		var packed := _job.blocks[index]
+		var packed := blocks[index]
 		if packed == 0:
 			continue
 		var local_cell := Vector3(local_x, local_y, local_z)
-		var color: Color = world.get_render_color(_job.base + Vector3i(local_x, local_y, local_z), packed)
-		var render_voxel := not (_job.water and _job.base.y + local_y == 0 and _job.blocks[index + 1] == 0)
-		var first_face := _job.faces
+		var color := Color()
+		var render_voxel := not (water and base.y + local_y == 0 and blocks[index + 1] == 0)
+		var first_face := faces
 		for face in range(6):
 			var air_index := index + HALO_FACE_OFFSETS[face]
-			if _job.blocks[air_index] != 0:
+			if blocks[air_index] != 0:
 				continue
-			if _job.rebuild_collision:
+			if rebuild_collision:
 				var slice: int = local_x if face < 2 else (local_y if face < 4 else local_z)
 				var u: int = local_y if face < 2 else local_x
 				var v: int = local_z if face < 4 else local_y
 				var plane := face * CHUNK_SIZE + slice
-				_job.collision_slices[plane] = 1
-				_job.collision_mask[plane * CHUNK_SIZE * CHUNK_SIZE + u + CHUNK_SIZE * v] = 1
+				collision_slices[plane] = 1
+				collision_mask[plane * CHUNK_SIZE * CHUNK_SIZE + u + CHUNK_SIZE * v] = 1
 			if not render_voxel:
 				continue
-			_job.faces += 1
-			var tile: int = AO.tile_id(_job.solids, air_index, face)
-			_job.tiles.append(tile)
-			_job.directions.append(face)
-			var first := _job.vertices.size()
+			if faces == first_face:
+				color = world.get_render_color(base + Vector3i(local_x, local_y, local_z), packed)
+			faces += 1
+			var tile: int = AO.tile_id(solids, air_index, face)
+			tiles.append(tile)
+			directions.append(face)
+			var first := vertices.size()
 			for corner in range(4):
-				_job.vertices.append(local_cell + CORNERS[face][corner])
-				_job.normals.append(Vector3(DIRECTIONS[face]))
-				_job.colors.append(Color(color.r, color.g, color.b, AO.face_corner(tile, face, corner)))
-				_job.ao_uvs.append(AO.face_uv(tile, face, corner))
+				vertices.append(local_cell + CORNERS[face][corner])
+				normals.append(Vector3(DIRECTIONS[face]))
+				colors.append(Color(color.r, color.g, color.b, AO.face_corner(tile, face, corner)))
+				ao_uvs.append(AO.face_uv(tile, face, corner))
 			for corner in TRIANGLES:
-				_job.indices.append(first + corner)
-		if _job.faces != first_face:
-			_job.spans[local_y + CHUNK_SIZE * (local_x + CHUNK_SIZE * local_z)] = (first_face << 3) | (_job.faces - first_face)
+				indices.append(first + corner)
+		if faces != first_face:
+			spans[local_y + CHUNK_SIZE * (local_x + CHUNK_SIZE * local_z)] = (first_face << 3) | (faces - first_face)
+	job.vertices = vertices
+	job.normals = normals
+	job.colors = colors
+	job.ao_uvs = ao_uvs
+	job.indices = indices
+	job.spans = spans
+	job.tiles = tiles
+	job.directions = directions
+	job.collision_mask = collision_mask
+	job.collision_slices = collision_slices
+	job.faces = faces
 
 func _publish(world: Node3D, material: Material, pending_colors: Dictionary) -> void:
 	# Hits/repaints arriving after a column was sampled must win at publication.
@@ -279,21 +332,25 @@ func _merge_collision_plane(plane: int) -> void:
 	# cells into rectangles, keeping holes, steps and outward triangle winding.
 	if _job.collision_slices[plane] == 0:
 		return
+	var mask := _job.collision_mask
+	var vertices := _job.collision_vertices
+	_job.collision_mask = PackedByteArray()
+	_job.collision_vertices = PackedVector3Array()
 	var face := plane / CHUNK_SIZE
 	var slice := plane % CHUNK_SIZE
 	var offset := plane * CHUNK_SIZE * CHUNK_SIZE
 	for v in range(CHUNK_SIZE):
 		for u in range(CHUNK_SIZE):
-			if _job.collision_mask[offset + u + CHUNK_SIZE * v] == 0:
+			if mask[offset + u + CHUNK_SIZE * v] == 0:
 				continue
 			var width := 1
-			while u + width < CHUNK_SIZE and _job.collision_mask[offset + u + width + CHUNK_SIZE * v] != 0:
+			while u + width < CHUNK_SIZE and mask[offset + u + width + CHUNK_SIZE * v] != 0:
 				width += 1
 			var height := 1
 			while v + height < CHUNK_SIZE:
 				var complete := true
 				for x in range(u, u + width):
-					if _job.collision_mask[offset + x + CHUNK_SIZE * (v + height)] == 0:
+					if mask[offset + x + CHUNK_SIZE * (v + height)] == 0:
 						complete = false
 						break
 				if not complete:
@@ -301,8 +358,10 @@ func _merge_collision_plane(plane: int) -> void:
 				height += 1
 			for y in range(v, v + height):
 				for x in range(u, u + width):
-					_job.collision_mask[offset + x + CHUNK_SIZE * y] = 0
+					mask[offset + x + CHUNK_SIZE * y] = 0
 			var origin := Vector3(slice, u, v) if face < 2 else (Vector3(u, slice, v) if face < 4 else Vector3(u, v, slice))
 			var scale := Vector3(1, width, height) if face < 2 else (Vector3(width, 1, height) if face < 4 else Vector3(width, height, 1))
 			for corner in TRIANGLES:
-				_job.collision_vertices.append(origin + CORNERS[face][corner] * scale)
+				vertices.append(origin + CORNERS[face][corner] * scale)
+	_job.collision_mask = mask
+	_job.collision_vertices = vertices

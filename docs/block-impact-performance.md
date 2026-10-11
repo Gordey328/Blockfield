@@ -56,3 +56,36 @@ to DOM input focus, so its result is excluded and retained in
 held-input/focus fixture; its script matches the current SHA exactly. The local
 HTTP directory alias initially named baseline-b was replaced by c for serving;
 the original b source/probe and invalid result remain available for reproduction.
+
+Paired native runs with no rendered browser active use the same benchmark on
+archived baseline then current source. `.cache/benchmarks/block-impact-paired-native-{baseline,patched}.json`
+and matching logs record first-hit sync median9.256→0.026ms lab and7.098→0.032ms
+Title; each phase72 targeted color updates and0 mesh/collision builds. Headless
+`dummy_surface` explicitly excludes the real GPU attribute path. Largest
+destructive frame slice11.867→4.820ms lab,10.032→4.637ms Title, but aggregate
+per-shot presentation CPU10.875→19.074ms and8.579→16.731ms respectively. Staging
+currently spreads work while increasing total CPU; exported comparison and
+throughput review are required before accepting this tradeoff. Destruction
+authority median221→232µs lab/182→190µs Title stays effectively unchanged.
+
+First patched actual-Main Web (`cd8ac5e`, patched-a) retained the same72/73/73
+shots and14/18/15 removals as corresponding wall baseline repeats. p9549.5/64.6/85.2ms,
+max235.1/72.3/131.1ms did not establish a consistent overall frame improvement.
+GPU path explicitly reports `attribute_region`;11/15/14 stale-build cancellations
+show why geometry throughput needs a second pass. Retain all patched-a JSON.
+Second pass moves mutable build buffers into sole-owned typed locals inside
+bounded units and computes palette only on visible cells. It also reduces
+hidden batched-fragment transform/color writes to final per-frame state while
+retaining exact substep collision and post-update Sprite3D inspection.
+
+Final scheduler/hot-loop native run is
+`.cache/benchmarks/block-impact-scheduler-native.json` with matching
+`.cache/logs/block-impact-scheduler-*`: destructive peak slices11.867→4.636ms
+lab and10.032→4.049ms Title. Aggregate medians10.875→12.390ms lab and
+8.579→9.879ms Title retain14–15% overhead; means retain16–19%. The initial
+75–95% increase is removed, but this is still a latency/throughput tradeoff.
+Publication maxima671/960µs; lab2 stale cancellations, Title0. Import,
+RGB4441/0 and preparation53/0 pass on final scheduler. Batched-fragment fixture
+29/0 proves3/6 physics substeps issue one final hidden position write per frame;
+existing effects32588/0 pass with three explicit headless GPU skips.
+Specialist leases are returned; frozen release and final Web comparison follow.

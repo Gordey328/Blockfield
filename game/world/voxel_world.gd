@@ -937,23 +937,30 @@ func process_rebuild_work(max_units: int = 0, time_budget_usec: int = 4000) -> D
 	var started := Time.get_ticks_usec()
 	var units := 0
 	var completed := 0
+	var max_step: int = _rebuild_stats.max_step_usec
 	if time_budget_usec > 0 and rebuild_budget > 0:
 		_ensure_material()
-		while (max_units <= 0 or units < max_units) and completed < rebuild_budget and Time.get_ticks_usec() - started < time_budget_usec:
-			var step_started := Time.get_ticks_usec()
-			var key := _nearest_dirty_key(true)
-			if key.x != -1000:
-				var cell: Vector3i = _color_dirty[key].keys()[0]
-				if not _streaming or _is_chunk_near(key):
-					_update_chunk_color(_chunks[key], cell)
-				_color_dirty[key].erase(cell)
-				if _color_dirty[key].is_empty():
-					_color_dirty.erase(key)
-					_dirty.erase(key)
+		# No input callback can interleave within this synchronous work slice.
+		# Select colors once per completed color chunk, and retain the active
+		# job's final-color queue until publication, rather than per column.
+		var color_key := _nearest_dirty_key(true)
+		var pending_colors: Dictionary = _color_dirty.get(_active_key, {})
+		var now := Time.get_ticks_usec()
+		while (max_units <= 0 or units < max_units) and completed < rebuild_budget and now - started < time_budget_usec:
+			var step_started := now
+			if color_key.x != -1000:
+				var cell: Vector3i = _color_dirty[color_key].keys()[0]
+				if not _streaming or _is_chunk_near(color_key):
+					_update_chunk_color(_chunks[color_key], cell)
+				_color_dirty[color_key].erase(cell)
+				if _color_dirty[color_key].is_empty():
+					_color_dirty.erase(color_key)
+					_dirty.erase(color_key)
 					completed += 1
+					color_key = _nearest_dirty_key(true)
 			else:
 				if _active_chunk == null:
-					key = _nearest_dirty_key()
+					var key := _nearest_dirty_key()
 					if key.x == -1000:
 						break
 					if _streaming and not _is_chunk_near(key):
@@ -961,14 +968,18 @@ func process_rebuild_work(max_units: int = 0, time_budget_usec: int = 4000) -> D
 						_geometry_dirty.erase(key)
 						_color_dirty.erase(key)
 						_collision_dirty.erase(key)
+						now = Time.get_ticks_usec()
 						continue
 					_start_chunk_build(key)
-				if _active_chunk.advance_rebuild(self, _material, _color_dirty.get(_active_key, {})):
+					pending_colors = _color_dirty.get(key, {})
+				if _active_chunk.advance_rebuild(self, _material, pending_colors):
 					_publish_chunk_build()
 					completed += 1
 			units += 1
-			_rebuild_stats.max_step_usec = maxi(_rebuild_stats.max_step_usec, Time.get_ticks_usec() - step_started)
+			now = Time.get_ticks_usec()
+			max_step = maxi(max_step, now - step_started)
 	var elapsed := Time.get_ticks_usec() - started
+	_rebuild_stats.max_step_usec = max_step
 	_rebuild_stats.last_frame_usec = elapsed
 	_rebuild_stats.max_frame_usec = maxi(_rebuild_stats.max_frame_usec, elapsed)
 	return {"processed_units": units, "completed_chunks": completed, "pending_chunks": _dirty.size(), "elapsed_usec": elapsed, "active_build": _active_chunk != null}

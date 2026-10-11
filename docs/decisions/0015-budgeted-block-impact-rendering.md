@@ -28,6 +28,12 @@ Minimap polling continues during progressive preparation. Upload only when its
 image identity, dimensions or completed pixel revision changes. Same-size map
 replacement must upload even if revision numbers match.
 
+For batched impact fragments, preserve all physics substeps and source lifetime
+calculations in per-frame state, then mirror the final hidden Sprite3D state
+once before uploading the batch. Visible smoke/water sprites retain their
+existing path. Post-update inspection and transformed-manager billboards remain
+equivalent; the pools and rendering architecture of ADR0011 are retained.
+
 ## Consequences
 
 Terrain preparation can yield between frames; GPU mesh publication and physics
