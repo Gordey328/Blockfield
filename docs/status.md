@@ -26,7 +26,7 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `1c046655fef23dcf46257dc10649d345ec4256d0`, merged/pushed.
+- Published client source: `2d60434b7534ff75c2a1b3863d235b643d0ea0b8`, merged/pushed (iPhone touch repair).
 - NexQuake mobile controls are merged into main through PR1, merge0fd90e75e508.
   All completed optimization commits through922f230 remain intact. Subsequent
   documentation does not change the checked game bytes. Mobile engine/release and
@@ -39,8 +39,10 @@ the user's chosen deployment scope is Docker/configuration preparation.
   camera-target-rays11/0, runtime smoke and normal Web export. DOM touch IDs
   -1/-2/INT_MIN/INT_MAX/0 now pass15/0 in both orientations, versus baseline15/5.
   MutationObserver diagnostic is recorded separately. Only MobileControls changes
-  in game/; all optimization work and pending AoS research are retained. Publication
-  is next; physical iPhone acceptance remains pending. [Evidence](nexquake-mobile-camera.md).
+  in game/; all optimization work and pending AoS research are retained. PR2 merged
+  asaffaf0a; Pages bundle812ea41 is built and all six public file hashes match.
+  Normal public input/Menu/Fire10→8 pass with no captured warnings/errors.
+  Physical iPhone acceptance remains pending. [Evidence](nexquake-mobile-camera.md).
 - Integrated NexQuake mobile release (2026-10-11): clean frozen1c046655fef2 passed
   all85 registered native behavioral/latency invocations, import/parser, runtime,
   server-launcher smoke and Web export on pinned Godot4.7.2. Actual-Main exported

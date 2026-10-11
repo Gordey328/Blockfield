@@ -249,3 +249,34 @@ separate DOM diagnostic; serve its build/web and use the visible run/size button
 Native-fixture specialist and read-only upstream reviewer have returned their
 leases. Root owns only integration/publication; concurrent AoS research remains
 untouched. Physical iPhone retry remains pending.
+
+
+## Published iPhone repair checkpoint
+
+PR2 merged asaffaf0a2e6c0cdeea4f27965f0d4c5e74bb7fd56. Production/test/tool
+bytes match frozen2d60434 exactly; merge/documentation do not change the checked
+export. Pages bundle812ea418f76a0c8650098027746d90c6f319becb is built with no
+error. Independent HTTPS verifies source2d60434 metadata and exact local/public
+SHA256 for HTML, JS, WASM, PCK and both audio worklets. PCK16,202,544bytes:
+`c2e59f8efceabd526c6799cf91cd5304506a2cc8a4bf4cbff4e184ab2a985e4d`.
+Public report: main checkout `.cache/browser/iphone-public-hashes.json`.
+
+The normal local export and actual public site render the lab and accept mobile
+preview movement/look. Public combat Menu opens the genuine menu, Fire decreases
+rifle magazine10→8 with unlimited ammo temporarily off, and camera/stick input
+moves the view/player. Public/local normal warning/error captures are empty.
+Public screenshot: main `.cache/browser/iphone-public-mobile.jpg`; local:
+managed worktree `.cache/browser/iphone-normal-local.jpg`. Unlimited ammo was
+returned to its original on setting after the test; existing mobile settings
+were retained. These normal checks use desktop mouse preview; the separate
+signed-ID DOM probe covers the browser touch bridge. Physical iPhone retry is
+pending, so the report does not claim measured device acceptance or aiming feel.
+
+Main fast-forward preserved the complete31-line pending AoS status insertion
+and every research file hash. Backup/hash manifest:
+main `.cache/iphone-touch-integration-backup-20261011/`. All completed optimization
+commits remain ancestors, only one game file differs. Native/review specialists
+and root engine/release leases are returned; own diagnostic/local/public tabs and
+servers8879/8880/8882 closed. Other chats' files/tabs/processes remain untouched.
+
+Test URL: https://gordey328.github.io/Blockfield/?v=iphone-touch-2d60434
