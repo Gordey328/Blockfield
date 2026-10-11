@@ -26,13 +26,22 @@ the user's chosen deployment scope is Docker/configuration preparation.
 - Godot4.7.2 `4.7.2.stable.official.ed1daf0bf`, GDScript, Compatibility, single-threaded Web templates.
 - Upstream `dcf449c845d509bbde9d79239b32d201c1389961`; `.cache/openspades` is reference-only.
 - [Repository](https://github.com/Gordey328/Blockfield): `main` source, `gh-pages` generated export.
-- Published client source: `4c051639e286b3ea4945c77cfa6d568c36bf39be`, committed/pushed.
-- Subsequent documentation records do not change the published binaries. Specialist
-  handoffs, effects repair and this release are complete; all file/engine/release
-  leases have been returned. Details are recorded below.
+- Published client source: `66e4b5b7eb89956657f97d7f623856080ea117b5`, committed/pushed.
+- Subsequent documentation records do not change the published binaries. Optimization
+  item4, specialist handoffs and publication are complete; root engine/release and
+  specialist leases have been returned. Concurrent mobile integration remains separate.
 
 ## Frozen validation
 
+- Optimization item4 (2026-10-11): frozen66e4b5b7eb89 passed all85 registered
+  native behavioral/latency invocations, import/runtime/Web/server export and PCK
+  smoke. Separate Web PCM113/0+DSP64/0 and JS lifecycle3/3 passed. Actual Main
+  cancel/restart/save downloads match exact raw/synchronous bytes; normal local
+  and public lab/Title rendering/input/progress checked. Independent public
+  HTML/JS/WASM/PCK and server ZIP hashes match. Earlier failure/benchmark chain,
+  fixture fixes and remaining stalls: [optimization evidence](optimization-audio-vxl-memory.md).
+  Current source is stable/pushed; all optimization leases returned. Full-port,
+  controlled device FPS/RSS and Linux/Docker/TLS acceptance remain open.
 - Permanent block damage (2026-10-11): implemented/published on frozen4c051639e286
   under [ADR0010](decisions/0010-persistent-block-damage.md). Offline/shared HP and
   darkening persist; joining/resumed clients receive flags and bounded loading hits.
@@ -80,20 +89,23 @@ the user's chosen deployment scope is Docker/configuration preparation.
 ## Published artifacts
 
 - [Pages development build](https://gordey328.github.io/Blockfield/) serves the checked
-  clean4c051639e286 export. Bundle `db3932405f3f07217f83b6ca844286af71eed02e`.
-- Public `index.pck` equals the local export:16,180,848bytes, SHA256
-  `10be980d25073beab27914f28c6a709d4fea4fa4f571165d9dc96fa46437f518`.
-  HTML5568bytes SHA256 `ab716cba3f68e75c1c99a2ed48aca9945fccef500a37d29017a826e9ebcb7e5e`.
-  Report `.cache/previews/public-persistent-4c051639e286.json`.
-- Matching [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-4c051639e286)
-  ZIP independently downloaded/hash-verified:29,335,660bytes, SHA256
-  `eb6997de1cd726068fa31acd2ec4a2209138aab4a5b34e86b36805bbdf43241f`.
-  New client/server identities: network5 / authority5-no-block-regen. The old57
-  recovering server is rejected by handshake hashes and is no longer compatible.
-- Export/PCK smoke did not execute Linux. Docker/container/Linux execution and
-  deployed TLS/WSS remain unverified. See [server deployment](server-deployment.md).
-- Historical dcee15f/812b316 and mobile31 evidence remains in fidelity-repairs and
-  mobile-controls/history. Documentation commits after4c do not change binaries.
+  clean66e4b5b7eb89 export. Bundle `22fd63050e11fad69aa3b421a4e0b8a1c3a0caa7`, built.
+- Public metadata/HTML/JS/WASM/PCK independently match local frozen artifacts.
+  PCK16,200,448bytes SHA256
+  `8c54b5408d6f8d0055f9340fc4bd6685937a99af026bf2f8e9a730e13c53d5d8`;
+  HTML5568bytes SHA256 `96074516bd05e1f45968de943337ce2fa6568d52c15942825439dfe3dd5c8fde`.
+  Reports `.cache/previews/optimization-item4/{frozen-validation,public-hashes}.json`.
+- Matching [server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
+  ZIP independently downloaded/hash-verified:29,344,396bytes SHA256
+  `76935d2fc59be4d5af6387266714001292a9c11a5adbf1c276a4e0a7799e168b`.
+  Network5 / authority5-no-block-regen remain; new client/server fingerprints share
+  the same frozen source. Previous4c/57 artifacts are historical checkpoints.
+- Windows exported-PCK smoke did not execute Linux. Docker/Linux execution and
+  deployed TLS/WSS remain unverified; see [server deployment](server-deployment.md).
+- Current ordinary local/public IAB lab/Title checks and retained pointer-lock
+  drag fallback are in [optimization evidence](optimization-audio-vxl-memory.md).
+  Historical4c/dcee15f/mobile31 evidence remains in their subsystem/history docs.
+  Documentation commits after66e4b5b do not change these binaries.
 
 ## Earlier frozen57 Web evidence
 
@@ -116,34 +128,30 @@ the user's chosen deployment scope is Docker/configuration preparation.
 
 ## Acceptance and next work
 
-- Optimization item4 implementation (2026-10-11): user authorized the summary's
-  audio, VXL loading/saving and memory scope. Specialists returned all file leases;
-  coordinator owns integration/docs, ADR0013 and engine/export/release. Bounded
-  exact-origin audio cache, complete workload counters, exact-color tint LRU and
-  cancellable private VXL jobs are integrated. Main guards progress, baseline and
-  downloads. Sync network interfaces/rules are unchanged. Parser/import, audio128/0,
-  environment70/0, audio optimization46/0, tint1555/0, VXL jobs62/0, actual Main
-  lifecycle15/0, source parity194/0, PCM134/0+81/0, source input35/0 and offline
-  lifecycle19/0 passed. Native benchmarks: audio142/0, memory/COW77/0;
-  stationary audio rays5640->47 (moving unchanged), tint caches capped256 each.
-  COW first live edit still costs13-15ms and64MiB. Voice allocation measurements
-  defer pooling. Slow intermediate lab padding was refined and exact bytes checked.
-  Actual exported Main load/cancel/input/audio passed; Title save downloaded exact
-  synchronous-encoder bytes, but exposed1.9s final browser staging. Follow-up now
-  yields bounded16KiB staging chunks and safely aborts pending JS; production JS
-  lifecycle3/3 and final parser/Main15/0 pass. Full browser follow-up pending.
-  Evidence: [optimization item4](optimization-audio-vxl-memory.md),
-  [ADR0013](decisions/0013-audio-vxl-memory.md). Concurrent mobile records/files
-  remain separately owned and are excluded from the frozen optimization source.
-  Final exported774 Main staging/cancel/restart and full lab save/download pass;
-  exact raw/canonical bytes checked. Stage Blob66.1ms and save Blob16.9ms are
-  separate from batch metrics; reset and first-write stalls remain. Initial Web
-  PCM113/2 then113/1 and environment64/2 exposed fixture wall-clock and single-query
-  setup issues; failures retained. Test-only complete audio-frame captures and
-  actual27-ray DSP setup preserve all thresholds and production budgets. Corrected
-  native PCM134/0+81/0 and parser pass. Read-only specialists found no production
-  blocker; obsolete synchronous-local wording in voxel.md was corrected.
-  Next: corrected Web PCM, frozen registered checks, normal browser and publication.
+- Optimization item4 completed/published (2026-10-11): user approved audio,
+  VXL loading/saving and memory. Frozen66e4b5b7eb89956657f97d7f623856080ea117b5
+  passed all85 registered native behavioral/latency checks, import/runtime,
+  Web/server export and exported-PCK smoke. New checks: ambience46/0, VXL62/0,
+  bounded materials1555/0, actual Main15/0. Native latency461/0, corrected PCM134/0
+  +81/0; exported AudioWorklet PCM113/0+DSP64/0; production JS lifecycle3/3.
+  Initial failed PCM fixtures are retained and corrected through full audio-frame
+  windows and actual27-ray DSP setup; production128/1.5ms budgets unchanged.
+  Exact stationary ambience rays5640->47 (moving unchanged); tint caches256 each.
+  Coherent private VXL jobs and bounded browser staging cancel stale work and keep
+  input callbacks available; raw/canonical downloaded bytes verified exactly.
+  Full85 ran on the same frozen source; earlier benchmarks/diagnostics are an
+  explicitly described validation chain. Normal local/public lab and Title render,
+  movement/tools/shot and progress checks passed; Chromium drag fallback remains.
+  Source and Pages/server package pushed; public metadata/HTML/JS/WASM/PCK and
+  independently downloaded ZIP match hashes. [Evidence](optimization-audio-vxl-memory.md),
+  [ADR0013](decisions/0013-audio-vxl-memory.md). First-write COW13-15ms/64MiB and
+  reset/initial allocation stalls remain; controlled FPS/phone/RSS/subjective audio
+  and Linux/Docker/TLS acceptance are open. Parity statuses are not promoted.
+  All specialists returned leases; root engine/release leases returned, owned
+  preview helpers stopped, public game tab retained. Concurrent mobile files and
+  records remain untouched by this task. Main source66e4b5b is stable/pushed for
+  separate mobile integration. Next optimization: controlled device baseline and
+  the remaining measured stages of the plan, rather than unmeasured pooling.
 
 - Optimization planning (2026-10-11): completed a read-only three-specialist audit
   of World, simulation/network and presentation/audio/UI, plus coordinator

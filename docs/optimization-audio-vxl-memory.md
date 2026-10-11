@@ -201,4 +201,74 @@ could return unknown on slow Web rays and retain the clear route. It now runs th
 actual production27-ray predicate with128 rays and no fixture preparation time
 cap; production remains128 rays/1.5ms and budget tests stay separate. No blocked
 answer is injected. Routing/ray/exhaustion diagnostics are recorded. Parser and
-native corrected PCM134/0+81/0 passed; final corrected Web proof remains pending.
+native corrected PCM134/0+81/0 passed.
+
+Corrected Web proof on frozen`66e4b5b7eb89956657f97d7f623856080ea117b5`
+passed AudioWorklet48kHz PCM113/0 and environmental DSP64/0. All19 sound
+windows captured their exact targets with no timeout/overflow; maximum reported
+capture wall/audio ratio1.0524. Environment windows also all completed without
+timeouts; maximum ratio1.3412. Actual clear obstruction queries used1 ray and
+blocked queries27 rays, `blocked_voices=[true]`, without fixture exhaustion.
+Measured low/high frequency ratios0.9998247/0.1173766 retain the original DSP
+thresholds. Reports/logs: `audio-pcm-web-final.json`, `audio-env-web-final.json`
+and corresponding `*-log.json` under `.cache/previews/optimization-item4/`.
+No Main/preferences/WAV writes or subjective browser listening acceptance.
+
+Both probes were prepared from this frozen archive under
+`.cache/optimization4-source-66e4b5b7eb89/.cache/`, preserving earlier exports.
+`git diff --quiet 774e506 66e4b5b -- game` passed: production bytes are identical
+to the actual-Main staging/cancel/download proof. This correction changes only
+fixtures and documentation. Earlier wall-window failures remain preserved;
+the results do not establish controlled mixer throughput versus the old release
+or glitch-free subjective audio. Full frozen behavioral/latency checks and
+production publication results follow.
+
+## Frozen checkpoint and publication
+
+`python tools/release_checkpoint.py --revision
+66e4b5b7eb89956657f97d7f623856080ea117b5 --server` passed import, all85 registered
+behavioral/latency invocations, runtime/launcher smoke, Web export, Linux export
+and exported-server-PCK smoke. Logs/source: `.cache/release-66e4b5b7eb89/`.
+The85 check logs contain no SCRIPT ERROR/Parse Error/ERROR/FAIL diagnostics.
+Selected final checks: Main15/0, VXL62/0, materials1555/0, audio cache46/0,
+controller511/0, source194/0, mobile2381/0+144/0, socket damage42/0 and native
+shaped latency461/0. Manifest `.cache/previews/optimization-item4/frozen-validation.json`.
+Headless effects skip3 GPU assertions; actual browser rendering is separate.
+
+Normal frozen export served by `python tools/serve.py --port8083`: rendered lab,
+movement, block palette/tool switching and rifle9/50 after a shot with unlimited
+ammo temporarily disabled. That option and rifle were restored. Original Title
+loaded through the normal menu with progress, rendered terrain, targets and
+minimap. Initial1280x720 browser later resized to619x476 with letterboxed canvas;
+checks followed fresh screenshots. No controlled frame-time comparison is claimed.
+Evidence: `production-shot.jpg`, `production-title.jpg`, `production-web-log.json`.
+Chromium pointer lock still returned UnknownError; the visible drag fallback
+worked. No captured Godot parser/script/resource errors; browser errors are not
+silently omitted. Reload was requested but not separately measured/accepted.
+
+Source pushed to main. Commands:
+`python tools/package_server.py --source .cache/release-66e4b5b7eb89 --destination build/packages`,
+`python tools/publish_pages.py`, and
+`python tools/publish_server_release.py --package build/packages/blockfield-server-66e4b5b7eb89.zip`.
+[Pages](https://gordey328.github.io/Blockfield/) build status built, bundle
+`22fd63050e11fad69aa3b421a4e0b8a1c3a0caa7`; public metadata identifies clean66e4b5b.
+Independent HTTP hashes match local HTML/JS/WASM/PCK. PCK16,200,448bytes SHA256
+`8c54b5408d6f8d0055f9340fc4bd6685937a99af026bf2f8e9a730e13c53d5d8`;
+HTML5568bytes SHA256 `96074516bd05e1f45968de943337ce2fa6568d52c15942825439dfe3dd5c8fde`.
+Report `.cache/previews/optimization-item4/public-hashes.json`.
+[Matching server prerelease](https://github.com/Gordey328/Blockfield/releases/tag/godot-66e4b5b7eb89)
+ZIP29,344,396bytes SHA256
+`76935d2fc59be4d5af6387266714001292a9c11a5adbf1c276a4e0a7799e168b`;
+publication helper independently downloaded and verified it without credentials.
+Network5 / authority5-no-block-regen remain; client/server fingerprints are from
+the same source. Windows PCK smoke does not establish Linux/Docker execution or
+public TLS/WSS. Full-port acceptance and controlled FPS/phone/memory acceptance
+remain open; item4 does not remove reset, initial allocation or first-write stalls.
+
+Final public IAB check at619x476: local entry, movement and block/rifle selection
+worked, original Title load exposed progress7% and completed with terrain/targets/
+minimap rendered. `public-title.jpg` and `public-web-log.json` preserve this check;
+only the known Chromium pointer-lock UnknownError was captured. The public game
+tab remains as a deliverable. All owned diagnostic/preview HTTP helpers stopped,
+temporary tabs closed, no engine process remains. Specialist leases and root
+engine/release leases are returned; concurrent mobile work stays separately owned.
