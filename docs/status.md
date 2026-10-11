@@ -3,7 +3,7 @@
 Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Offline 3×3 team combat — 2026-10-11 (implementation checkpoint)
+## Offline 3×3 team combat — 2026-10-11 (verified Crossroads addition)
 
 User authorized an offline match: one human, two allied bots and three opponents,
 with movement, shooting, cover and flanking. Coordinator owns Main/controller/HUD,
@@ -24,14 +24,38 @@ boundary climb are retained in the logs; the latter is corrected with a 0.01-uni
 epsilon preserving support/overlap checks. Final scene at1222ticks has all five
 bots moving and attempting fire, 10cover/10flank decisions and score3:4.
 Commands/results and limits are retained in [offline TDM evidence](offline-tdm.md).
-Coordinator now owns the serial engine/release lease; frozen full regression,
-export and real browser acceptance are pending. First freeze f888fe92a68e passes
-earlier suites but stops on a pre-existing SilentAudio override signature that
-missed ADR0019's optional blast-falloff argument. Root updates only that fixture
-signature and repeats the frozen build; the failed archive/log is preserved. Existing
-optimization-plan/Steam research edits are preserved. No original parity row is
-promoted by this checkpoint. Next: diagnose behavior, then freeze and verify the
-playable Web build before publication.
+Coordinator owns the serial engine/release lease. Frozen3d1199cb0251 passed all92
+registered fixtures, import/smokes and export. Its actual exported diagnostic scene
+passed5/0 movement/fire/roster/pause/resume checks; all five bots moved and attempted
+fire, and the visible overlay reached72 bot shots,17 cover/17 flank decisions.
+Normal Web completed a13:25 round and returned to the lab. Initial mobile score
+overlap is corrected; authority mirroring occurs once per tick and pose/view work
+once per rendered frame. Camera now precedes frame effects; the TDM brand survives
+locale changes. Final source a1a177c6bdc0a08607cb133e9bcc811789d9d1dc.
+First f888 freeze exposed a stale SilentAudio fixture override, repaired in3d1199c;
+52bbc1d stopped on an existing HDR assertion dependent on saved preferences.
+Failed archives/logs are retained. Frozen checkpoints now use private fixture
+settings and restore exact original project bytes before export. Full3a865e425903
+passes all92 fixtures, import, both smokes and export; mobile controls3099/0 and
+look225/0. Final source differs only by camera ordering/HUD caption; final parser,
+scene62/0, UI284/0, runtime and export pass. The unchanged final actual-scene Web
+probe passes5/0; all five bots move111–181units/attempt fire at tick2310, with55
+confirmed bot shots,14cover/14flank decisions and score5:8. Generic Chromium
+UnknownError messages persist in the separate probe; normal local/public captured
+error/warning lists are empty. Normal final Web physical W/mouse fire and mobile
+Fire are exercised, with390×844 two-row toolbar/score checked and preferences/
+viewport restored. Public normal UI starts, shows natural death/respawn and5:11,
+then resets to0:0/5:00 Ready. Public Fire ammo change is not claimed across respawn.
+Published clean source a1a177c6bdc0a08607cb133e9bcc811789d9d1dc, bundle
+114f58611fb8c0d9775180c7034264b6b63c8e96, [Pages](https://gordey328.github.io/Blockfield/).
+Pages reports built; public build-info and SHA256 of all six core artifacts match
+the frozen export (`.cache/tdm-pages-verification.json`). Commands/results/screens
+and remaining arena/navigation/frame-pacing limits are in [offline TDM](offline-tdm.md).
+Normal in-app combat snapshots show3–13FPS on a concurrently loaded host; stable
+Web FPS/physical-phone acceptance remains open. Only added A01 is VERIFIED for
+this authored arena; no original parity row is promoted. All specialists finished;
+engine leases returned. Existing optimization-plan/Steam/template edits are
+preserved. Next: assess bot difficulty and Web frame pacing in a controlled run.
 
 ## Game modes and bot design research — 2026-10-11
 

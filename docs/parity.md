@@ -83,7 +83,7 @@ promote full P01/P08–P16 or W03 acceptance.
 | W10 | Save/export edited map as VXL | `GameMap.cpp:93`; `Client_Input.cpp:562`; `Client_Draw.cpp:TakeMapShot` | 1 | IMPLEMENTED |
 | M01 | CTF: bases/intel, pickup, carrier, drop, capture, scores/capture limit, winner and round reset | `CTFGameMode.h`; `CTFGameMode.cpp:PlayerHasIntel`; `NetClient.cpp:1192,1427,1447,1461`; `Client_NetHandler.cpp:121` | 1+2 | IMPLEMENTED |
 | M02 | TC: neutral/owned territories, contested capture progress, ownership, winner and round reset | `TCGameMode.h`; `TCGameMode.cpp:47`; `NetClient.cpp:1367,1398`; `TCProgressView.cpp` | 1+2 | IMPLEMENTED |
-| A01 | User addition: offline TDM 3×3, five active bots, cover/flanks, score/time finish and restart | User 2026-10-11; ADR0020; original code in game/ai and OfflineTDMSession | 1 | IMPLEMENTED |
+| A01 | User addition: offline TDM 3×3 on Crossroads, five active bots, cover/flanks, score/time finish and restart | User 2026-10-11; ADR0020; original game/ai and OfflineTDMSession; [native/Web/Pages evidence](offline-tdm.md), smooth Web FPS remains open | 1 | VERIFIED |
 | M03 | Local authoritative offline rules for health, damage, respawn, restock and objectives | No offline server in original; client relies on `NetClient.cpp:919,1295,1482` | 1 | IMPLEMENTED |
 | M04 | Match reset restores map and all objective/player/resource state | Original reset/map change driven by `NetClient.cpp:1348` | 1+2 | IMPLEMENTED |
 

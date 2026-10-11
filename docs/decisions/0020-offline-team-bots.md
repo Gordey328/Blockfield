@@ -13,7 +13,8 @@ client prediction or wire-format extension is required.
 
 Each completed authority step mirrors its result once. Camera and weapon poses,
 and the five actor views, update once per rendered frame; low render rates must
-not repeat pose work for every fixed physics tick. The mobile score line sits
+not repeat pose work for every fixed physics tick. Camera presentation precedes
+the effects that consume its final frame pose. The mobile score line sits
 below the actual toolbar bounds, including a toolbar that wraps to two rows.
 
 The separate offline scene contains one blue human plus two blue bots and three
