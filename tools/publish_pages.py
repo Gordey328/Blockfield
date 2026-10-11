@@ -37,6 +37,9 @@ def main():
     git('add','--all',cwd=folder)
     changed=git('status','--porcelain',cwd=folder)
     if changed:git('commit','-m','Publish checked Godot Web development build',cwd=folder)
+    # Keep sibling builds published from independent checkouts.
+    git('fetch','origin','gh-pages',cwd=folder)
+    git('rebase','origin/gh-pages',cwd=folder)
     git('push','origin','HEAD:gh-pages',cwd=folder)
     api('/repos/'+args.repo+'/pages','PUT',{'build_type':'legacy','source':{'branch':'gh-pages','path':'/'}})
     queued=api('/repos/'+args.repo+'/pages/builds','POST')

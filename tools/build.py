@@ -115,9 +115,14 @@ def main():
 
 def export_web():
     folder=ROOT/'build'/'web';folder.mkdir(parents=True,exist_ok=True)
-    run('export',['--export-release','Web',str(folder/'index.html')])
+    from web_release_template import select
+    preset, original, template_metadata = select(ROOT)
+    try:
+        run('export',['--export-release','Web',str(folder/'index.html')])
+    finally:
+        preset.write_bytes(original)
     (folder/'.nojekyll').write_text('')
-    (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961',**source_state()},indent=2)+'\n',encoding='utf-8')
+    (folder/'build-info.json').write_text(json.dumps({'engine':VERSION,'iteration':1,'status':'development','upstream':'dcf449c845d509bbde9d79239b32d201c1389961',**source_state(),**template_metadata},indent=2)+'\n',encoding='utf-8')
     shutil.copy2(ROOT/'LICENSE',folder/'LICENSE.txt')
     shutil.copytree(ROOT/'game'/'assets'/'openspades'/'licenses',folder/'notices',dirs_exist_ok=True)
     shutil.copytree(ROOT/'licenses',folder/'notices'/'engine',dirs_exist_ok=True)

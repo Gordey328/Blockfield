@@ -36,6 +36,49 @@ Own specialist leases are returned and no own server helper was started.
 Original parity rows remain IMPLEMENTED; physical-device feel/full-port
 acceptance remain separate. Next: user assessment of the new combat style.
 
+## Reduced Web engine template — 2026-10-11 (verified isolated export)
+
+User requested a reduced Godot Web build, working-game verification and sizes.
+Complete:20 retained modules versus46 eligible;26 removals. Exact engine
+4.7.2.stable ed1daf0bf001b61586d9930840f2f1394092c079, Emscripten4.0.11,
+SCons4.9.1, Node24.19.0; -Os/thinLTO, jobs2/link2, single-thread/no extensions.
+Build passed in1:02:27. Profile17ac32fffba5b52fe9becd7c9e4313d79c3d53d6cd9e0c9d894a9aebcf5726c1.
+Both exports use frozen3d1199cb0251f1cfe9c13cbd66a553264a34c1e5, with identical
+PCK71ef67d7b0681fdde5f5571b279bd9efeceff37d513c3f443b875649e31e6265.
+WASM39514754→31835587bytes (−19.434%); gzip10054758→8043492 (−20.003%).
+Complete Web folder63855150→56144228bytes; gzip sum25828498→23811261.
+Parser/import/exports pass; identical source's92 native suites pass, probe47/0,
+stock/reduced real browser54/0 each. After compile, unchanged network-session
+repeat passes505/0; earlier failed attempts remain in the logs. Normal reduced
+Web manually passes Russian settings, original VXL, movement, tools1–4, map,
+drag-look fallback and TDM combat (3:5 at25s). IAB pointer capture rejection also
+affects stock; fallback works. Fonts/audio/game resources remain intact.
+Deliverables: build/web-reduced-3d1199/, build/blockfield-web-reduced-3d1199.zip,
+build/templates/godot-4.7.2-web-blockfield.{zip,json}, build/web-template-report.json.
+Copied/ZIP-extracted files match all measured SHA256s. Local preview8087 is left
+running with the normal TDM paused for user inspection; helper session71290.
+Owned files: tools/build_web_template.py, tools/web_template/{blockfield.py,module-audit.json},
+tests/browser/template_probe.gd, tools/export_template_probe.py,
+tools/compare_web_builds.py, docs/web-template-size.md, ADR0021 and this section.
+Specialist leases returned; root owns completed integration. Reproducible commands,
+pins, counts, failed attempts and limits: [size evidence](web-template-size.md),
+[ADR0021](decisions/0021-reduced-web-template.md). Source/output/evidence are
+isolated under .cache/web-template-verification and .cache/template-probe-*.
+Shared live gameplay/HUD, default presets, stock templates and build/web remain
+owned by offline3x3 chat. Original parity promotion is not claimed.
+Next release can explicitly select the accepted custom ZIP; repeat browser
+acceptance if enabling a removed capability or changing the retained contracts.
+
+User approved default integration. Release exports now select the hash-pinned
+reduced ZIP; presets are restored and metadata records its hash. Frozen main
+integration export/public verification pending. New helper: tools/web_release_template.py.
+Sibling https://gordey328.github.io/Blockfield/reduced/ was published as bundle
+c1a5d66e0793a0944cca725eed8398e1772bfbc3 (built). Public metadata/WASM/PCK
+hashes match; normal Russian menu/TDM/keyboard movement work and public
+warning/error list is empty. Evidence: build/reduced-public-verification.json
+and build/reduced-public-browser.jpg. Publisher: tools/publish_pages_variant.py.
+
+
 ## Offline 3×3 team combat — 2026-10-11 (verified Crossroads addition)
 
 User authorized an offline match: one human, two allied bots and three opponents,
