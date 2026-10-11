@@ -100,6 +100,64 @@ apply. Menu opens the existing HUD menu; deactivation releases overlay actions
 before global cleanup. Networking remains the same prediction/authenticated
 command/authoritative Runtime path with unchanged wire/rule limits.
 
+## All-item primary look — 2026-10-11
+
+Frozen source `6d61ea9cc26037e3c26553fdfed677dde3cfdc45` changes exactly one
+production line compared with `4a522ce`: remove the `Tool.WEAPON` gate in
+MobileControls. Godot `4.7.2.stable.official.ed1daf0bf`, upstream
+`dcf449c845d509bbde9d79239b32d201c1389961`.
+
+Import/parser, MobileControls3099/0, actual Main/HUD/Player look225/0, UI284/0,
+source-input35/0, source-parity194/0, network-controller511/0, camera-target-rays11/0,
+grenade17/0, runtime smoke and normal Web export pass. These are the eight affected
+suites; the previous complete89-check release is separate evidence, not a new run.
+Native userdata was isolated; original project config was restored before normal
+import/export. Logs and SHA256 manifest: `.cache/all-tool-look-6d61ea9cc260/`.
+The existing Web download-MB shell is retained.
+
+The same new overlay regression against baseline4a fails3099/3, precisely for
+spade/block/grenade (`.cache/all-tool-look-red/`). Initial483 Main225/1 bypassed
+selection callbacks by directly assigning tool fields; beginning a grenade then
+correctly observed the new tool and released the old trigger. Fixtures now use
+normal `select_weapon`/`select_tool`; production rules were unchanged. Failed logs
+remain under `.cache/all-tool-look-483305092d49/`.
+
+Reproduction commands (bundled Python path is in status):
+
+```powershell
+python .cache/all-tool-look-validate.py 6d61ea9cc260 .cache/all-tool-look-483305092d49/game/.godot
+python tools/export_mobile_probe.py --source .cache/all-tool-look-6d61ea9cc260 --name all-tool-6d61ea9 --import-cache .cache/all-tool-look-6d61ea9cc260/game/.godot
+python -m http.server 8078 --bind 127.0.0.1 --directory .cache
+```
+
+Helpers/diagnostics preserve existing result folders; choose a fresh name/path to
+repeat. Standard engine checks remain registered in `tools/build.py`. Open the
+isolated probe's `build/web/preview.html`, select each orientation, then press
+Run DOM touch checks in the real game. At844x390 and390x844,27/0 each (54/0 total)
+cover all six selections, held primary outside its button, exact40deg yaw/10deg
+pitch, normal release, cancel, independent movement/LOOK, focus/menu and mirroring.
+Restored live gameplay also moves4.363/3.858 units and fires2 shots in each run.
+Both captured probe warning/error lists are empty. Saved portrait report/screenshot:
+`.cache/previews/all-tool-look-portrait.{json,jpg}`.
+
+Ordinary local export visibly enters the lab, enables mobile controls, exercises
+rifle/spade/block/grenade Fire drag outside the button and rotates both axes.
+An800ms held grenade press releases and visibly throws a projectile; local lab
+unlimited stock remains3. Its captured warning/error list is empty; screenshot
+`.cache/previews/all-tool-look-normal-local.jpg`. Physical-phone feel remains
+untested; this does not promote full parity rows.
+
+Published via the integrated grenade-feedback release:
+source `d8e5ddb09d0ff63917d3312a758a2f9f4c584430`, Pages bundle
+`2f786bedd3e1c33c41010f382b05b7b37e476ff0`, built/no error. Its MobileControls
+source is byte-identical to checked6d. Independently fetched metadata and all six
+export files match the integrated frozen export; report
+`.cache/previews/all-tool-look-public.json`. Ordinary public lab entry and
+spade/block/grenade Fire drags rotate yaw/pitch, with an empty captured warning/
+error list. Screenshot `.cache/previews/all-tool-look-normal-public.jpg`.
+Input file/engine leases are returned; the own HTTP helper and temporary tabs
+are stopped. Full-row/physical-phone acceptance remain open.
+
 ## Mobile FPS validation
 
 Godot4.7.2 import/parser passed (`.cache/logs/mobile-fps-import.log`). Actual
