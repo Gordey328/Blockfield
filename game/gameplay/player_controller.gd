@@ -205,6 +205,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		_block_secondary_held=false
 
 func _process(_delta: float) -> void:
+	_process_touch_motion()
+	if session is OFFLINE_TDM and _network_owner != null:
+		# Authority runs at 60 Hz; presentation runs once per rendered frame.
+		_sync_camera_mode()
+		_update_view(_delta)
+		if world != null: world.set_view_position(camera.global_position)
+
+func _process_touch_motion() -> void:
 	if _queued_touch_motion == Vector2.ZERO:
 		return
 	# A render callback can precede the physics adoption of a new network life.
@@ -386,7 +394,6 @@ func _uses_shared_rules() -> bool:
 
 func _offline_match_physics(delta: float) -> void:
 	var match_session: OFFLINE_TDM = session as OFFLINE_TDM
-	match_session.update(0)
 	var owner: SharedPlayerState = match_session.get_owner_state()
 	if owner == null: return
 	_network_adopt(owner,null,delta)
@@ -415,7 +422,6 @@ func _offline_match_physics(delta: float) -> void:
 		if result.get("ok",false):
 			_network_yaw = yaw
 			_network_pitch = pitch
-			match_session.update(0)
 			var next: SharedPlayerState = match_session.get_owner_state()
 			if next != null: _network_adopt(next,null,0)
 			if lab != null: lab.present_offline_tick(result.get("transactions",[]))
@@ -423,8 +429,6 @@ func _offline_match_physics(delta: float) -> void:
 		_aim_toggled = false
 	if session.health <= 0 and session.team < 2: _death_elapsed += delta
 	_sync_camera_mode()
-	world.set_view_position(camera.global_position)
-	_update_view(delta)
 
 func _network_physics(delta: float) -> void:
 	var replica := _network_replica()

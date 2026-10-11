@@ -34,8 +34,11 @@ Import/parser passes. AI fixture passes 4440 assertions; session fixture passes
 81 assertions. The final actual-scene fixture passes 62 assertions after patrol
 tuning and the spawn correction (`.cache/logs/tdm-final-scene.log`): all five bots
 move, attempt fire and follow their shared positions, with 10 cover decisions,
-10 flank decisions and a natural score of 3:4 after 1222 ticks. Frozen full-build
-verification remains pending.
+10 flank decisions and a natural score of 3:4 after 1222 ticks. The frozen
+`3d1199cb0251f1cfe9c13cbd66a553264a34c1e5` build passed all 92 registered
+fixtures, parser/import, runtime smoke, server-launcher smoke and Web export.
+Three explicit headless GPU skips remain in the existing MultiMesh checks.
+Logs are in `.cache/release-3d1199cb0251/.cache/logs/`.
 
 A 3600-tick shared-session diagnostic run with a stationary human confirmed shots
 from every bot: IDs2–6 accepted 31/14/18/31/13 shots and 20/40/17/21/30 hits.
@@ -67,7 +70,12 @@ kill/time completion, fresh epoch/map restart and the unchanged lab entry.
 
 ## Browser and publication evidence
 
-Pending the frozen export and interactive browser check. The separate
+The initial interactive Web round reached 13:25, displayed the result and returned
+to the lab. It exposed a mobile score/toolbar overlap, now corrected using the
+actual toolbar bounds. Redundant offline state mirroring and per-physics-tick
+weapon poses were also removed; the updated scene fixture passes the same 62
+assertions (`tdm-render-scene.log`). Final frozen export and browser checks are
+pending. The separate
 `tools/export_offline_tdm_probe.py --release .cache/release-<commit>` exports the
 actual scene with diagnostic controls and `window.offlineTDMProbe`; it does not
 modify the production Pages entry point.

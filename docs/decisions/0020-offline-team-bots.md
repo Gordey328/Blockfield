@@ -11,6 +11,11 @@ hits, deaths and terrain edits for every actor. Presentation never applies damag
 or commits an already committed map transaction a second time. No server, socket,
 client prediction or wire-format extension is required.
 
+Each completed authority step mirrors its result once. Camera and weapon poses,
+and the five actor views, update once per rendered frame; low render rates must
+not repeat pose work for every fixed physics tick. The mobile score line sits
+below the actual toolbar bounds, including a toolbar that wraps to two rows.
+
 The separate offline scene contains one blue human plus two blue bots and three
 green bots. The authored 80×24×56 Crossroads map has three approaches, tall cover,
 flank routes and distinct spawn positions. First to 25 enemy kills wins; after five

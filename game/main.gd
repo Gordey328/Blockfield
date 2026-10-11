@@ -184,7 +184,7 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_vxl_progress()
 	if network_mode: _poll_network()
-	session.update(delta)
+	if not offline_tdm_mode: session.update(delta)
 	if network_mode: _network_update_views()
 	elif offline_tdm_mode: _update_shared_actor_views()
 	audio.positional=positional_audio
@@ -1087,7 +1087,6 @@ func present_offline_tick(transactions: Array) -> void:
 			hud.set_menu_visible(true)
 			continue
 		_network_present_event(event,false)
-	_update_shared_actor_views()
 
 func network_can_resume() -> bool:
 	return _network_resume.size() == 32 or (network_client != null and network_client.resume_token().size() == 32)

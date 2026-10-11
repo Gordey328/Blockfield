@@ -182,6 +182,8 @@ func _create_hud() -> void:
 	if _is_offline_tdm():
 		_hud_brand.text=_ui("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE")
 		_tdm_score=_label("",22,Color("e4eddf"))
+		_tdm_score.add_theme_color_override("font_outline_color",Color("111819"))
+		_tdm_score.add_theme_constant_override("outline_size",4)
 		_tdm_score.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		_tdm_score.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 		_tdm_score.offset_left=-240
@@ -422,7 +424,17 @@ func _update_tdm_status() -> void:
 	var match_session: OFFLINE_TDM=session as OFFLINE_TDM
 	var seconds: int=ceili(maxf(0.0,float(match_session.match_duration_ticks-maxi(0,match_session.simulation.tick+1))/60.0))
 	var score_text: String="%d : %d   ·   %d:%02d"%[session.team_scores[0],session.team_scores[1],seconds/60,seconds%60]
-	if _tdm_score != null: _tdm_score.text=score_text
+	if _tdm_score != null:
+		_tdm_score.text=score_text
+		if uses_mobile_controls() and mobile_controls != null:
+			# The toolbar can occupy one or two rows and honors control scaling.
+			var regions: Dictionary=mobile_controls.get_hit_regions()
+			var below_toolbar: float=88.0
+			for action: String in MOBILE_CONTROLS.TOP_ACTIONS:
+				var region: Rect2=regions.get(action,Rect2())
+				below_toolbar=maxf(below_toolbar,region.end.y+8.0)
+			_tdm_score.offset_top=below_toolbar
+			_tdm_score.offset_bottom=below_toolbar+28.0
 	if _tdm_menu_status != null:
 		_tdm_menu_status.text=score_text
 		if match_session.finished:
@@ -985,8 +997,8 @@ func _update_mobile_layout() -> void:
 	_mode.visible=not mobile
 	if _tdm_score != null:
 		_tdm_score.add_theme_font_size_override("font_size",16 if mobile else 22)
-		_tdm_score.offset_top=52 if mobile else 18
-		_tdm_score.offset_bottom=80 if mobile else 50
+		_tdm_score.offset_top=88 if mobile else 18
+		_tdm_score.offset_bottom=116 if mobile else 50
 		_tdm_score.offset_left=-160 if mobile else -240
 		_tdm_score.offset_right=160 if mobile else 240
 	_weapon_icon.visible=not mobile
