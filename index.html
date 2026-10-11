@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- Based on Godot 4.7.2 godot.html; MIT license: ../../licenses/godot/LICENSE.txt. -->
+<html lang="ru">
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
@@ -26,7 +27,7 @@ body {
 	outline: none;
 }
 
-#status, #status-splash, #status-progress {
+#status, #status-splash, #status-download {
 	position: absolute;
 	left: 0;
 	right: 0;
@@ -66,14 +67,29 @@ body {
 	image-rendering: pixelated;
 }
 
-#status-progress, #status-notice {
+#status-download, #status-notice {
 	display: none;
 }
 
-#status-progress {
-	bottom: 10%;
-	width: 50%;
+#status-download {
+	bottom: max(5%, env(safe-area-inset-bottom));
+	width: min(80%, 32rem);
 	margin: 0 auto;
+	text-align: center;
+	z-index: 1;
+	font: 16px/1.4 system-ui, sans-serif;
+	font-variant-numeric: tabular-nums;
+	text-shadow: 0 1px 3px #000;
+}
+
+#status-progress {
+	display: block;
+	width: 100%;
+	margin: 0 0 0.5rem;
+}
+
+#status-bytes {
+	margin: 0;
 }
 
 #status-notice {
@@ -105,7 +121,10 @@ body {
 
 		<div id="status">
 			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="index.png" alt="">
-			<progress id="status-progress"></progress>
+			<div id="status-download">
+				<progress id="status-progress" aria-label="Загрузка игры"></progress>
+				<p id="status-bytes">Загрузка игры…</p>
+			</div>
 			<div id="status-notice"></div>
 		</div>
 
@@ -117,7 +136,30 @@ const engine = new Engine(GODOT_CONFIG);
 
 (function () {
 	const statusOverlay = document.getElementById('status');
+	const statusDownload = document.getElementById('status-download');
 	const statusProgress = document.getElementById('status-progress');
+	const statusBytes = document.getElementById('status-bytes');
+	const megabytes = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+	// Exported sizes cover the complete engine + pack, including before both requests start.
+	const downloadSize = Object.values(GODOT_CONFIG.fileSizes || {}).reduce((sum, bytes) =>
+		sum + (Number.isFinite(bytes) && bytes > 0 ? bytes : 0), 0);
+
+	function updateDownload(current, total) {
+		const loaded = Number.isFinite(current) ? Math.max(0, current) : 0;
+		const expected = Math.max(downloadSize, Number.isFinite(total) ? total : 0);
+		const loadedMB = megabytes.format(loaded / 1000000);
+		if (expected > 0) {
+			statusProgress.max = expected;
+			statusProgress.value = loaded;
+			statusBytes.textContent = loaded >= expected
+				? `Загружено ${loadedMB} МБ · Запуск игры…`
+				: `Загрузка игры: ${loadedMB} / ${megabytes.format(expected / 1000000)} МБ`;
+		} else {
+			statusProgress.removeAttribute('value');
+			statusProgress.removeAttribute('max');
+			statusBytes.textContent = `Загружено ${loadedMB} МБ`;
+		}
+	}
 	const statusNotice = document.getElementById('status-notice');
 
 	let initializing = true;
@@ -133,7 +175,7 @@ const engine = new Engine(GODOT_CONFIG);
 			return;
 		}
 		statusOverlay.style.visibility = 'visible';
-		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
+		statusDownload.style.display = mode === 'progress' ? 'block' : 'none';
 		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
 		statusMode = mode;
 	}
@@ -198,17 +240,10 @@ const engine = new Engine(GODOT_CONFIG);
 			displayFailureNotice(missingMsg + missing.join('\n'));
 		}
 	} else {
+		updateDownload(0, downloadSize);
 		setStatusMode('progress');
 		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-				}
-			},
+			'onProgress': updateDownload,
 		}).then(() => {
 			setStatusMode('hidden');
 		}, displayFailureNotice);
