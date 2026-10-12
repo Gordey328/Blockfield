@@ -23,6 +23,8 @@ var _deferred_removals: Array[Dictionary] = []
 var _fatal_cells: Dictionary[Vector3i,bool] = {}
 var _lab_tick: int = 0
 var _lab_clock_enabled: bool = false
+var _lab_generation: int = 0
+var _lab_respawn_source: WeakRef
 
 func configure(local_session: LocalSession, local_player: Node3D, voxel_world: VoxelWorld) -> void:
 	session = local_session
@@ -31,6 +33,7 @@ func configure(local_session: LocalSession, local_player: Node3D, voxel_world: V
 	configure_data(local_session, voxel_world.data if voxel_world != null else null)
 
 func configure_data(local_session: LocalSession, map_data: VoxelData) -> void:
+	_disconnect_lab_respawn()
 	if data != null and data.cells_committed.is_connected(_on_cells_committed): data.cells_committed.disconnect(_on_cells_committed)
 	if terrain != null: terrain.dispose()
 	session = local_session
@@ -48,10 +51,15 @@ func configure_data(local_session: LocalSession, map_data: VoxelData) -> void:
 	_fatal_cells.clear()
 	_lab_tick = maxi(0,map_data.last_tick) if map_data != null else 0
 	_lab_clock_enabled = false
+	_lab_generation = maxi(_lab_generation+1,maxi(1,local_session.player_deaths+1)) if local_session != null else 0
+	if local_session != null and not local_session is OfflineTDMSession:
+		_lab_respawn_source = weakref(local_session)
+		local_session.player_respawned.connect(_on_lab_respawn)
 	if data != null: data.cells_committed.connect(_on_cells_committed)
 	action_sequence = 0
 
 func dispose() -> void:
+	_disconnect_lab_respawn()
 	if data != null and data.cells_committed.is_connected(_on_cells_committed): data.cells_committed.disconnect(_on_cells_committed)
 	if terrain != null: terrain.dispose()
 	terrain = null
@@ -59,6 +67,7 @@ func dispose() -> void:
 	world = null
 	player = null
 	session = null
+	_lab_generation = 0
 	_lab_motion.clear()
 	_lab_motion_generation.clear()
 	_lab_health.clear()
@@ -67,6 +76,20 @@ func dispose() -> void:
 	_receipts.clear()
 	_deferred_removals.clear()
 	_fatal_cells.clear()
+
+func _disconnect_lab_respawn() -> void:
+	# Track the actual observed source independently of the public session field,
+	# which can already point at its replacement during host rebinding.
+	if _lab_respawn_source != null:
+		var observed: LocalSession = _lab_respawn_source.get_ref() as LocalSession
+		if is_instance_valid(observed) and observed.player_respawned.is_connected(_on_lab_respawn):
+			observed.player_respawned.disconnect(_on_lab_respawn)
+	_lab_respawn_source = null
+
+func _on_lab_respawn() -> void:
+	# Team changes and manual respawn start lives without incrementing deaths.
+	# Death alone leaves the current life identity until this real spawn signal.
+	_lab_generation += 1
 
 func cell_version(cell: Vector3i) -> int:
 	return int(_watched_cells.get(cell,0))
@@ -121,7 +144,7 @@ func generation() -> int:
 	if match_state != null:
 		var owner: SharedPlayerState = match_state.get_actor(owner_id())
 		return owner.spawn_generation if owner != null else 0
-	return session.player_deaths + 1 if session != null else 0
+	return _lab_generation if session != null else 0
 
 func alive() -> bool:
 	if session == null or data == null: return false

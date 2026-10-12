@@ -324,6 +324,8 @@ func _render() -> void:
 	_meter.text = _ui("Обычный набор · выбери новый предмет", "Classic kit · choose an invention") if _selected == "source" else _name(_selected) + " · " + _stock_label(_selected, selected_entry)
 	if primary:
 		_meter.text += _ui(" · заряд %d%% · нагрев %d%%", " · charge %d%% · heat %d%%") % [roundi(float(_readout.get("charge", 0.0)) * 100), roundi(float(_readout.get("heat", 0.0)) * 100)]
+	if float(_readout.get("jet_remaining", 0.0)) > 0.0:
+		_meter.text += _ui(" · тяга %.1f с", " · thrust %.1f s") % float(_readout.jet_remaining)
 	_hint.text = str(_readout.get("target_reason", _ui("Наведи прицел на видимое место и подтверди вызов", "Aim at a visible location and confirm support"))) if _targeting else ""
 	_hint.visible = _targeting
 	_refresh_layout()
@@ -432,7 +434,8 @@ func _stock_label(id: String, entry: Dictionary) -> String:
 	var cooldowns: Dictionary = _readout.get("cooldowns", {})
 	var cooldown: float = float(cooldowns.get(id, 0.0))
 	if str(entry.get("category", "")) == "primary":
-		return _ui("патроны %d / %d", "ammo %d / %d") % [int(_readout.get("magazine", entry.get("clip", 0))) if id == _selected else int(entry.get("clip", 0)), int(_readout.get("reserve", entry.get("reserve", 0))) if id == _selected else int(entry.get("reserve", 0))]
+		var label: String = _ui("стартовые патроны %d / %d", "starting ammo %d / %d") if _home_mode or id != _selected else _ui("патроны %d / %d", "ammo %d / %d")
+		return label % [int(_readout.get("magazine", entry.get("clip", 0))) if id == _selected else int(entry.get("clip", 0)), int(_readout.get("reserve", entry.get("reserve", 0))) if id == _selected else int(entry.get("reserve", 0))]
 	var label: String = _ui("запас %d", "stock %d") % int(stock.get(id, entry.get("stock", 0)))
 	if cooldown > 0.0: label += _ui(" · готово через %.1f с", " · ready in %.1f s") % cooldown
 	return label

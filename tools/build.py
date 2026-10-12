@@ -135,7 +135,7 @@ def main():
     for name,path in suites:
         if selected and name not in selected: continue
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','rush-upgrade-panel','rush-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','rush-upgrade-panel','rush-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main','arsenal-scene','arsenal-lab') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     if args.export: export_web()
 

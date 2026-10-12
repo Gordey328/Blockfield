@@ -113,7 +113,7 @@ func _process(delta: float) -> void:
 	if _data != main.world.data or _epoch != main.world.data.epoch or _data_generation != main.world.data.generation: _bind()
 	var readout: Dictionary = runtime.readout()
 	readout.selected_item = str(readout.get("selected_item", _loadout.primary)) if is_custom_primary() else "source"
-	readout.enabled = enabled and main.session.health > 0 and not is_catalog_open()
+	readout.enabled = enabled and bool(readout.get("enabled", false)) and bridge.alive() and not is_catalog_open()
 	readout.first_person = main.player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON
 	if main.offline_survival_mode: readout.loadout = _frozen_loadout.duplicate(true)
 	var aim: Dictionary = bridge.ray_world(main.player.get_aim_origin(), main.player.get_aim_direction(), 96.0)
@@ -133,8 +133,8 @@ func _process(delta: float) -> void:
 		_refresh_age = 0.0
 		var blocked: bool = main._launch_in_progress or (not main._launch_configuration.is_empty() and main._launch_status != "ready")
 		var choice: bool = main.offline_survival_mode and bool(main.session.get_rush_state().get("pending", false))
-		panel.set_enabled(not blocked and not choice and main.session.health > 0 and (not main.offline_tdm_mode or main.offline_survival_mode))
-		panel.set_combat_visible(main.hud._focused and not blocked and not choice and not main.hud.is_menu_open() and main.session.health > 0)
+		panel.set_enabled(not blocked and not choice and bridge.alive() and (not main.offline_tdm_mode or main.offline_survival_mode))
+		panel.set_combat_visible(main.hud._focused and not blocked and not choice and not main.hud.is_menu_open() and bridge.alive())
 		panel.set_readout(readout)
 	main.hud._combat_readout.arsenal_state = readout if is_custom_primary() else {}
 	if is_custom_primary(): main.hud._ammo.visible = false

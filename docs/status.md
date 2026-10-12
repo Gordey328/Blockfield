@@ -98,9 +98,27 @@ Home, catalogue, training launch, unique gauss model and finite 3→2 fire are
 observed; IAB uses the existing mouse-drag fallback when pointer lock is unavailable.
 Lab unlimited resources were explicitly switched off through the original menu.
 All20 interactions, touch, saturation and public acceptance remain pending.
-A final Home-only Classic kit action is written to permit clean original-mode
-startup without visiting the lab; its additional UI fixture awaits the final
-UI freeze/export. No arsenal publication has run.
+Home-only Classic kit action is written and native UI 188/0 verifies it. Freeze
+465a86b6ae46040d6b6eaca0217601c99de6cfe5 fails actual scene 114/2 while the Web
+client is running: its process-frame loop can span multiple real fixed steps.
+The build registers arsenal-scene/lab with --fixed-fps 60 like existing scene
+fixtures. Strict unchanged scene 115/0 and lab 38/0 then pass, with clean logs;
+no export/publication is produced from the failed freeze. Catalog capacity copy
+now explicitly distinguishes starting ammo from the selected live inventory;
+active jet thrust remaining is visible in the compact meter.
+
+A final lab life seam is fixed: manual respawn and team changes emit the real
+player_respawned signal without incrementing deaths. Bridge now tracks that
+signal with a monotonic lab generation and a disposable WeakRef observer.
+Coordinator reconfigures on the next fixed boundary, hides combat while spectator
+and retains the same map/terrain helper. Expanded authority (expected 197) and
+actual lab (expected 50) are written but not yet run. All source/engine leases
+are closed. Ordinary Web so far exercises X01–X08 and X20 with distinct models,
+finite counters; X07 locks a living actor and causes a credited kill, X20 consumes
+one call and physically lifts the owner above the structures. Remaining IDs,
+touch, saturation and final public verification are still outstanding.
+No arsenal publication has run.
+
 Next: verify the final Home opt-out, inspect every item in ordinary desktop/touch
 Web, publish
 and verify public files/gameplay, then pause the heartbeat.

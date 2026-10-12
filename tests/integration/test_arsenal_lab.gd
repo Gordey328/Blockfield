@@ -51,6 +51,13 @@ func restore() -> void:
 		elif FileAccess.file_exists(path):
 			check(DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK, "fixture-only preference file is removed")
 
+func arm_sun(coordinator: ArsenalCoordinator) -> void:
+	coordinator._select("x16")
+	aim_at(app.player.global_position + Vector3(12, -.02, 0))
+	coordinator._apply("x16")
+	await frames(2)
+	check(int(coordinator.runtime.readout().stock.x16) == 0 and not coordinator.runtime.visuals().is_empty(), "new active lab life consumes a finite Sun and retains its pending fuse")
+
 func exercise() -> void:
 	var loadout: Dictionary = {"primary":"x03", "bomb":"x12", "stratagems":["x17","x20"]}
 	set_meta("blockfield_launch", {"mode":"training", "map_id":"lab", "weapon":1, "arsenal":loadout})
@@ -183,6 +190,28 @@ func exercise() -> void:
 	check(session.health == 100 and session.respawn_remaining == 0.0, "the existing three-second LocalSession clock performs ordinary respawn")
 	check(coordinator.bridge == bridge and bridge.terrain == terrain and app.world.data == data and data.get_block(permanent) == 0x01996644, "ordinary respawn preserves built terrain and existing terrain authority")
 	check(runtime.readout().enabled and int(runtime.readout().stock.x16) == 1 and app.player.uses_arsenal(), "ordinary new life re-enables custom inventory through the same bridge")
+	# Spectator/team/manual respawn are real LocalSession life transitions even
+	# when the death counter does not change. Pending old-life fuses must cancel.
+	var stable_deaths: int = session.player_deaths
+	var life: int = bridge.generation()
+	await arm_sun(coordinator)
+	session.select_team(2)
+	await frames(8)
+	check(session.team == 2 and session.player_deaths == stable_deaths and not bridge.alive(), "actual spectator selection leaves health/death count unchanged but removes the active owner life")
+	check(runtime.visuals().is_empty() and not runtime.readout().enabled and not coordinator.panel._enabled and not coordinator.panel._bank.visible, "spectator transition cancels old ordnance and hides/disables the actual arsenal panel")
+	check(coordinator.bridge == bridge and bridge.terrain == terrain and app.world.data == data and data.get_block(permanent) == 0x01996644, "spectator transition preserves the same canonical map and terrain authority")
+	session.select_team(0)
+	await frames(8)
+	check(bridge.generation() > life and runtime.readout().enabled and int(runtime.readout().stock.x16) == 1 and session.player_deaths == stable_deaths, "returning to the team grants a fresh active generation through real player_respawned without another death")
+	check(coordinator.bridge == bridge and bridge.terrain == terrain and app.world.data == data and data.get_block(permanent) == 0x01996644 and coordinator.panel._bank.visible, "team return reopens the panel while retaining ordinary built terrain")
+	for transition: String in ["team", "manual_respawn"]:
+		await arm_sun(coordinator)
+		life = bridge.generation()
+		if transition == "team": session.select_team(1)
+		else: session.respawn()
+		await frames(2)
+		check(bridge.generation() > life and session.player_deaths == stable_deaths and runtime.visuals().is_empty() and runtime._queue.is_empty() and runtime._status.is_empty(), "actual " + transition + " cancels the previous life at the fixed boundary without changing deaths")
+		check(runtime.readout().enabled and int(runtime.readout().stock.x16) == 1 and session.current_weapon == 1 and coordinator.bridge == bridge and bridge.terrain == terrain and app.world.data == data and data.epoch == epoch and data.get_block(permanent) == 0x01996644, "actual " + transition + " restores finite inventory and the original source class through the same map/bridge")
 	# Explicit adoption is distinct from death: replace this map in-place while
 	# retaining its epoch, then exercise the generation guard through Main/World.
 	app.hud.set_menu_visible(true)
