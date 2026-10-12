@@ -41,4 +41,3 @@ func _collapse_neighbors(removed: Array[Vector3i], changes: Array, groups: Array
 					checked[member] = true
 					_record(member,0,changes,true)
 				groups.append({"cells":component,"colors":colors})
-

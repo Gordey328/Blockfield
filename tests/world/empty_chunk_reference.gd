@@ -43,4 +43,3 @@ func _build_halo_columns(world: Node3D, max_units: int, deadline_usec: int) -> i
 		job.cursor = 0
 	_batch_max_unit_usec = maxi(_batch_max_unit_usec, max_unit)
 	return processed
-
