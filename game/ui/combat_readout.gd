@@ -115,12 +115,17 @@ func _draw_slots(origin: Vector2) -> void:
 
 func _draw_survival() -> void:
 	var width: float = 218.0 if compact else 328.0
-	var rectangle: Rect2 = Rect2((size.x - width) * 0.5, score_y, width, 48.0 if compact else 56.0)
-	draw_style_box(_panel, rectangle)
 	var lines: PackedStringArray = survival_text.split("\n")
-	for index: int in mini(2, lines.size()):
+	var line_count: int = mini(3, lines.size())
+	var panel_height: float = (48.0 if compact else 56.0) + (19.0 if line_count > 2 else 0.0)
+	var rectangle: Rect2 = Rect2((size.x - width) * 0.5, score_y, width, panel_height)
+	draw_style_box(_panel, rectangle)
+	for index: int in line_count:
 		var height: int = (13 if compact else 17) if index == 0 else (11 if compact else 13)
 		var text_width: float = CombatTheme.font().get_string_size(lines[index], HORIZONTAL_ALIGNMENT_LEFT, -1, height).x
+		while height > 9 and text_width > width - 16.0:
+			height -= 1
+			text_width = CombatTheme.font().get_string_size(lines[index], HORIZONTAL_ALIGNMENT_LEFT, -1, height).x
 		_text(lines[index], Vector2(rectangle.get_center().x - text_width * 0.5, rectangle.position.y + 19.0 + index * 19.0), height, CombatTheme.ACCENT if index == 0 else CombatTheme.WHITE)
 
 func _draw_score() -> void:

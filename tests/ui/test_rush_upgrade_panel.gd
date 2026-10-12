@@ -98,16 +98,34 @@ func _check_quick_launch() -> void:
 	root.add_child(shell)
 	shell.launch_requested.connect(func(configuration: Dictionary) -> void: launches.append(configuration.duplicate(true)))
 	await _frames(4)
-	for dimensions: Vector2i in [Vector2i(375, 812), Vector2i(812, 375), Vector2i(568, 320), Vector2i(1280, 720)]:
-		root.size = dimensions
-		await _frames(4)
-		var viewport: Rect2 = root.get_visible_rect()
-		var css_per_logical: Vector2 = Vector2(dimensions) / viewport.size
-		for name_value: String in ["Rush", "Play", "Training", "Settings"]:
-			var target: Button = shell.find_child(name_value, true, false) as Button
-			_check(target != null and viewport.grow(0.5).encloses(target.get_global_rect()), "Home keeps Rush and existing actions immediately reachable: %s %s" % [str(dimensions), name_value])
-			if target != null:
-				_check(target.size.x * css_per_logical.x >= 55.5 and target.size.y * css_per_logical.y >= 55.5, "Home action keeps a56CSS target: %s %s" % [str(dimensions), name_value])
+	for locale: String in ["ru", "en"]:
+		preferences.load(settings_path)
+		preferences.set_value("profile", "locale", locale)
+		preferences.save(settings_path)
+		shell.show_home()
+		for dimensions: Vector2i in [Vector2i(375, 812), Vector2i(812, 375), Vector2i(568, 320), Vector2i(1280, 720)]:
+			root.size = dimensions
+			await _frames(4)
+			var viewport: Rect2 = root.get_visible_rect()
+			var css_per_logical: Vector2 = Vector2(dimensions) / viewport.size
+			_check((shell.find_child("HomeBrand", true, false) as Label).text == "BLOCKFIELD RUSH", "Home names the primary Rush experience: " + locale)
+			if dimensions.y >= 440:
+				var intro: Label = shell.find_child("HomeIntro", true, false) as Label
+				_check(intro != null and not intro.text.contains("3×3") and (intro.text.contains("усиления") or intro.text.contains("upgrades")), "Home explains survival and upgrades instead of the classic mode: " + locale)
+			var rules: Label = shell.find_child("HomeRushRules", true, false) as Label
+			if rules != null:
+				_check(rules.text.contains("180") and (rules.text.contains("зачистка") or rules.text.contains("cleanup")), "Home distinguishes the wave timer from final cleanup: " + locale)
+			for name_value: String in ["Rush", "Play", "Survival", "Training", "Settings"]:
+				var target: Button = shell.find_child(name_value, true, false) as Button
+				var context: String = "%s %s %s" % [locale, str(dimensions), name_value]
+				_check(target != null and viewport.grow(0.5).encloses(target.get_global_rect()), "Home keeps Rush and existing actions immediately reachable: " + context)
+				if target != null:
+					_check(target.size.x * css_per_logical.x >= 55.5 and target.size.y * css_per_logical.y >= 55.5, "Home action keeps a56CSS target: " + context)
+					var ancestor: Node = target.get_parent()
+					while ancestor != null:
+						if ancestor is Control and ((ancestor as Control).clip_contents or ancestor is ScrollContainer):
+							_check((ancestor as Control).get_global_rect().grow(0.5).encloses(target.get_global_rect()), "Entire Home action stays inside its clipping ancestor: " + context)
+						ancestor = ancestor.get_parent()
 	var selection: Dictionary = shell.get_selection()
 	var bytes_before: PackedByteArray = FileAccess.get_file_as_bytes(settings_path)
 	var button: Button = shell.find_child("Rush", true, false) as Button

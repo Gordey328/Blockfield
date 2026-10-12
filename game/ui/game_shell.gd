@@ -287,7 +287,8 @@ func _build_home() -> void:
 	var header: HBoxContainer = HBoxContainer.new()
 	header.custom_minimum_size.y = TARGET_CSS
 	_layout.add_child(header)
-	var brand: Label = _label("BLOCKFIELD", 24 if _mobile else 30)
+	var brand: Label = _label("BLOCKFIELD RUSH", 24 if _mobile else 30)
+	brand.name = "HomeBrand"
 	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(brand)
 	var profile: Label = _label(_player_name, 14, CombatTheme.MUTED)
@@ -307,16 +308,18 @@ func _build_home() -> void:
 	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	copy.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	copy.size_flags_stretch_ratio = 0.9
-	copy.add_theme_constant_override("separation", 8 if _mobile else 18)
+	copy.add_theme_constant_override("separation", 8 if _mobile else 10)
 	content.add_child(copy)
 	if not _compact:
-		copy.add_child(_label(_ui("ВОКСЕЛЬНЫЙ ШУТЕР", "VOXEL SHOOTER"), 12, CombatTheme.ACCENT))
-	var heading: Label = _label(_ui("Твоё поле боя.", "Your battlefield."), 32 if _mobile else 54)
+		copy.add_child(_label(_ui("ВОКСЕЛЬНОЕ ВЫЖИВАНИЕ", "VOXEL SURVIVAL"), 12, CombatTheme.ACCENT))
+	var heading: Label = _label(_ui("Три минуты.\nОдна жизнь.", "Three minutes.\nOne life."), 32 if _mobile else 40)
+	heading.name = "HomeHeading"
 	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	heading.visible = not _compact
 	copy.add_child(heading)
 	if not _compact:
-		var intro: Label = _label(_ui("Бой 3×3 с ботами. Строй укрытия, ищи обходы и меняй мир вокруг себя.", "Fight 3×3 with bots. Build cover, find a flank, and reshape the world."), 16 if _mobile else 19, CombatTheme.MUTED)
+		var intro: Label = _label(_ui("Выживай, выбирай усиления, строй и ломай укрытия.", "Survive, choose upgrades, build cover and break through it."), 16, CombatTheme.MUTED)
+		intro.name = "HomeIntro"
 		intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		copy.add_child(intro)
 	_rush_start = _button("Rush", _ui("Rush · 3 минуты  →", "Rush · 3 minutes  →"), _launch_rush, true)
@@ -329,27 +332,19 @@ func _build_home() -> void:
 	_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_error.hide()
 	copy.add_child(_error)
-	var secondary_parent: Node = copy
-	if _compact:
-		var secondary: GridContainer = GridContainer.new()
-		secondary.columns = 2
-		secondary.add_theme_constant_override("h_separation", 8)
-		secondary.add_theme_constant_override("v_separation", 8)
-		copy.add_child(secondary)
-		secondary_parent = secondary
+	var secondary: GridContainer = GridContainer.new()
+	secondary.name = "HomeSecondaryActions"
+	secondary.columns = 2
+	secondary.add_theme_constant_override("h_separation", 8)
+	secondary.add_theme_constant_override("v_separation", 8)
+	copy.add_child(secondary)
 	var play: Button = _button("Play", _ui("Играть  →", "Play  →"), func() -> void: show_setup("tdm"))
-	secondary_parent.add_child(play)
-	secondary_parent.add_child(_button("Survival", _ui("Волны зомби", "Zombie waves"), func() -> void: show_setup("survival")))
-	secondary_parent.add_child(_button("Training", _ui("Тренировка", "Training"), func() -> void: show_setup("training")))
-	var utilities: GridContainer = GridContainer.new()
-	utilities.columns = 2
-	utilities.add_theme_constant_override("h_separation", 8)
-	if not _compact: copy.add_child(utilities)
-	else: utilities.free()
-	var settings_parent: Node = secondary_parent if _compact else utilities
-	settings_parent.add_child(_button("Settings", _ui("Настройки", "Settings"), func() -> void: _request_utility("settings")))
+	secondary.add_child(play)
+	secondary.add_child(_button("Survival", _ui("Волны зомби", "Zombie waves"), func() -> void: show_setup("survival")))
+	secondary.add_child(_button("Training", _ui("Тренировка", "Training"), func() -> void: show_setup("training")))
+	secondary.add_child(_button("Settings", _ui("Настройки", "Settings"), func() -> void: _request_utility("settings")))
 	if not _mobile:
-		copy.add_child(_label(_ui("Локальная игра · 1 игрок и 5 ботов", "Offline play · 1 player and 5 bots"), 13, CombatTheme.MUTED))
+		copy.add_child(_label(_ui("Без сервера · Классические режимы рядом", "No server needed · Classic modes available"), 13, CombatTheme.MUTED))
 		var hero: PanelContainer = _panel()
 		hero.custom_minimum_size.x = 470
 		hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -361,8 +356,11 @@ func _build_home() -> void:
 		var hero_image: TextureRect = _image(str(CATALOG.get_entry("crossroads").get("preview", "")), Vector2(0, 300), true)
 		hero_content.add_child(hero_image)
 		hero_content.add_child(_label("CROSSROADS", 23))
-		hero_content.add_child(_label(_ui("Командный бой 3×3 · 25 убийств · 5 минут", "Team battle 3×3 · 25 kills · 5 minutes"), 14, CombatTheme.ACCENT))
-		var home_note: Label = _label(_ui("Настоящее поле боя из блоков. Каждый пролом открывает новый маршрут.", "A battlefield made of blocks. Every breach opens a new route."), 15, CombatTheme.MUTED)
+		var hero_rules: Label = _label(_ui("Rush · 180 секунд волн, затем зачистка · Одна жизнь", "Rush · 180 seconds of waves, then cleanup · One life"), 14, CombatTheme.ACCENT)
+		hero_rules.name = "HomeRushRules"
+		hero_rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hero_content.add_child(hero_rules)
+		var home_note: Label = _label(_ui("Компактная арена из блоков. Каждый пролом открывает новый маршрут.", "A compact block arena. Every breach opens a new route."), 15, CombatTheme.MUTED)
 		home_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		hero_content.add_child(home_note)
 

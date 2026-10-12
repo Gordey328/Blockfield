@@ -511,7 +511,7 @@ func _update_rush_status() -> void:
 		_rush_panel.visible = pending and _focused and not is_menu_open() and visible
 	if not bool(rush.get("enabled", false)): return
 	var levels: Dictionary = rush.get("levels", {})
-	var progress: String = _ui("%d очков · Усиление через %d убийств", "%d points · Upgrade in %d kills") % [int(rush.get("score", 0)), maxi(0, int(rush.get("next_kills", 0)) - int(rush.get("kills", 0)))]
+	var progress: String = _ui("%d очков · Ещё %d до усиления", "%d points · %d kills to upgrade") % [int(rush.get("score", 0)), maxi(0, int(rush.get("next_kills", 0)) - int(rush.get("kills", 0)))]
 	if int(rush.get("next_kills", 0)) <= 0:
 		progress = _ui("%d очков · Урон %d · Броня %d", "%d points · Power %d · Armor %d") % [int(rush.get("score", 0)), int(levels.get("power", 0)), int(levels.get("armor", 0))]
 	_combat_readout.survival_text += "\nRush · " + progress
