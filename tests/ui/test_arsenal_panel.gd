@@ -2,6 +2,7 @@ extends SceneTree
 ## Real touch dispatch, catalogue admission and bounded CSS layout.
 const PANEL = preload("res://ui/arsenal_panel.gd")
 const CATALOG = preload("res://gameplay/arsenal_catalog.gd")
+const MOBILE = preload("res://ui/mobile_controls.gd")
 var checks: int = 0
 var failures: int = 0
 var selections: Array[String] = []
@@ -83,9 +84,10 @@ func _run() -> void:
 	var original: Dictionary = readout.duplicate(true)
 	panel.set_readout(readout)
 	await _frames(3)
+	await _tap(panel._more)
 	await _tap(panel._apply)
 	_check(applications.is_empty() and panel.get_display_state().targeting, "First support tap enters explicit targeting without firing")
-	await _tap(panel._apply)
+	await _tap(panel._more)
 	panel._apply.pressed.emit()
 	_check(applications == ["x17"], "Confirm sends one support request and rejects duplicate submission")
 	panel.set_readout(original)
@@ -125,6 +127,7 @@ func _run() -> void:
 	readout.selected_item = "x01"
 	panel.set_readout(readout)
 	await _frames(3)
+	await _tap(panel._more)
 	var point: Vector2 = panel._apply.get_global_rect().get_center()
 	_touch(point, true)
 	await _frames(2)
@@ -137,6 +140,7 @@ func _run() -> void:
 	_check(triggers == [true, false, true, false], "Opening catalogue cancels held fire before root pauses input")
 	_touch(point, false)
 	panel.close()
+	await _tap(panel._more)
 	await _tap(panel._source)
 	_check(selections.back() == "source" and panel.get_display_state().selected_item == "source", "Classic action restores original equipment through an explicit intent")
 	panel.set_home_mode(true)
@@ -178,6 +182,8 @@ func _run() -> void:
 			await _frames(3)
 			var viewport: Rect2 = root.get_visible_rect()
 			_check(viewport.grow(.5).encloses(panel._bank.get_global_rect()), "Compact equipped bank fits viewport: " + str(dimensions))
+	await _check_home_card_resize()
+	await _check_compact_bank()
 	panel.set_enabled(false)
 	panel.show_catalog(true)
 	_check(not panel._overlay.visible and not panel._bank.visible, "Disabled lifecycle hides and gates both surfaces")
@@ -189,6 +195,140 @@ func _run() -> void:
 	root.content_scale_aspect = saved.scale_aspect
 	print("ARSENAL PANEL: %d checks, %d failures" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+func _check_home_card_resize() -> void:
+	root.size = Vector2i(1280, 720)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	root.content_scale_size = Vector2i.ZERO
+	var sample: ArsenalPanel = PANEL.new()
+	root.add_child(sample)
+	sample.set_home_mode(true)
+	sample.set_enabled(true)
+	sample.configure("ru")
+	await _frames(3)
+	for dimensions: Vector2i in [Vector2i(390, 844), Vector2i(1280, 720), Vector2i(390, 844)]:
+		sample.close()
+		root.size = dimensions
+		sample.show_catalog(true)
+		var css_per_logical: Vector2 = Vector2(dimensions) / root.get_visible_rect().size
+		var heights: Array[float] = []
+		_check(sample._cards.x01.custom_minimum_size.y >= 142 and sample._cards.x01.custom_minimum_size.y <= 240, "Opening/resizing never stores a viewport-sized minimum for the first card: " + str(dimensions))
+		for frame: int in 4:
+			await _frames(1)
+			var height: float = sample._cards.x01.get_global_rect().size.y * css_per_logical.y
+			heights.append(height)
+			_check(height >= 141.5 and height <= 240.5, "First rendered Home card stays bounded before settling: " + str(dimensions) + " frame=" + str(frame))
+			if frame > 0:
+				var card_rectangle: Rect2 = sample._cards.x01.get_global_rect()
+				_check(card_rectangle.grow(.5).encloses(sample._card_titles.x01.get_global_rect()) and card_rectangle.grow(.5).encloses(sample._card_details.x01.get_global_rect()), "Early card text stays inside its bounds before the CSS poll: " + str(dimensions) + " frame=" + str(frame))
+		await create_timer(.30).timeout
+		heights.append(sample._cards.x01.get_global_rect().size.y * css_per_logical.y)
+		_check(absf(heights.back() - heights[0]) < 1.0, "Home card avoids quarter-second height jitter after opening: " + str(dimensions))
+		print("ARSENAL CARD RESIZE %s: %s" % [dimensions, heights])
+	var reached: Array[String] = []
+	for category: String in ["primary", "bomb", "stratagem"]:
+		sample._choose_category(category)
+		await _frames(2)
+		for entry: Dictionary in CATALOG.entries():
+			if entry.category != category: continue
+			var id: String = str(entry.id)
+			var card: Button = sample._cards[id]
+			sample._scroll.ensure_control_visible(card)
+			await _frames(2)
+			var rectangle: Rect2 = card.get_global_rect()
+			var detail: Label = sample._card_details[id]
+			_check(rectangle.size.y >= 141.5 and rectangle.size.y <= 240.5 and sample._scroll.get_global_rect().intersects(rectangle), "Every mobile Home card has bounded reachable content: " + id)
+			_check(rectangle.grow(.5).encloses(sample._card_titles[id].get_global_rect()) and rectangle.grow(.5).encloses(detail.get_global_rect()) and detail.get_visible_line_count() == detail.get_line_count(), "Card title and complete wrapped action text remain unclipped: " + id)
+			reached.append(id)
+	_check(reached.size() == 20, "All twenty Home cards remain reachable after desktop/mobile transitions")
+	sample.free()
+
+func _check_compact_bank() -> void:
+	root.size = Vector2i(844, 390)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	root.content_scale_size = Vector2i.ZERO
+	var sample: ArsenalPanel = PANEL.new()
+	root.add_child(sample)
+	sample.set_enabled(true)
+	var state: Dictionary = {"selected_item":"x17", "loadout":CATALOG.defaults(), "stock":{"x17":2, "x12":2}, "cooldowns":{}, "magazine":3, "reserve":12, "enabled":true, "target_valid":true}
+	var applied: Array[String] = []
+	var held: Array[bool] = []
+	var selected: Array[String] = []
+	sample.apply_requested.connect(func(id: String) -> void:
+		applied.append(id)
+		state.stock[id] = int(state.stock.get(id, 0)) - 1
+		sample.set_readout(state))
+	sample.trigger_changed.connect(func(value: bool) -> void: held.append(value))
+	sample.item_selected.connect(func(id: String) -> void: selected.append(id))
+	sample.set_readout(state)
+	await _frames(4)
+	var center: Vector2 = Vector2(844, 390) * .5
+	var aim_area: Rect2 = Rect2(center - Vector2.ONE * 12, Vector2.ONE * 24)
+	_check(sample._compact_bank and not sample._actions_row.visible and sample._more.visible, "Short landscape starts with one equipped row and a More action")
+	_check(not sample._bank.get_global_rect().intersects(aim_area), "Closed844×390 bank leaves the actual crosshair and surrounding aim area clear")
+	for button: Button in sample._slots + [sample._more]:
+		_check(button.is_visible_in_tree() and button.get_global_rect().size.x >= 55.5 and button.get_global_rect().size.y >= 55.5, "Every closed bank action retains a56CSS touch target")
+	var mobile: BlockfieldMobileControls = MOBILE.new()
+	root.add_child(mobile)
+	mobile.setup(null, null)
+	mobile.set_process_input(false)
+	mobile.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	mobile.size = Vector2(844, 390)
+	mobile.set_touch_preferences(false, 1.0, false)
+	var mobile_rects: Dictionary = mobile.get_action_rects()
+	_check(not sample._bank.get_global_rect().intersects(mobile_rects.primary) and not sample._bank.get_global_rect().intersects(mobile.get_hit_regions().move), "Closed bank avoids real primary-fire and fixed joystick regions")
+	_check(sample._bank.position.y >= mobile.get_layout_height(), "Closed bank remains below the original tool row")
+	mobile.free()
+	await _tap(sample._more)
+	_check(sample._actions_row.visible and sample._actions_open and sample.get_safe_zones() == [sample._bank.get_global_rect()], "More opens the existing action drawer and exposes its exact safe bounds")
+	await _tap(sample._apply)
+	_check(sample._targeting and not sample._actions_row.visible and not sample._actions_open and applied.is_empty(), "Touch Aim collapses the drawer without spending support stock")
+	_check(sample._more.text.contains("Подтвердить") and not sample._bank.get_global_rect().intersects(aim_area), "Direct confirmation stays reachable while the aim area is clear")
+	state.target_valid = false
+	sample.set_readout(state)
+	await _tap(sample._more)
+	_check(applied.is_empty() and sample._more.disabled and state.stock.x17 == 2, "Invalid target disables compact confirmation without spending stock")
+	state.target_valid = true
+	sample.set_readout(state)
+	await _tap(sample._more)
+	_check(applied == ["x17"] and state.stock.x17 == 1 and not sample._actions_open, "Touch Confirm spends support stock exactly once through the shared intent path")
+	state.selected_item = "x12"
+	sample.set_readout(state)
+	await _tap(sample._more)
+	await _tap(sample._apply)
+	_check(applied == ["x17", "x12"] and state.stock.x12 == 1 and not sample._actions_row.visible, "Bomb application folds the drawer after one request")
+	state.selected_item = "x01"
+	sample.set_readout(state)
+	await _tap(sample._more)
+	var fire_point: Vector2 = sample._apply.get_global_rect().get_center()
+	_touch(fire_point, true, false, 8)
+	await _frames(1)
+	await _tap(sample._more)
+	_check(held == [true, false] and sample._touches.is_empty() and sample._canceled_touches.has(8), "Collapsing with another finger cancels every owned index and releases held fire")
+	_touch(fire_point, false, false, 8)
+	_check(sample._canceled_touches.is_empty() and applied.size() == 2, "Canceled release cannot activate a hidden action or leak a pointer claim")
+	await _tap(sample._more)
+	await _tap(sample._source)
+	_check(selected == ["source"] and not sample._actions_open, "The compact drawer keeps Classic backup accessible through a real touch")
+	await _tap(sample._more)
+	root.size = Vector2i(390,844)
+	await _frames(4)
+	_check(not sample._actions_open and sample._actions_row.visible and not sample._more.visible, "Rotating an open drawer to portrait clears fold state and restores direct actions")
+	root.size = Vector2i(844,390)
+	await _frames(4)
+	_check(not sample._actions_open and not sample._actions_row.visible and not sample._bank.get_global_rect().intersects(aim_area), "Returning from portrait restores a closed bank with a clear crosshair")
+	for dimensions: Vector2i in [Vector2i(390,844), Vector2i(844,390), Vector2i(1280,720), Vector2i(844,390)]:
+		root.size = dimensions
+		await _frames(4)
+		_check(root.get_visible_rect().encloses(sample._bank.get_global_rect()), "Resized combat bank stays inside the viewport: " + str(dimensions))
+		if dimensions.y < 500:
+			_check(not sample._actions_row.visible and sample._more.visible, "Rotation returns to a closed compact bank: " + str(dimensions))
+			await _tap(sample._more)
+			_check(sample._actions_row.visible, "Action drawer remains reachable after rotation: " + str(dimensions))
+			await _tap(sample._more)
+		else:
+			_check(sample._actions_row.visible and not sample._more.visible, "Portrait/desktop retain the existing directly visible actions: " + str(dimensions))
+	sample.free()
 
 func _check_layout(panel: ArsenalPanel, dimensions: Vector2i, scaled: bool) -> void:
 	var viewport: Rect2 = root.get_visible_rect()
@@ -208,9 +348,9 @@ func _tap(button: Button, clip: Rect2 = Rect2()) -> void:
 	_touch(rectangle.get_center(), false)
 	await _frames(2)
 
-func _touch(point: Vector2, down: bool, canceled: bool = false) -> void:
+func _touch(point: Vector2, down: bool, canceled: bool = false, index: int = 7) -> void:
 	var event: InputEventScreenTouch = InputEventScreenTouch.new()
-	event.index = 7
+	event.index = index
 	event.position = point
 	event.pressed = down
 	event.canceled = canceled

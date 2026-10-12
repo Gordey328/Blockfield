@@ -24,12 +24,17 @@ var _selected: String = "source"
 var _loadout: Dictionary = {}
 var _readout: Dictionary = {}
 var _targeting: bool = false
+var _actions_open: bool = false
+var _compact_bank: bool = false
 var _submitted: bool = false
 var _firing: bool = false
 var _canvas: Control
 var _bank: PanelContainer
 var _overlay: PanelContainer
+var _catalog_margin: MarginContainer
 var _slots: Array[Button] = []
+var _more: Button
+var _actions_row: HBoxContainer
 var _all_buttons: Array[Button] = []
 var _cards: Dictionary[String, Button] = {}
 var _card_titles: Dictionary[String, Label] = {}
@@ -52,6 +57,8 @@ var _logical_per_css: Vector2 = Vector2.ONE
 var _css_extent: Vector2 = Vector2.ZERO
 var _layout_age: float = 1.0
 var _touches: Dictionary = {}
+var _canceled_touches: Dictionary[int, bool] = {}
+var _stock_text: String = ""
 var _entries: Array[Dictionary] = []
 var _entry_by_id: Dictionary[String, Dictionary] = {}
 
@@ -72,7 +79,8 @@ func set_readout(readout: Dictionary) -> void:
 	if readout.get("loadout", null) is Dictionary and readout.loadout != _loadout: _loadout = CATALOG.canonical_loadout(readout.loadout)
 	var selected: String = str(readout.get("selected_item", _selected))
 	if selected != _selected:
-		_release_fire()
+		_cancel_touches()
+		_actions_open = false
 		_targeting = false
 	_selected = selected
 	if _selected == "source": _targeting = false
@@ -88,28 +96,35 @@ func set_enabled(value: bool) -> void:
 	_ensure_built()
 	_enabled = value
 	if not value:
-		_release_fire()
+		_cancel_touches()
 		_touches.clear()
+		_canceled_touches.clear()
+		_actions_open = false
 		if _catalog_open: show_catalog(false)
 	_render()
 
 func set_home_mode(value: bool) -> void:
 	_ensure_built()
+	if value != _home_mode:
+		_cancel_touches()
+		_actions_open = false
 	_home_mode = value
-	_release_fire()
 	_render()
 
 func set_combat_visible(value: bool) -> void:
 	_ensure_built()
+	if _combat_visible and not value:
+		_cancel_touches()
+		_actions_open = false
 	_combat_visible = value
-	if not value: _release_fire()
 	_render()
 
 func show_catalog(open: bool) -> void:
 	_ensure_built()
 	if open and not _enabled: return
 	if _catalog_open == open: return
-	_release_fire()
+	_cancel_touches()
+	_actions_open = false
 	_targeting = false
 	_catalog_open = open
 	_render()
@@ -117,8 +132,10 @@ func show_catalog(open: bool) -> void:
 
 func close() -> void:
 	show_catalog(false)
-	_release_fire()
+	_cancel_touches()
+	_actions_open = false
 	_targeting = false
+	_render()
 
 func is_catalog_open() -> bool:
 	return _catalog_open
@@ -135,7 +152,8 @@ func request_application(id: String) -> void:
 	var cooldowns: Dictionary = _readout.get("cooldowns", {})
 	if not primary and (int(stock.get(id, entry.get("stock", 0))) <= 0 or float(cooldowns.get(id, 0.0)) > 0): return
 	if id != _selected:
-		_release_fire()
+		_cancel_touches()
+		_actions_open = false
 		_selected = id
 		_targeting = false
 		_submitted = false
@@ -162,7 +180,8 @@ func get_display_state() -> Dictionary:
 		"catalog_count": _cards.size(), "targeting": _targeting,
 		"apply_disabled": _apply.disabled, "apply_text": _apply.text,
 		"hint": _hint.text, "stock_text": _meter.text,
-		"columns": _grid.columns, "minimum_target_css": TARGET_CSS}
+		"columns": _grid.columns, "minimum_target_css": TARGET_CSS,
+		"actions_open": _actions_open, "compact_bank": _compact_bank}
 
 func _ensure_built() -> void:
 	if _built: return
@@ -191,16 +210,20 @@ func _ensure_built() -> void:
 		button.add_theme_font_size_override("font_size", 12)
 		row.add_child(button)
 		_slots.append(button)
-	var actions: HBoxContainer = HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 5)
-	bank_layout.add_child(actions)
+	_more = _button("ArsenalMore", _toggle_actions)
+	_more.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_more.add_theme_font_size_override("font_size", 12)
+	row.add_child(_more)
+	_actions_row = HBoxContainer.new()
+	_actions_row.add_theme_constant_override("separation", 5)
+	bank_layout.add_child(_actions_row)
 	_catalog = _button("ArsenalBrowse", func() -> void: show_catalog(true))
 	_source = _button("ArsenalSource", _return_source)
 	_reload = _button("ArsenalReload", _request_reload)
 	_apply = _button("ArsenalApply", _request_apply)
 	_apply.button_down.connect(_press_fire)
 	_apply.button_up.connect(_release_fire)
-	for button: Button in [_catalog, _source, _reload, _apply]: actions.add_child(button)
+	for button: Button in [_catalog, _source, _reload, _apply]: _actions_row.add_child(button)
 	_meter = _label("", 12, THEME.MUTED)
 	bank_layout.add_child(_meter)
 	_hint = _label("", 12, THEME.WARNING)
@@ -210,12 +233,12 @@ func _ensure_built() -> void:
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.add_theme_stylebox_override("panel", _style(Color("101f2e")))
 	_canvas.add_child(_overlay)
-	var margin: MarginContainer = MarginContainer.new()
-	for side: String in ["left", "right", "top", "bottom"]: margin.add_theme_constant_override("margin_" + side, 12)
-	_overlay.add_child(margin)
+	_catalog_margin = MarginContainer.new()
+	for side: String in ["left", "right", "top", "bottom"]: _catalog_margin.add_theme_constant_override("margin_" + side, 12)
+	_overlay.add_child(_catalog_margin)
 	var layout: VBoxContainer = VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 8)
-	margin.add_child(layout)
+	_catalog_margin.add_child(layout)
 	var heading: HBoxContainer = HBoxContainer.new()
 	layout.add_child(heading)
 	_title = _label("", 22, THEME.ACCENT)
@@ -263,6 +286,9 @@ func _ensure_built() -> void:
 		_grid.add_child(button)
 		_cards[id] = button
 		var content: VBoxContainer = VBoxContainer.new()
+		# The preset must resolve against its actual card parent, including on the
+		# first open before the deferred GridContainer sort has run.
+		button.add_child(content)
 		content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		content.offset_left = 12
 		content.offset_right = -12
@@ -270,7 +296,6 @@ func _ensure_built() -> void:
 		content.offset_bottom = -10
 		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_theme_constant_override("separation", 7)
-		button.add_child(content)
 		var title: Label = _label("", 17, entry.get("color", THEME.ACCENT))
 		content.add_child(title)
 		_card_titles[id] = title
@@ -326,6 +351,7 @@ func _render() -> void:
 		_meter.text += _ui(" · заряд %d%% · нагрев %d%%", " · charge %d%% · heat %d%%") % [roundi(float(_readout.get("charge", 0.0)) * 100), roundi(float(_readout.get("heat", 0.0)) * 100)]
 	if float(_readout.get("jet_remaining", 0.0)) > 0.0:
 		_meter.text += _ui(" · тяга %.1f с", " · thrust %.1f s") % float(_readout.jet_remaining)
+	_stock_text = _meter.text
 	_hint.text = str(_readout.get("target_reason", _ui("Наведи прицел на видимое место и подтверди вызов", "Aim at a visible location and confirm support"))) if _targeting else ""
 	_hint.visible = _targeting
 	_refresh_layout()
@@ -362,7 +388,8 @@ func _equip(id: String) -> void:
 
 func _select_slot(index: int) -> void:
 	if not _enabled or not _combat_visible or _home_mode or _catalog_open: return
-	_release_fire()
+	_cancel_touches()
+	_actions_open = false
 	_selected = _slot_item(index)
 	_targeting = false
 	item_selected.emit(_selected)
@@ -370,7 +397,8 @@ func _select_slot(index: int) -> void:
 
 func _return_source() -> void:
 	if not _enabled: return
-	_release_fire()
+	_cancel_touches()
+	_actions_open = false
 	_selected = "source"
 	_targeting = false
 	item_selected.emit("source")
@@ -385,10 +413,14 @@ func _request_apply() -> void:
 	var entry: Dictionary = _entry(_selected)
 	if str(entry.get("category", "")) == "primary": return
 	if str(entry.get("category", "")) == "stratagem" and not _targeting:
+		_cancel_touches()
+		_actions_open = false
 		_targeting = true
 		_render()
 		return
 	_submitted = true
+	_cancel_touches()
+	_actions_open = false
 	_targeting = false
 	apply_requested.emit(_selected)
 	_render()
@@ -404,6 +436,21 @@ func _release_fire() -> void:
 	if not _firing: return
 	_firing = false
 	trigger_changed.emit(false)
+
+func _toggle_actions() -> void:
+	if not _enabled or not _combat_visible or _home_mode or _catalog_open: return
+	if _targeting:
+		_request_apply()
+		return
+	_cancel_touches()
+	_actions_open = not _actions_open
+	_render()
+
+func _cancel_touches() -> void:
+	_release_fire()
+	for index: int in _touches:
+		if _canceled_touches.size() < MAX_TOUCHES: _canceled_touches[index] = true
+	_touches.clear()
 
 func _slot_item(index: int) -> String:
 	if index < 2: return str(_loadout.get("primary" if index == 0 else "bomb", ""))
@@ -443,6 +490,7 @@ func _stock_label(id: String, entry: Dictionary) -> String:
 func _refresh_layout() -> void:
 	if not _built or not is_inside_tree(): return
 	var css: Vector2 = _css_size()
+	_layout_age = 0.0
 	_logical_per_css = get_viewport().get_visible_rect().size / css
 	_canvas.scale = _logical_per_css
 	_canvas.size = css
@@ -457,18 +505,49 @@ func _refresh_layout() -> void:
 	_overlay.position = inset
 	_overlay.size = css - inset * 2
 	_grid.columns = 2 if css.x >= 800 and css.y >= 500 else 1
+	var next_compact: bool = css.y < 500.0
+	if next_compact != _compact_bank:
+		_cancel_touches()
+		_actions_open = false
+	_compact_bank = next_compact
+	_more.visible = _compact_bank
+	_more.text = _ui("Подтвердить", "Confirm") if _targeting else _ui("Ещё", "More")
+	_more.tooltip_text = _hint.text if _targeting else _ui("Арсенал, обычный набор, перезарядка и применение", "Arsenal, classic kit, reload and application")
+	_more.disabled = _apply.disabled if _targeting else not _enabled
+	_actions_row.visible = not _compact_bank or _actions_open
+	_meter.max_lines_visible = 1 if _compact_bank else -1
+	_meter.text = _hint.text if _compact_bank and _targeting else _stock_text
+	_hint.visible = _targeting and not _compact_bank
 	_instruction.visible = not compact
 	_title.add_theme_font_size_override("font_size", 18 if compact else 22)
 	var width: float = minf(css.x - inset.x * 2, 580.0)
 	_bank.position = Vector2((css.x - width) * .5, maxf(inset.y, 76.0 if compact else 82.0))
 	_bank.size = Vector2(width, 0)
 	for button: Button in _all_buttons: button.custom_minimum_size.x = TARGET_CSS
+	_more.custom_minimum_size.x = maxf(TARGET_CSS, ceilf(_more.get_theme_font("font").get_string_size(_more.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 16.0))
 	_home_source.custom_minimum_size.x = 128
+	var panel_padding: float = _overlay.get_theme_stylebox("panel").get_minimum_size().x
+	var margins: float = _catalog_margin.get_theme_constant("margin_left") + _catalog_margin.get_theme_constant("margin_right")
+	# Reserve scrollbar width even before AUTO visibility has settled. The
+	# resulting wrap width is conservative when a small category needs no scroll.
+	var scrollbar: float = _scroll.get_v_scroll_bar().get_combined_minimum_size().x
+	var gap: float = _grid.get_theme_constant("h_separation") * (_grid.columns - 1)
+	var text_width: float = maxf(32.0, floorf((_overlay.size.x - panel_padding - margins - scrollbar - gap) / _grid.columns) - 24.0)
 	for id: String in _cards:
-		var content: VBoxContainer = _card_titles[id].get_parent() as VBoxContainer
-		_cards[id].custom_minimum_size.y = maxf(142, content.get_combined_minimum_size().y + 24)
+		# A label/container minimum at its old or zero width can be thousands of
+		# pixels tall. Never feed that transient value back into the card minimum.
+		var text_height: float = _wrapped_height(_card_titles[id], text_width) + _wrapped_height(_card_details[id], text_width)
+		_cards[id].custom_minimum_size.y = maxf(142.0, ceilf(text_height + 7.0 + 20.0))
 	_close_button.text = _ui("Готово", "Done")
 	for button: Button in _tabs.values(): button.add_theme_font_size_override("font_size", 12 if css.x < 420 else 14)
+
+func _wrapped_height(label: Label, width: float) -> float:
+	var font: Font = label.get_theme_font("font")
+	var font_size: int = label.get_theme_font_size("font_size")
+	var flags: int = TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+	var measured: float = font.get_multiline_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, width, font_size, -1, flags).y
+	var lines: int = maxi(1, ceili(measured / maxf(1.0, font.get_height(font_size))))
+	return ceilf(measured) + maxf(0.0, float(label.get_theme_constant("line_spacing"))) * (lines - 1) + 2.0
 
 func _process(delta: float) -> void:
 	_layout_age += maxf(delta, 0.0)
@@ -491,6 +570,10 @@ func _input(event: InputEvent) -> void:
 		if _catalog_open or _within_bank(event.position): get_viewport().set_input_as_handled()
 		return
 	if event is InputEventScreenTouch:
+		if _canceled_touches.has(event.index):
+			if not event.pressed: _canceled_touches.erase(event.index)
+			get_viewport().set_input_as_handled()
+			return
 		if event.pressed:
 			if not _catalog_open and not _within_bank(event.position): return
 			if _touches.has(event.index) or _touches.size() >= MAX_TOUCHES:
@@ -506,6 +589,8 @@ func _input(event: InputEvent) -> void:
 			if button == _apply: _release_fire()
 			if is_instance_valid(button) and button.is_visible_in_tree() and not button.disabled and not event.canceled and not bool(claim.moved) and button.get_global_rect().has_point(event.position): button.pressed.emit()
 		else: return
+		get_viewport().set_input_as_handled()
+	elif event is InputEventScreenDrag and _canceled_touches.has(event.index):
 		get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag and _touches.has(event.index):
 		var claim: Dictionary = _touches[event.index]

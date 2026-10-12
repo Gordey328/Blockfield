@@ -78,3 +78,47 @@ The failed freeze is retained; no export from it is published.
 Final frozen source, reproducible commands/counts, browser captures, performance
 limits and public SHA256 comparison will be appended after their actual runs.
 Physical phone acceptance and full OpenSpades port completion are separate.
+
+## Local ordinary Web pass before final mobile layout repair
+
+Source c12506de8acc999e30a191f9f3a13b7a9e45c632 passes import,23 selected fixtures,
+smoke and the ordinary single-thread Compatibility export. Actual new counts:
+authority197/0, terrain812/0, view/audio131/0, panel188/0, records47/0,
+Rush scene115/0, lab50/0. Combined unchanged first-freeze63 and second-freeze47
+(nine repeated) give evidence for all101 registered fixtures. The exact current
+log is .cache/logs/arsenal-frozen-c12506d.log. The roof still completes145 ticks;
+this concurrent-browser native run measures41.098ms maximum, which must be kept
+alongside earlier9.119–13.012ms observations rather than discarded.
+
+Local desktop interaction at1280×720 uses the ordinary293/c125 engine/PCK.
+The c125 pass additionally observes X13 gravity warning, X14 multicolor lure,
+X15 three deployed banana models, X16 four-second warning and real crater,
+X17 confirmed narrow hole, X18 confirmed line cuts and X19 supported turret.
+The long original lab menu pause leaves the sun warning at3.6s when resumed.
+The game-exported crater PNG is .cache/previews/arsenal-web/c125-pocket-sun-crater.png.
+Only the IAB pointer-lock restriction appears in browser error logs; the original
+drag fallback is used for desktop looking.
+
+The ignored local arsenal-touch.html copies ordinary HTML and includes a bounded
+DOM TouchEvent WebMCP driver. It changes no engine/PCK, authority, resources or
+hidden game state; it reports isTrusted=false. Both helper files must be excluded
+from publication. Synthetic DOM touch is explicitly not a physical phone test.
+Touch mode is enabled using the original Settings UI and lab unlimited resources
+are explicitly turned off for each new LocalSession. At844×390 real touch
+selection/scroll/Fire/Aim observes: X01 magazine3→2, X02 4→3, X03 8→7,
+X04 fuel240→193 with simultaneous joystick, X05 24→17, X06 1→0,
+X08 battery180→139, X09 4→3 and actual pink cover, X10 held windup/cuts;
+X11 stock3→2 and Aim-button remote crater, X12 2→1, X13 1→0 with pull field,
+X14 2→1, X15 3→0 deploying its three mines, X16 1→0 plus X20 escape thrust,
+X17/X18/X19 each2→1 after aim/confirm. X20 consumes both calls and physically
+lifts the player with simultaneous joystick; thrust time is displayed. X07's
+valid living-target lock and3→1 (two salvos) are observed by touch at1280×720;
+invalid aim preserves stock. All twenty receive actual touch application, though
+real zombie lure behavior in the exported Rush is still pending. The original
+manual Respawn button restores life inventory and preserves the large crater.
+
+Actual mobile inspection finds two UI defects missed by earlier native tests:
+an immediate stale wrapped-height minimum before cards settle at390×844, and the
+two-row bank covering the center aim at844×390. Width-derived card sizing and a
+single-row bank with explicit actions drawer/confirmation are under repair;
+this pre-repair pass does not accept the final mobile layout or publication.

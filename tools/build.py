@@ -113,7 +113,8 @@ def main():
                ('arsenal-panel','tests/ui/test_arsenal_panel.gd'),
                ('arsenal-records','tests/gameplay/test_arsenal_records.gd'),
                ('arsenal-scene','tests/integration/test_arsenal_scene.gd')]
-    suites += [('arsenal-lab','tests/integration/test_arsenal_lab.gd')]
+    suites += [('arsenal-lab','tests/integration/test_arsenal_lab.gd'),
+               ('arsenal-web-benchmark','tests/gameplay/test_arsenal_web_benchmark.gd')]
     suites += [('survival-launch-latency','tests/integration/test_survival_launch_latency.gd')]
     suites += [('zombie-grenades','tests/simulation/test_zombie_grenades.gd'),
                ('survival-levels','tests/integration/test_survival_levels.gd'),
@@ -135,7 +136,7 @@ def main():
     for name,path in suites:
         if selected and name not in selected: continue
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','rush-upgrade-panel','rush-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main','arsenal-scene','arsenal-lab') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','rush-upgrade-panel','rush-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main','arsenal-scene','arsenal-lab','arsenal-web-benchmark') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     if args.export: export_web()
 

@@ -117,7 +117,53 @@ are closed. Ordinary Web so far exercises X01–X08 and X20 with distinct models
 finite counters; X07 locks a living actor and causes a credited kill, X20 consumes
 one call and physically lifts the owner above the structures. Remaining IDs,
 touch, saturation and final public verification are still outstanding.
-No arsenal publication has run.
+Frozen c12506de8acc999e30a191f9f3a13b7a9e45c632 passes parser/import, all23 selected
+fixtures, smoke and ordinary Compatibility Web export. New authority197/0,
+terrain812/0, view/audio131/0, panel188/0, records47/0, Rush scene115/0 and
+lab50/0 are actual results, not expectations. Original mobile10059/0,
+look223/0, aim79/0, actual TDM68/0 and Rush66/0 are included. Log:
+.cache/logs/arsenal-frozen-c12506d.log. This roof run still completes24,576 cells
+in145 ticks, but its observed maximum41.098ms is higher under concurrent browser
+load; the earlier9.119–13.012ms observations are not a browser FPS guarantee.
+
+Actual local c125 Web additionally exercises X13–X19: gravity field, multicolor
+disco placement, three banana mines, one-stock sun, confirmed drill/piano cuts
+and supported turret. Sun warning survives a long real menu pause and resumes
+with3.6s remaining before producing a canonical crater. Captures are generated
+by the game's own screenshot/export UI in .cache/previews/arsenal-web/.
+DOM TouchEvent input (synthetic, not physical hardware) at844×390 confirms
+support aim/confirmation, finite x20 stock, thrust readout and concurrent joystick.
+The local diagnostic HTML adds only a DOM-input WebMCP tool; engine/PCK are the
+ordinary frozen export and publication must exclude both diagnostic files.
+
+At390×844 the reused Home catalog briefly computes an oversized first card before
+wrapping settles. A new fixture reproduces the immediate minimum-height defect
+(247checks/1failure); arsenal_refs owns only Panel/UI fixture and the sole engine
+lease for a deterministic width-based sizing fix. Root retains browser/docs and
+release integration. All20 touch actions, browser AI/Rush/stress and public
+verification remain outstanding. No arsenal publication has run.
+
+All twenty c125 IDs now receive real synthetic DOM touch application. X07 locks a
+living visible actor by touch at1280×720 and spends3→1 on two salvos; other IDs
+use844×390. Source Fire/Aim supplies C4 remote detonation. Manual original Respawn
+preserves the crater. Exact per-ID resources are in arsenal-evidence.md; this does
+not infer real-phone acceptance. Ordinary game is navigated to about:blank before
+the final serial native performance run to remove concurrent browser load.
+
+Both mobile fixes are source-frozen. Width-based text sizing keeps immediate and
+settled cards142px; short-landscape single-row bank/More drawer/Aim-fold/direct
+Confirm preserves crosshair,56CSS targets, touch cancellation and Classic backup.
+Import and expanded panel286/0 are clean. Diagnostic scene plus real native driver
+are written in tests/gameplay/arsenal_web_benchmark* and test_arsenal_web_benchmark.gd.
+Import passes; first driver catches an Array typing error at Start, fixed with
+Array[Vector3i]. Retained retry log passes171/0:24,576 roof cells/24,580 canonical
+removals/145 ticks, actual mesh drain, pause,64/12/50 caps and epoch resets. Native
+helper CPU716.233ms total/13.683ms max,179 rendered callbacks including8 paused.
+These are native/headless observations only. All specialist source/engine leases
+are returned. Coordinator registers the diagnostic as the102nd fixture and adds
+tools/export_arsenal_benchmark.py; deliberate entry-scene overrides are private/
+dirty metadata, rejected by ordinary Pages publication. Final ordinary/private
+exports and actual browser checks are next.
 
 Next: verify the final Home opt-out, inspect every item in ordinary desktop/touch
 Web, publish

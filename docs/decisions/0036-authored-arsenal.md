@@ -48,6 +48,24 @@ modal pause/capture, HUD, loading and restart; extra touch regions cannot become
 movement/look/fire input. Procedural authored sound resources use a bounded voice
 pool. The existing total50 decorative-particle cap is unchanged.
 
+At short CSS heights below500, the combat bank keeps four equipped slots and a
+More button in one56px row so the center aim stays visible. More exposes the
+existing actions drawer; support Aim folds it and turns More into Confirm.
+Folding cancels owned touch indices until their real release. Normal portrait
+and desktop retain directly visible actions. Card heights use font measurements
+at known CSS column width rather than a transient wrapped-container minimum.
+
+The private benchmark scene is a separate diagnostic export, never a substitute
+for ordinary-game interaction. It detaches a real24,576-cell roof through the
+same cooperative helper, adopts canonical receipts once through VoxelWorld,
+waits actual mesh publication, records bounded raw CPU/frame/pause samples and
+can saturate the existing64/12 geometry and single50particle pools. Reset creates
+a new diagnostic epoch; pause freezes helper and effect clocks. Export tooling
+copies frozen source into an ignored directory and changes only the copied
+entry scene. Metadata declares the diagnostic overrides dirty/private, so normal
+Pages publication rejects this folder. CPU step observations and rendered callback
+rates are separate measurements, not phone or universal60FPS guarantees.
+
 Acceptance requires all twenty distinct real mechanisms, lifecycle/saturation and
 source regressions, actual desktop/touch Web interaction and verified publication.
 Native timing and desktop viewport dimensions do not establish phone performance.
