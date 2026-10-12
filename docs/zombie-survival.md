@@ -1,9 +1,9 @@
 # Zombie survival: implementation and evidence
 
 Updated: 2026-10-12 (Europe/Moscow). This report records the implemented offline
-mode and available development checks. Frozen release acceptance and publication
-are pending; the coordinator adds their exact source/bundle identities and Web
-evidence after completing those gates.
+mode, development checks and the published frozen release. The accepted runtime
+is 16874505fa75ae4804e027db123fa2a8524b2ab8; documentation evidence commits do not
+change its production game/tests/tools. The complete port remains in development.
 
 Godot is `4.7.2.stable.official.ed1daf0bf`, Compatibility renderer. Upstream
 OpenSpades remains `dcf449c845d509bbde9d79239b32d201c1389961`. Development starts
@@ -298,7 +298,7 @@ The 40.404 ms maximum also remains visible in the evidence. Physical iPhone 12
 mini / Chrome sustained 30 FPS, thermals, memory growth and touch comfort remain
 unverified.
 
-## Pending coordinator gates
+## Frozen and ordinary Web gates
 
 First frozen attempt at `4e93e1375df79a6fc589df5fb44d406e5f9adeb9` stopped
 at the panel fixture's old Russian headshot caption expectation after the display
@@ -317,15 +317,20 @@ does not consume ammunition. Pause holds the exact preparation/active countdown.
 Restart creates a fresh paused preparation; Continue begins it. Pursuit, a 20HP
 bite, repeated death, Home, three firearm kills in a horde and a single-enemy
 60-second victory are observed in the ordinary game. The successful run ends at
-01:00 with 1 kill, 0 live and 60 damage taken; it does not establish a normal Web
-cleanup run with live enemies at the deadline. That boundary has meaningful
-authority/actual-scene fixtures. The result caption now clarifies head hits rather
+01:00 with 1 kill, 0 live and 60 damage taken. A separate ordinary perimeter run
+reaches the deadline with 1 live enemy and 40HP: the HUD changes to cleanup and
+states that no more zombies will appear. The last enemy keeps approaching and
+takes an 18-damage arm hit. The post-deadline finishing kill was not captured;
+the cleanup-to-win boundary has meaningful authority/actual-scene fixtures.
+The result caption now clarifies head hits rather
 than implying headshot kills. No new GDScript diagnostic is observed; earlier
 Chromium UnknownError pointer capture entries use the existing drag fallback.
 
 Retained JPEGs: `.cache/previews/zombies-web/settings-portrait.jpg`,
 `defeat-landscape.jpg`, `horde-12-desktop.jpg`, `horde-fire-desktop.jpg` and
-`victory-desktop.jpg`. At the full 12-live limit the visible normal HUD reads
+`victory-desktop.jpg`, `cleanup-live.jpg` and `build-49.jpg`. Actual building
+decreases 50 blocks to 49; a grenade decreases 3 to 2, with blast damage applied
+once. At the full 12-live limit the visible normal HUD reads
 40FPS / 25.0ms / 447 draw calls; while firing/retreating, 3 kills reduce live
 population to 9 and the sample reads 29FPS / 34.5ms / 499 draw calls. These are
 short observations on this desktop, with rendering, sound and effects active;
@@ -336,21 +341,60 @@ ordinary export command: bundled Python `-c "import sys; sys.path.insert(0,'tool
 import build; build.export_web()"`, retained in
 `.cache/logs/survival-export-layout-only.log`. It is not the publishable frozen gate.
 
-- **Frozen source/full gate: PENDING.** The coordinator's mutable full pass
-  encountered an existing Native HDR fixture expectation of `changed == true`
-  while setting an already-saved speed of zero. The intended frozen fixture uses
-  a new private user directory; HDR idempotent behavior is unchanged. This failed
-  mutable run is not accepted as a full pass. Coordinator adds exact retained
-  failure/final command logs, source SHA and final gate result.
-- **Ordinary Web acceptance: PENDING.** Coordinator reports preliminary ordinary
-  browser observations of preparation/countdown, pause with frozen time, a
-  20-HP bite, death/restart and Home. Those observations still need their frozen
-  bundle identity and retained browser evidence here. Victory/cleanup, full
-  population, mobile input/layout and all-weapon resource loops are not yet
-  accepted by this report.
-- **Publication: PENDING.** Add the checked bundle commit, Pages URL, public hash
-  comparison and actual public gameplay/result/reload checks after publication.
-  There is no new public zombie-mode delivery claim in this draft.
+- **Frozen source/full gate: PASSED.** Source
+  `16874505fa75ae4804e027db123fa2a8524b2ab8` passes parser/import, all 85 registered
+  fixtures, runtime smoke and ordinary Web export, with no rejected diagnostics.
+  `.cache/logs/survival-frozen-final.log` and
+  `.cache/release-16874505fa75/.cache/logs/` retain the results. All seven new
+  fixtures pass: 28/131/302/82/158/42/34 checks respectively. Original lab HDR
+  is 119/0, TDM 81/0 and scene 68/0, shell 434/0, launch 46/0, mobile controls
+  10059/0, look 223/0, aim assist 79/0 and combat HUD 680/0. The mutable full
+  attempt's idempotent saved-zero HDR failure is retained separately; it is not
+  accepted as a gate. Fresh private user directories isolate frozen checks;
+  production project.godot bytes are restored before export. Command:
+
+  `bundled-python -X utf8 tools/release_checkpoint.py --revision 16874505fa75ae4804e027db123fa2a8524b2ab8 --import-cache game/.godot`.
+- **Ordinary Web: CHECKED with the limits above.** Final frozen localhost reload
+  starts the same survival scene, held keyboard movement, actual Fire and pause;
+  the wave panel shows 1 of 1 appeared with 55 seconds left. The browser-control
+  DOM timeout during one bundled action recovered on observation; the game
+  continued normally. Earlier extensive ordinary checks share exactly this
+  production game tree except the clarified result caption. No diagnostic export,
+  fake game or injected state is used.
+- **Publication: VERIFIED.** Source 16874505fa75ae4804e027db123fa2a8524b2ab8 is
+  pushed to codex/zombie-survival and fast-forwarded into dev from b35f694, with
+  both remote SHAs checked. Private Pages checkout from d0c06b5 receives the exact
+  26-file frozen export, preserving optimized/game-ui/reduced siblings. The
+  publisher rebases on remote gh-pages and publishes bundle
+  61771051a523bd0c4005c4ece118e109b3540981. Only build-info.json, index.html and
+  index.pck change. API reports built/no error; all 26 independent public SHA256
+  comparisons match, including engine, pack, maps and notices. Retained reports:
+  `.cache/survival-pages-prepared.json`, `.cache/public-survival-hashes.json` and
+  `.cache/logs/survival-pages-{publish,verify}.log`. Commands use bundled Python:
+
+  `tools/publish_pages.py --directory .cache/zombie-pages` and
+  `.cache/survival-release-check.py public` (retained private audit helper).
+
+  Actual public Home → Zombie waves restores production defaults 10 minutes,
+  quota up to6, 60-second interval and linear+1/minute, with the existing shotgun
+  and mobile-On preference. All six unarmed zombies appear; keyboard movement,
+  real shotgun Fire6to5, pause and Home work. Public375×812 setup restores the
+  same settings, launches the real scene, accepts look without spending the6
+  rounds, touch Fire6to5 and Menu pause. The public warning/error list is empty.
+  Retained proof: `public-survival.jpg`, `public-settings.jpg` and
+  `public-settings-portrait.jpg` in `.cache/previews/zombies-web/`. URL:
+  https://gordey328.github.io/Blockfield/?v=16874505fa75 .
+
+  Existing CI limitation: pages.yml does not supply the ignored hash-pinned
+  reduced template on a clean runner. This is a checked local frozen publication,
+  not an Actions success claim. The accepted template hash is unchanged.
+
+Heartbeat ui-2 is PAUSED through automation_update after public acceptance, with
+saved state checked. Specialists and engine leases are complete; own HTTP8096 is
+stopped and temporary browser viewport is reset. The public deliverable and managed
+worktree are retained; ignored snapshots/logs/private publication checkout support
+review. Shared dirty checkout is untouched. Scope/parity/ADR/status are updated;
+this finite Crossroads addition does not certify the entire port or phone hardware.
 
 Further development of additional maps or enemy types follows this first
 finite-mode acceptance. The reference research and evolving game design remain in

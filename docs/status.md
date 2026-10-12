@@ -3,7 +3,7 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Zombie survival implementation — 2026-10-12 (in progress)
+## Zombie survival — 2026-10-12 (completed and published)
 
 The multiplayer predecessor actually completed its removal, all78 tests, browser
 checks and publication before this work started. Managed zombie-survival/Blockfield
@@ -20,7 +20,8 @@ AI fixture. zombie_design_refs owns only new zombie view/pause-result panel and
 their fixtures. Root owns Entry/Main/HUD/catalog/shell/combat integration, new scene,
 setup/actual-scene fixtures, shared build config, ADR/docs and serial engine/Web
 release. No other user-owned chat is created or messaged. No agent engine leases
-were issued during edits; source handoffs now ready for root parser.
+were issued during edits; all specialists have returned their source and engine
+leases, and the coordinator completed serial integration, verification and release.
 OfflineSurvivalSession inherits the existing shared command/presentation bridge,
 overrides TDM round/roster/spawn/supply policy and uses only local authority.
 Twelve reusable zombie lives remain bounded; no firearms, hit Areas, HP labels or
@@ -40,9 +41,32 @@ These are short desktop samples, not sustained phone FPS; Web static memory is
 unavailable (0), not a zero-memory claim. Native 12-slot planning measurement is
 recorded separately. A mutable full suite stopped at the existing HDR fixture's
 changed expectation for an already-saved zero speed. The frozen full gate uses a
-fresh private settings directory. Next: freeze source, run every registered check,
-verify the final normal export and publish/hash-check root Pages. Details and
-remaining limits: [zombie survival](zombie-survival.md).
+fresh private settings directory. The corrected frozen source
+16874505fa75ae4804e027db123fa2a8524b2ab8 passes parser/import, all 85 registered
+fixtures, runtime smoke and ordinary Web export. It is pushed on
+codex/zombie-survival and fast-forwarded into dev; remote SHAs are checked. The
+initial freeze's old panel-caption expectation is retained and corrected; the
+final panel is 158/0. Final native TDM/UI/mobile regressions also pass.
+
+Pages bundle 61771051a523bd0c4005c4ece118e109b3540981 is built with no API error.
+All 26 public files hash-match the frozen export. Only root metadata/HTML/PCK
+change; optimized/game-ui/reduced siblings are preserved. Actual public Home →
+Zombie waves starts defaults 10min / up to6 / 60s / linear+1 per minute, with the
+retained shotgun and mobile-On preference. Six unarmed zombies appear, movement
+and real Fire6to5 work, and pause/Home return work. At375×812, setup restores all
+defaults, look preserves6 rounds, touch Fire changes6to5 and Menu pauses. Public
+warning/error list is empty. Ordinary local live cleanup after the timer is also
+observed; the post-deadline finishing kill has behavioral/scene evidence, while
+the separately observed normal victory killed the last enemy before the deadline.
+No whole-port, imported-map-navigation or physical-phone FPS acceptance is implied.
+
+Heartbeat ui-2 is disabled (PAUSED by the app tool, saved state checked). Own HTTP
+helper is stopped; browser viewport is reset and the public deliverable retained.
+The attached managed source worktree and ignored release evidence are kept for
+review/reproduction; shared dirty checkout remains preserved. Subsequent evidence
+commits change docs only; production game/tests/tools match the checked revision.
+Details, exact commands and remaining limits: [zombie survival](zombie-survival.md).
+URL: https://gordey328.github.io/Blockfield/?v=16874505fa75 .
 
 ## Multiplayer removal — 2026-10-12 (completed and published)
 
