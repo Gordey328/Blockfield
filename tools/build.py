@@ -111,7 +111,7 @@ def main():
                ('main-optimization','tests/integration/test_main_optimization.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
     run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
                 '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)

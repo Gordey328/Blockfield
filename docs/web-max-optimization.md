@@ -121,6 +121,17 @@ Normal cohort costs about11.8→5.9ms/frame. Report:
 `.cache/benchmarks/maxopt-corpse.json`; first-pass evidence is retained separately.
 No bodies, collisions, source substeps, lifetimes or graphics options are removed.
 
+First frozen full check at `c3c503552aa5b21bcde6feb8557c07aa8a70d753` passes
+import and the first14 fixtures, then UI284/1 fails its remapped movement assertion.
+The old UI fixture waits12 rendered frames for physical motion without a fixed
+simulation/render ratio. Faster rendered callbacks do not guarantee the expected
+physics duration. The same archived UI fixture at `--fixed-fps60` passes284/0
+without production changes; build.py now gives this actual-input fixture the same
+fixed60 mode as other input/scene fixtures. Failed and clean logs remain under
+`.cache/release-c3c503552aa5/.cache/logs/test-ui{,-fixed60}.log`. A fresh frozen
+full gate is still required. Two test-oracle trailing EOF blank lines were removed
+after the first implementation commit; staged whitespace checks then pass.
+
 ## Reproduction and evidence
 
 Use bundled Python
