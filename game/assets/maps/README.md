@@ -1,4 +1,4 @@
-# Bundled Mirage voxel conversion
+# Bundled voxel conversions
 
 The user supplied the `csgo_mirage` GoldSrc map archive and explicitly requested
 publishing its converted map with Blockfield on GitHub Pages on 2026-10-11.
@@ -22,3 +22,19 @@ models and Blender scene are retained locally, outside this release.
 
 The offline lab's World/modes menu exposes “Open csgo_mirage”. The public `maps/`
 directory also provides the identical package for manual import/download.
+
+## Dust2 from Teardown
+
+The user supplied `C:/Users/Gordey/Desktop/dust2csgo` and explicitly requested
+immediate publication on2026-10-12. Source author: CleverGrief; source info.txt
+contains `[noupload]`, retained in the compiled package's provenance. This
+conversion does not relicense original map assets under Blockfield's code license.
+Only the compiled `dust2.bfmap` is bundled; raw XML/VOX/images/Lua stay local.
+
+Teardown XML/MagicaVoxel150 → BFM1,0.6meters/block,220×44×189,392,015solid cells.
+SHA256:`d9d8e1f6f7e7d14719242def88c306f3af0dda681c765c3a41222bf91bcaab61`.
+Static geometry and supplied heightmap ground are retained; reserved255 helper
+markers are excluded. Thin details are quantized. Original scripts, moving
+vehicles/doors, source lighting/material physics, ropes and water are omitted.
+The World/modes menu exposes “Open dust2”; maps/dust2.bfmap is the same download.
+See docs/teardown-dust2-conversion.md for evidence and explicit limits.
