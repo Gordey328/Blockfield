@@ -1,0 +1,16 @@
+{
+  "engine": "4.7.2",
+  "iteration": 1,
+  "status": "development",
+  "upstream": "dcf449c845d509bbde9d79239b32d201c1389961",
+  "bundled_maps": [
+    {
+      "path": "maps/csgo_mirage.bfmap",
+      "sha256": "08b69203a2dde4d276053647312dbcdd5bf20f0730203ee24c4c293934e35d3a"
+    }
+  ],
+  "source_commit": "274b3608b39a63919f9b1f86470a6f62badff034",
+  "source_dirty": false,
+  "template_kind": "reduced",
+  "template_sha256": "a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922"
+}
