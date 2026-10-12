@@ -108,3 +108,7 @@ to its original Auto; public pre-existing On is preserved.
 After public reload,375×812 setup still selects the saved shotgun; final public
 warning/error list is empty. Temporary viewport override is reset, local tab and
 HTTP helper are closed, and only the public deliverable tab is retained.
+
+Code is isolated for integration in [draft PR3](https://github.com/Gordey328/Blockfield/pull/3)
+targeting dev. The original checkout remains on its concurrent task branch; the
+new UI runtime is in the attached worktree and public development path.

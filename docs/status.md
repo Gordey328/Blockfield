@@ -45,6 +45,8 @@ delivery is complete; next UI scope is dedicated pause/death/results/settings.
 Public reload confirms stored shotgun selection and an empty final warning/error
 list. Temporary local tab/HTTP helper are closed; browser viewport is reset and
 the public deliverable tab is retained. Code/validation/release leases are returned.
+Review/integration artifact: [draft PR3](https://github.com/Gordey328/Blockfield/pull/3)
+targets dev. Runtime remains912adec; later branch commits update documentation only.
 See [ADR0030](decisions/0030-game-shell-and-offline-launch.md).
 
 ## Approved optimization integration into dev — 2026-10-12
