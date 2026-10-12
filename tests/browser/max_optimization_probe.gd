@@ -9,6 +9,7 @@ var status: Label
 var frames: Array[float] = []
 var measuring: bool = false
 var peak_draws: int = 0
+var peak_corpses: int = 0
 var callback: JavaScriptObject
 
 func _ready() -> void:
@@ -43,6 +44,7 @@ func _process(delta: float) -> void:
 	if not measuring: return
 	frames.append(delta*1000.0)
 	peak_draws = maxi(peak_draws,int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)))
+	peak_corpses = maxi(peak_corpses,app._corpses.size())
 
 func run(kind: String) -> void:
 	if kind not in ["lab","tdm","title"]: return
@@ -58,11 +60,9 @@ func run(kind: String) -> void:
 	app.hud.set_mobile_controls_mode(2)
 	app.hud.set_menu_visible(true)
 	if kind=="title": await app.load_original_map()
-	app.hud.set_menu_visible(false)
-	app.hud._focused = true
-	app.hud._sync_controls()
 	app.session.invulnerable = true
 	app.session.unlimited_ammo = true
+	if kind=="tdm": app.session.kill_limit = 10000
 	_set_status("Preparing "+kind+"; terrain and materials warm outside timings")
 	var deadline: int = Time.get_ticks_msec()+120000
 	while Time.get_ticks_msec()<deadline:
@@ -72,11 +72,15 @@ func run(kind: String) -> void:
 		_set_status("Preparation failed")
 		busy = false
 		return
+	app.hud.set_menu_visible(false)
+	app.hud._focused = true
+	app.hud._sync_controls()
 	await get_tree().create_timer(5.0).timeout
 	var rows: Array[Dictionary] = []
 	for repeat: int in 3:
 		frames.clear()
 		peak_draws = 0
+		peak_corpses = 0
 		_set_status("Measuring "+kind+" sample "+str(repeat+1)+" / 3")
 		RECORDER.reset()
 		measuring = true
@@ -90,10 +94,14 @@ func run(kind: String) -> void:
 			"p99_frame_ms":frames[int((frames.size()-1)*.99)],"max_frame_ms":frames[-1],
 			"peak_draw_calls":peak_draws,"cpu":RECORDER.snapshot(),"memory_static":Performance.get_monitor(Performance.MEMORY_STATIC)})
 		rows[-1]["corpses"] = app._corpses.size()
+		rows[-1]["peak_corpses"] = peak_corpses
+		if kind=="tdm":
+			rows[-1]["authority_tick"] = app.session.simulation.tick
+			rows[-1]["finished"] = app.session.finished
 	var result: Dictionary = {"scenario":kind,"engine":Engine.get_version_info().string,
 		"renderer":RenderingServer.get_video_adapter_name(),"graphics":app.get_graphics_options(),"samples":rows,
 		"actors":app.session.targets.size(),"network_client_created":app.network_client!=null,
-		"method":"Actual Main rendered Web, same diagnostic wrappers, 5s warmup then three10s samples; no physical-phone or universal FPS acceptance"}
+		"method":"Actual Main rendered Web, same diagnostic wrappers; paused terrain preparation, 5s warmup then three10s samples; TDM diagnostic kill limit10000; no physical-phone or universal FPS acceptance"}
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("window.maxoptResult="+JSON.stringify(result),true)
 	print("MAXOPT_WEB: "+JSON.stringify(result))

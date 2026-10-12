@@ -132,6 +132,29 @@ fixed60 mode as other input/scene fixtures. Failed and clean logs remain under
 full gate is still required. Two test-oracle trailing EOF blank lines were removed
 after the first implementation commit; staged whitespace checks then pass.
 
+Frozen `0a129eca80ff3b2dbadae947dc43cec141311d4d` passes all102 runs
+(101 Godot fixtures plus latency458/0), parser/import, client/server smokes and
+normal reduced-template Web export. Logs under
+`.cache/release-0a129eca80ff/.cache/logs` contain no rejected engine diagnostics.
+Independent final review subsequently catches two custom-extension compatibility
+edges: a Corpse subclass's `_ray` override could be bypassed, and a callback that
+changes `corpse.world` could keep reading the captured old world. The final guard
+requires a base Corpse script as well as base World/Data; disabled fast paths use
+the live adapter. Final corpse SHA256
+`303ab67651e1a01e9d125c6e6642174307006871c468e46952c7b8079161452e`
+supersedes141. New independent1635/0, original9046/0, Main8/0 and actual TDM62/0
+pass, including explicit normal base-cache activation and both custom cases.
+The earlier paired component report remains tied to141; final browser timing
+uses303. Only corpse runtime changes after the full102 gate; final affected
+checks/smokes/export are repeated on a fresh archive before delivery.
+
+Expanded browser diagnostics keep authority paused until terrain is ready,
+then warm for5s and measure three10s windows. TDM diagnostic kill limit10000 avoids
+ending the comparison early; production limits are unchanged. Methods add Corpse
+step, bot commands and Match step costs plus actual body counts. Baseline and
+candidate use the identical final fixture/wrappers; their scene CPU is normalized
+per rendered callback or authority step, and frame intervals remain separate.
+
 ## Reproduction and evidence
 
 Use bundled Python

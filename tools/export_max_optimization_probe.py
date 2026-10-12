@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--name', required=True)
     parser.add_argument('--import-cache', type=Path)
+    parser.add_argument('--prepare-only', action='store_true')
     args = parser.parse_args()
     if not re.fullmatch(r'[a-z0-9-]+', args.name):
         raise SystemExit('Use lowercase letters, digits and hyphens')
@@ -60,6 +61,10 @@ def main():
     identity = {'source': str(args.source.resolve()), 'targets': TARGETS,
         'scripts': {str(p.relative_to(target / 'game')): hashlib.sha256(p.read_bytes()).hexdigest()
                     for p in (target / 'game').rglob('*.gd')}}
+    (target / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
+    if args.prepare_only:
+        print(target, flush=True)
+        return
     engine = build.engine()
     build.ROOT = target
     build.engine = lambda: engine

@@ -46,6 +46,31 @@ class OverrideData extends VoxelData:
 		clip_calls += 1
 		return clip_calls%13 == 0 or super.clip_box(point)
 
+class OverrideRayCorpse extends OpenSpadesCorpse:
+	var ray_calls: int = 0
+	func _ray(origin: Vector3, endpoint: Vector3, max_steps: int) -> Dictionary:
+		ray_calls += 1
+		var result: Dictionary = super._ray(origin,endpoint,max_steps)
+		if ray_calls%7 == 0:result.hit = false
+		return result
+
+class OverrideRayReference extends "corpse_reference.gd":
+	var ray_calls: int = 0
+	func _ray(origin: Vector3, endpoint: Vector3, max_steps: int) -> Dictionary:
+		ray_calls += 1
+		var result: Dictionary = super._ray(origin,endpoint,max_steps)
+		if ray_calls%7 == 0:result.hit = false
+		return result
+
+class ReassignWorld extends VoxelWorld:
+	var corpse: Node3D
+	var replacement: Node3D
+	var clip_calls: int = 0
+	func clip_box(point: Vector3) -> bool:
+		clip_calls += 1
+		if clip_calls == 3:corpse.world = replacement
+		return super.clip_box(point)
+
 func _initialize() -> void:
 	for argument: String in OS.get_cmdline_user_args():
 		if argument == "--benchmark":benchmark = true
@@ -58,6 +83,8 @@ func _run() -> void:
 	await _override_checks()
 	await _data_override_checks()
 	await _ray_contracts()
+	await _ray_override_checks()
+	await _world_reassignment_checks()
 	var report: Dictionary = {"assertions":assertions,"failures":failures,"reference_sha256":REFERENCE_SHA256}
 	if benchmark:
 		report["cohorts"] = await _benchmark()
@@ -125,6 +152,8 @@ func _differential(scenario: String) -> void:
 		candidate.step(delta)
 		reference.step(delta)
 		generic.step(delta)
+		if frame == 0:
+			_check(candidate._last_step_cache_enabled and not generic._last_step_cache_enabled, "Base corpse/World/Data uses optimized cache and generic adapter keeps fallback")
 		_check(_snapshot(candidate) == _snapshot(reference), "Independent source exact state/matrix equivalence %s frame %d" % [scenario,frame])
 		_check(_snapshot(generic) == _snapshot(reference), "Generic Node3D fallback exact equivalence %s frame %d" % [scenario,frame])
 		_check(candidate._step_cells.is_empty() and candidate._step_world == null and not candidate._step_cache_enabled, "No occupancy/world version survives source step")
@@ -296,6 +325,52 @@ func _snapshot(corpse: Node3D) -> Array:
 		corpse._edge_velocities,corpse._edge_initialized,corpse.simulation_time]
 	for part: String in PART_NAMES:values.append((corpse._parts[part] as Node3D).transform)
 	return values
+
+func _ray_override_checks() -> void:
+	var world: VoxelWorld = _world()
+	var candidate := OverrideRayCorpse.new()
+	var reference := OverrideRayReference.new()
+	root.add_child(candidate)
+	root.add_child(reference)
+	candidate.setup(world,_state())
+	reference.setup(world,_state())
+	for frame: int in range(20):
+		candidate.step(.07)
+		reference.step(.07)
+		_check(not candidate._last_step_cache_enabled and candidate.ray_calls > 0 and candidate.ray_calls == reference.ray_calls and _snapshot(candidate) == _snapshot(reference), "Inherited corpse preserves overridden ray results/calls frame %d" % frame)
+	candidate.free()
+	reference.free()
+	world.free()
+	await process_frame
+	await process_frame
+
+func _world_reassignment_checks() -> void:
+	var worlds: Array[ReassignWorld] = [ReassignWorld.new(),ReassignWorld.new()]
+	var replacements: Array[VoxelWorld] = [_world(),_world()]
+	var candidate := CORPSE.new()
+	var reference := REFERENCE.new()
+	root.add_child(candidate)
+	root.add_child(reference)
+	for index: int in range(2):
+		worlds[index].clear_world(Vector3i(32,16,32))
+		worlds[index].data.seed_box(Vector3i.ZERO,Vector3i(32,2,32),0x01605040)
+		worlds[index].water_level = -10
+		worlds[index].corpse = candidate if index == 0 else reference
+		worlds[index].replacement = replacements[index]
+		replacements[index].water_level = 7
+		replacements[index].data.seed_box(Vector3i(4,2,4),Vector3i(24,4,24),0x01aacc99)
+	candidate.setup(worlds[0],_state())
+	reference.setup(worlds[1],_state())
+	for frame: int in range(20):
+		candidate.step(.07)
+		reference.step(.07)
+		_check(candidate.world == replacements[0] and reference.world == replacements[1] and worlds[0].clip_calls == worlds[1].clip_calls and _snapshot(candidate) == _snapshot(reference), "Custom callback world reassignment is observed by the next query frame %d" % frame)
+	candidate.free()
+	reference.free()
+	for world: Node3D in worlds:world.free()
+	for world: VoxelWorld in replacements:world.free()
+	await process_frame
+	await process_frame
 
 func _check(condition: bool, message: String) -> void:
 	assertions += 1

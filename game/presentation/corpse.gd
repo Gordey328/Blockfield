@@ -39,6 +39,7 @@ var _parts: Dictionary = {}
 var _active := false
 var _step_world: VoxelWorld
 var _step_cache_enabled: bool = false
+var _last_step_cache_enabled: bool = false
 var _step_cells: Dictionary[Vector3i,bool] = {}
 var _step_dt: float = -1.0
 var _step_damp: float = 1.0
@@ -152,10 +153,16 @@ func step(delta: float) -> void:
 	# The whole source spring step is synchronous. Repeated point/line queries
 	# see one map version; no cache survives into another rendered frame.
 	_step_world = world as VoxelWorld if is_instance_valid(world) else null
-	_step_cache_enabled = _step_world != null and _step_world.get_script() == VOXEL_WORLD_SCRIPT and _step_world.data.get_script() == VOXEL_DATA_SCRIPT
+	var own_script: Script = get_script()
+	_step_cache_enabled = _step_world != null and own_script.get_base_script() == null and _step_world.get_script() == VOXEL_WORLD_SCRIPT and _step_world.data.get_script() == VOXEL_DATA_SCRIPT
+	_last_step_cache_enabled = _step_cache_enabled
 	if _step_cache_enabled:
 		_step_dimensions = _step_world.dimensions
 		_step_water_level = _step_world.water_level
+	else:
+		# Custom callbacks may replace world mid-step. Each following query must
+		# read the live adapter, and inherited corpses retain virtual _ray calls.
+		_step_world = null
 	_step_cells.clear()
 	_step_dt = dt
 	_step_damp = pow(0.9,dt)

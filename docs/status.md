@@ -30,10 +30,13 @@ about55–58fps but sustained3×3 drops to about7–23fps and Main cost grows to
 Presentation specialist adds exact corpse-query/physics optimization with a preserved
 original oracle under agreed exclusive ownership:1590/0, original9046/0, measured
 1599/0 and actual TDM62/0 pass;16-body native CPU49–54% lower. No quality/body-count/
-collision/substep reduction is authorized or applied. All specialist source handoffs
-and engine leases are returned; root integrates serially. Next: expanded paired
-actual-Main profile and frozen full validation/export. Detailed failures and
-component limits remain in the report.
+collision/substep reduction is authorized or applied. Frozen0a129ec passes all102
+test runs (101 Godot plus latency458/0), parser/import, client/server smokes and
+normal Web export. Review adds base-Corpse/live-custom-adapter guards: new1635/0,
+original9046/0, Main8/0 and TDM62/0 pass. Only corpse runtime changes after0a;
+all specialist source handoffs/engine leases returned. Root repeats final affected
+archive checks/export, then expanded paired actual-Main Web profiles and a separate
+branch preview. Existing main/reduced Pages paths remain separately owned.
 See [branch evidence](web-max-optimization.md), [ADR0027](decisions/0027-quality-preserving-web-optimization.md).
 
 ## Combined Mirage/effects Pages release — 2026-10-11 (published development build)
