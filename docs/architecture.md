@@ -19,7 +19,7 @@
 - BlockfieldProtocol/WSTransport use explicit bounded bytes and poll-driven socket lifecycle. SessionRegistry binds guest capabilities to stable actors; InputQueue enforces generation/epoch, bounded intent and one command per step. MapTransfer stages baseline/deltas privately before adoption. ServerRuntime wires these to MatchSimulation; ClientPrediction provides pure replay/interpolation and ClientReplica owns confirmed public state plus private owner state. MATCH_STATE14 and GAME_EVENTS15 use validated shared public serialization with owner-only private fields; PLAYER_REQUEST16 carries bounded class/team/color/reload intents. Full native wire/Replica/rendered integration is implemented; browser/deployment acceptance remains unfinished. See decisions/0005-authoritative-multiplayer.md and server-runtime.md.
 - HitHistory retains exact closed actor/terrain frames. Runtime admits input timestamps; Match plans all historical firearm pellets before damage and checks current life/color on commit. One bounded immutable terrain index may be shared by independently revocable queries. Prepared source hit-volume transforms live only within a shot. Round reset rotates capabilities and completes fresh map/state barriers while preserving canonical IDs. See hit-history.md, match-rewind.md and runtime-epoch.md.
 
-On `codex/web-max-optimization`, Main uses OpenSpadesCorpse's explicit
+On `dev` and `codex/web-max-optimization`, Main uses OpenSpadesCorpse's explicit
 `setup_static` path with the existing Player/Dead model and a captured death pose.
 Floor projection happens once; resource refresh preserves the pose, and Main does
 not dispatch per-frame corpse physics. Existing body retention, camera center and

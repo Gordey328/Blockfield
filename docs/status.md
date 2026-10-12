@@ -3,6 +3,22 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Approved optimization integration into dev — 2026-10-12
+
+The user accepts the optimization and explicitly authorizes merging everything into
+`dev`. After `git fetch origin --prune`, remote/local dev is absent and origin/main
+is `d5516eb2bfd22bd5d03f32ac751dce7c01086876`, an ancestor of the optimization branch.
+Root creates dev from origin/main, fast-forwards it to approved optimization head
+`3412b5153a109448006d20df9a0fbdaf7dfeb69c` and pushes origin/dev, then adds this
+documentation handoff. Remote SHA verification confirms the push. No conflicts.
+The game/tests/tools trees exactly match checked runtime274b360; the existing106
+gate, smokes/export and browser evidence remain valid without another engine run.
+Root owns integration; world specialist independently verifies runtime tree identity.
+Unrelated optimization-plan/Steam edits remain uncommitted and untouched.
+The separate optimized Pages build remains checked source274b360/bundle6194640;
+the Pages workflow listens to main, so pushing dev does not publish a different
+build. Physical-phone30fps acceptance remains open. Next development starts from dev.
+
 ## Web optimization branch — 2026-10-12 (published development build)
 
 Checked runtime `274b3608b39a63919f9b1f86470a6f62badff034` is committed/pushed on

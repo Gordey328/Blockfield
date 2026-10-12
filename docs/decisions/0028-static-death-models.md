@@ -2,6 +2,9 @@
 
 Date: 2026-10-12, Europe/Moscow. Status: accepted by the user.
 
+The user subsequently approves integrating the complete optimization branch into
+`dev`; this presentation adaptation applies there as well.
+
 The target device is iPhone12 mini using Chrome. The quality-preserving Web pass
 finds corpse simulation to be a large sustained-combat CPU cost, while other
 render, player/authority and UI costs remain. The user explicitly permits removing
