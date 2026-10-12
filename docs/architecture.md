@@ -21,6 +21,8 @@
   Match Main disables the discarded lab bootstrap before child readiness and
   seeds streaming/camera at the authority spawn. Entry gives the pending shell two
   presentation turns before loading; standalone lab bootstrap stays enabled.
+  Normal match launch awaits existing bounded chunk and progressive minimap/water
+  preparation with a30second error/retry deadline before clock/input admission.
 - Web startup uses `game/web/loading.html`, derived from the pinned engine shell. The existing `Engine.onProgress` byte callback supplies decimal MB for the engine/game pack; exported file sizes supply the complete denominator before downloads start. Its original startup/error/overlay lifecycle stays intact; see [ADR0017](decisions/0017-web-download-progress.md).
 - VoxelData: shared packed cells, source queries, VXL, edit/collapse rules, atomic ordered transactions and bounded journal. VoxelWorld adopts Data and owns chunk meshes/collision, water/GI/reflections, top-down textures and visual falling clusters. Never apply an adopted transaction to Data then World twice.
 - LocalSession owns the offline lab and source-shaped local rules. SharedPlayerState, PlayerRules, GrenadeRules, MatchObjectives and MatchSimulation own fixed60Hz local multi-actor combat. OfflineTDMSession supplies one human and five bots; transport, prediction, rewind and connection lifecycle are removed under [ADR0031](decisions/0031-offline-only-game.md).

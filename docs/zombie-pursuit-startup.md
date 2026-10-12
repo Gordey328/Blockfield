@@ -88,11 +88,75 @@ $python_runtime = 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/d
 & '.tools/godot/Godot_v4.7.2-stable_win64_console.exe' --headless --path .cache/release-16874505fa75/game --fixed-fps 60 --script 'C:/Users/Gordey/.codex/worktrees/zombie-survival/Blockfield/tests/integration/test_startup_work.gd' -- --baseline
 ```
 
-## Frozen export and publication
+## Frozen export and local desktop acceptance
 
-Pending. Follow-up build supports explicit repeatable `--suite` selection; import
-and runtime smoke always run, and default remains all registered fixtures. The
-frozen gate will use changed/relevant native suites, no mobile-UI suite, ordinary
-Web export and local desktop input/render inspection. Public verification uses
-asset hashes and Pages API status, without reopening deployed gameplay.
-Heartbeat ui-2 remains PAUSED.
+Frozen runtime37297ed2fc4b48f3e56547a4681cd0ecf937ff06 passes parser/import, the18
+explicitly selected fixtures below, runtime smoke and ordinary Web export. It is
+pushed on codex/zombie-survival and fast-forwarded into dev; both remote SHAs are
+checked. Export metadata records clean source and the pinned reduced template
+a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922. Default build gate
+still runs all fixtures; these results do not claim a repeat of the original85.
+
+| Selected frozen fixture | Result |
+| --- | --- |
+| world / session / lab integration | 30/0;166/0;119/0 |
+| voxel adapter / world preparation | 25/0;53/0 |
+| offline TDM / real TDM scene | 81/0;68/0 |
+| shell / real launch | 434/0;46/0 |
+| survival settings / authority | 28/0;147/0 |
+| zombie AI / view | 523/0;82/0 |
+| survival setup / real scene | 42/0;36/0 |
+| startup / player rules / shared simulation | 16/0;141/0;234/0 |
+
+Frozen AI-only profile: mean2.901ms,p9510.722ms,max58.987ms, same bounded192jobs/
+280searches/56432nodes and no exhausted search. Startup ready samples are
+survival1564.312ms and warm TDM652.008ms, discarded lab0; they retain the native
+timing limits above. Detailed logs live under
+`.cache/release-37297ed2fc4b/.cache/logs/`; coordinator gate is
+`.cache/logs/zombie-followup-frozen.log`.
+
+```powershell
+& $python_runtime -X utf8 tools/release_checkpoint.py --revision 37297ed2fc4b48f3e56547a4681cd0ecf937ff06 --import-cache game/.godot --suite world --suite session --suite integration --suite world-preparation --suite voxel-adapter --suite offline-tdm --suite offline-tdm-scene --suite game-launch --suite game-shell --suite survival-settings --suite survival-session --suite zombie-ai --suite zombie-view --suite survival-setup --suite survival-scene --suite startup-work --suite match-simulation --suite player-rules
+& $python_runtime -X utf8 tools/serve.py --port 8098 --directory build/web
+```
+
+Ordinary frozen local URL127.0.0.1:8098/?v=37297ed2fc4b was inspected in the desktop
+in-app browser at its default1280×720, with no mobile-size override. Home → waves →
+Start shows the real Preparing map overlay and then completed terrain/minimap at
+the correct spawn with17seconds of preparation remaining. Held D plus Fire moves
+the owner laterally and consumes rifle10→6. Six actual lives appear; stationary
+owner receives100damage and defeat at active00:18, with6/6spawned,0skipped and
+0kills. Result → Home returns to the lightweight shell. Temporary local tab and
+HTTP helper are closed/stopped. Screenshots local-startup.jpg and local-result.jpg
+and local-console.json are in `.cache/previews/zombie-followup/`.
+Console contains one Chromium UnknownError, with the visible capture-unavailable
+notice and functional drag fallback; no GDScript/parser error is recorded. No
+precise browser launch-time/FPS claim is inferred from these snapshots.
+
+## Publication
+
+Pages bundlee22dce5935d56e70a468c37bdd4311b57b2ee733 is built with no API error.
+All26public files hash-match frozen37297ed2fc4b48f3e56547a4681cd0ecf937ff06. The first
+asset poll correctly fails acceptance while Pages is building and still serves
+the old three changed root files; retain zombie-followup-pages-building.log and
+public-zombie-followup-building.json. Final verification passes in
+zombie-followup-pages-verify.log and public-zombie-followup-hashes.json. Root
+changes only metadata/HTML/PCK; optimized/game-ui/reduced siblings
+are preserved. Public verification uses asset hashes and Pages API, without
+opening deployed gameplay. ui-2 stays PAUSED.
+URL: https://gordey328.github.io/Blockfield/?v=37297ed2fc4b . No deployed-browser
+or mobile UI inspection was performed for this follow-up. Subsequent evidence
+commits change docs only; production game/tests/tools match the checked runtime.
+
+Publication commands:
+
+```powershell
+& $python_runtime -X utf8 .cache/zombie-followup-release-check.py prepare
+& $python_runtime -X utf8 tools/publish_pages.py --directory .cache/zombie-pages
+& $python_runtime -X utf8 .cache/zombie-followup-release-check.py public
+```
+
+The retained private helper enumerates26frozen files, verifies every copied/public
+SHA256 and preserved sibling inventory, and checks Pages status. No credentials
+are copied into the source or logs. The shared dirty primary checkout stays
+untouched; the attached worktree and ignored evidence remain for reproduction.

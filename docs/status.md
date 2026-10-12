@@ -3,7 +3,7 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Zombie pursuit and startup follow-up — 2026-10-12 (in progress)
+## Zombie pursuit and startup follow-up — 2026-10-12 (completed and published)
 
 Latest user request supersedes the earlier cheaper detour/breach policy: choose
 randomly, break reachable forward blocks when an elevated owner cannot be reached,
@@ -13,13 +13,33 @@ ordinary local desktop Web inspection. Shared dirty checkout remains untouched;
 work continues in the attached zombie-survival worktree from 151ce9be8b56f8e11144446cbfb89092158e5dca.
 Coordinator owns Entry/Main/world bootstrap, startup fixture, build/docs/release.
 zombie_code_audit owns director/navigation and AI fixture; survival_authority owns
-survival session and its fixture. Serial engine lease currently belongs to AI.
+survival session and its fixture. All specialist source/serial engine leases are
+returned and coordinator verification/release is complete.
 AI has returned parser/import and523/0, including random33/64, no-retreat and
 1/2/6-block/5×5-platform fixtures. Authority has returned parser/import and147/0,
 including real spawn/strike/collapse/fall and shared queue progress. Root launch46/0,
 scene36/0, startup16/0, parser/import and runtime smoke pass; match launch now holds
-clock/input until budgeted initial chunk publication. Frozen export/publication
-remain next. Exact mutable commands/results and timing limits:
+clock/input until budgeted initial chunk/minimap/water preparation. Frozen
+37297ed2fc4b48f3e56547a4681cd0ecf937ff06 passes parser/import, selected18 fixtures,
+runtime smoke and ordinary Web export. Frozen counts: world30, lab session166,
+lab integration119, voxel adapter25, world preparation53, TDM81, TDM scene68,
+shell434, launch46, survival settings28/session147, AI523/view82, setup42/scene36,
+startup16, player rules141, shared match234; all0failures. No claim of repeating
+the original85-fixture/mobile acceptance. Native ready samples (not full click
+latency or browser FPS) are survival1564ms/warmTDM652ms, discarded lab1→0; cold
+resource/HUD/rig work remains. Normal local Web starts via preparation, displays
+completed terrain/minimap at the owner spawn, moves with keyboard, consumes
+rifle10→6 and receives real damage/defeat with6spawned lives, then returns Home.
+One Chromium UnknownError accompanies capture-unavailable/functional drag fallback;
+there is no recorded GDScript error. No public gameplay/mobile UI reinspection.
+Source is pushed and fast-forwarded into dev, remote SHAs checked. Pages bundle
+e22dce5935d56e70a468c37bdd4311b57b2ee733 is built/no API error; all26public files
+hash-match the freeze, root metadata/HTML/PCK only, sibling builds preserved.
+The early building-state poll is retained and never claimed as acceptance.
+Own local HTTP helper and temporary tab are stopped/closed; ui-2 remains PAUSED.
+Production game/tests/tools match the checked runtime; follow-up evidence commits
+change docs only. URL: https://gordey328.github.io/Blockfield/?v=37297ed2fc4b .
+Exact commands/results and timing limits:
 [follow-up evidence](zombie-pursuit-startup.md). The original completed release
 below remains historical evidence, not proof of these new edits. ui-2 stays PAUSED.
 
