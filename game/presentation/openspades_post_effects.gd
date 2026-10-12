@@ -184,7 +184,7 @@ func update_state(delta: float, health: float, hurt_age: float = -1, _sprinting:
 	_color_material.set_shader_parameter("camera_motion",motion)
 	_depth_material.set_shader_parameter("focus_distance",maxf(focus_distance,0.05))
 	_depth_material.set_shader_parameter("focus_focal_length",0.054 + 13.0 * pow(clampf(aiming,0.0,1.0),3.0))
-	_update_flares()
+	if bool(_options.lens_flare) and not _flare_sources.is_empty(): _update_flares()
 
 func set_flare_sources(sources: Array[Dictionary]) -> void:
 	_flare_sources = sources.slice(0,4)

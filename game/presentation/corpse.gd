@@ -3,6 +3,11 @@ extends Node3D
 ## GPL-3.0-or-later. Adapted from OpenSpades v0.1.3 Sources/Client/Corpse.cpp.
 ## Source nine-point spring body, not Godot's unrelated rigid-body ragdoll solver.
 const MODELS = preload("res://presentation/openspades_models.gd")
+const VOXEL_WORLD_SCRIPT = preload("res://world/voxel_world.gd")
+const VOXEL_DATA_SCRIPT = preload("res://world/voxel_data.gd")
+const COLLISION_AXES: Array[int] = [0,2,1]
+const HEAD_POINTS: Array[int] = [0,1,8]
+const MAX_QUERY_CELLS: int = 256
 const WORLD_AXES := Basis(Vector3.RIGHT,Vector3.BACK,Vector3.DOWN)
 const MODEL_AXES_INVERSE := MODELS.SOURCE_AXES
 const EDGE_PAIRS := [[0,1],[1,2],[2,3],[3,0],[0,4],[1,5],[2,6],[3,7]]
@@ -10,6 +15,14 @@ const LENGTHS := [[0,1,0.8],[2,3,0.8],[0,3,0.9],[1,2,0.9],
 	[0,2,1.204],[1,3,1.204],[4,0,1.0],[5,1,1.0],[6,2,1.0],[7,3,1.0]]
 const LINES := [[0,1],[1,2],[2,3],[3,0],[0,2],[1,3],[0,4],[1,5],[2,6],[3,7]]
 enum Point { TORSO1,TORSO2,TORSO3,TORSO4,ARM1,ARM2,LEG1,LEG2,HEAD }
+
+class LineRay extends RefCounted:
+	var hit: bool = false
+	var start_solid: bool = false
+	var position := Vector3.ZERO
+	var cell := Vector3i.ZERO
+	var normal := Vector3i.ZERO
+
 var player_id := -1
 var team := 0
 var color := MODELS.TEAM_COLORS[0]
@@ -24,6 +37,18 @@ var _edge_velocities := PackedVector3Array()
 var _edge_initialized := PackedByteArray()
 var _parts: Dictionary = {}
 var _active := false
+var _step_world: VoxelWorld
+var _step_cache_enabled: bool = false
+var _step_cells: Dictionary[Vector3i,bool] = {}
+var _step_dt: float = -1.0
+var _step_damp: float = 1.0
+var _step_vertical_damp: float = 1.0
+var _step_spring_damp: float = 0.0
+var _step_head_damp: float = 0.0
+var _step_dimensions := Vector3i.ZERO
+var _step_water_level: float = 1.0
+var _first_line_ray: LineRay = LineRay.new()
+var _second_line_ray: LineRay = LineRay.new()
 
 func setup(voxel_world: Node3D, state: Dictionary) -> void:
 	clear()
@@ -124,15 +149,36 @@ func step(delta: float) -> void:
 	var elapsed := minf(delta,0.25)
 	var substeps := maxi(4,ceili(elapsed*240.0))
 	var dt := elapsed/float(substeps)
+	# The whole source spring step is synchronous. Repeated point/line queries
+	# see one map version; no cache survives into another rendered frame.
+	_step_world = world as VoxelWorld if is_instance_valid(world) else null
+	_step_cache_enabled = _step_world != null and _step_world.get_script() == VOXEL_WORLD_SCRIPT and _step_world.data.get_script() == VOXEL_DATA_SCRIPT
+	if _step_cache_enabled:
+		_step_dimensions = _step_world.dimensions
+		_step_water_level = _step_world.water_level
+	_step_cells.clear()
+	_step_dt = dt
+	_step_damp = pow(0.9,dt)
+	_step_vertical_damp = pow(0.371,dt)
+	_step_spring_damp = 1.0-pow(0.1,dt)
+	_step_head_damp = 1.0-pow(0.05,dt)
 	for index in range(substeps): _substep(dt)
+	_step_world = null
+	_step_cache_enabled = false
+	_step_cells.clear()
+	_step_dt = -1.0
 	simulation_time += elapsed
 	_update_models()
 
 func _substep(dt: float) -> void:
-	var damp := pow(0.9,dt)
-	var damp_vertical := pow(0.371,dt)
+	var damp: float = _step_damp if dt == _step_dt else pow(0.9,dt)
+	var damp_vertical: float = _step_vertical_damp if dt == _step_dt else pow(0.371,dt)
 	var water_level := 1.0
-	if is_instance_valid(world):
+	if _step_cache_enabled:
+		water_level = _step_water_level
+	elif _step_world != null:
+		water_level = _step_world.water_level
+	elif is_instance_valid(world):
 		var value = world.get("water_level")
 		if value != null: water_level = float(value)
 	for index in range(9):
@@ -146,9 +192,9 @@ func _substep(dt: float) -> void:
 			velocity.y = (velocity.y-dt*32.0)*damp_vertical
 		if not _clip(old):
 			# Native X/Y/Z axes map to Godot X/Z/Y, including collision order.
-			for axis in [0,2,1]:
+			for axis: int in COLLISION_AXES:
 				var sample := old
-				for completed_axis in [0,2,1]:
+				for completed_axis: int in COLLISION_AXES:
 					sample[completed_axis] = position[completed_axis]
 					if completed_axis == axis: break
 				if _clip(sample):
@@ -195,7 +241,7 @@ func _spring(a: int, b: int, distance: float, dt: float) -> void:
 	positions[b] += correction*0.5
 	positions[a] -= correction*0.5
 	var midpoint := (velocities[a]+velocities[b])*0.5
-	var damp := 1.0-pow(0.1,dt)
+	var damp: float = _step_spring_damp if dt == _step_dt else 1.0-pow(0.1,dt)
 	velocities[a] += (midpoint-velocities[a])*damp
 	velocities[b] += (midpoint-velocities[b])*damp
 
@@ -208,8 +254,8 @@ func _head_spring(dt: float) -> void:
 	velocities[0] -= force*0.5
 	velocities[1] -= force*0.5
 	var midpoint := (velocities[0]+velocities[1])*0.25+velocities[8]*0.5
-	var damp := 1.0-pow(0.05,dt)
-	for index in [0,1,8]: velocities[index] += (midpoint-velocities[index])*damp
+	var damp: float = _step_head_damp if dt == _step_dt else 1.0-pow(0.05,dt)
+	for index: int in HEAD_POINTS: velocities[index] += (midpoint-velocities[index])*damp
 
 func _angle_spring(base: int, a: int, b: int, minimum: float, maximum: float, dt: float) -> void:
 	var first := positions[a]-positions[base]
@@ -226,17 +272,32 @@ func _angle_spring(base: int, a: int, b: int, minimum: float, maximum: float, dt
 	velocities[base] -= force
 
 func _line_collision(a: int, b: int, dt: float) -> void:
+	# Pure production queries cannot re-enter this cast. Custom worlds keep the
+	# original owned Dictionary path, including virtual _ray overrides.
+	if _step_cache_enabled:
+		_cast_ray_into(last_positions[a],last_positions[b],8,_first_line_ray)
+		if not _first_line_ray.hit or _first_line_ray.start_solid:return
+		_cast_ray_into(last_positions[b],last_positions[a],8,_second_line_ray)
+		if not _second_line_ray.hit or _second_line_ray.start_solid:return
+		_resolve_line_collision(a,b,dt,_first_line_ray.position,_second_line_ray.position,
+			_first_line_ray.normal,_second_line_ray.normal,_first_line_ray.cell)
+		return
 	var first := _ray(last_positions[a],last_positions[b],8)
 	if not first.hit or first.start_solid: return
 	var second := _ray(last_positions[b],last_positions[a],8)
 	if not second.hit or second.start_solid: return
+	_resolve_line_collision(a,b,dt,first.position,second.position,first.normal,second.normal,first.cell)
+
+func _resolve_line_collision(a: int, b: int, dt: float, first_position: Vector3,
+		second_position: Vector3, first_normal: Vector3i, second_normal: Vector3i,
+		first_cell: Vector3i) -> void:
 	var length_squared := positions[b].distance_squared_to(positions[a])
-	if (first.position-last_positions[a]).dot(last_positions[b]-last_positions[a]) > length_squared: return
-	if (second.position-last_positions[b]).dot(last_positions[a]-last_positions[b]) > length_squared: return
-	var penetration: float = first.position.distance_to(second.position)
-	var direction: Vector3 = Vector3(first.normal+second.normal)
+	if (first_position-last_positions[a]).dot(last_positions[b]-last_positions[a]) > length_squared: return
+	if (second_position-last_positions[b]).dot(last_positions[a]-last_positions[b]) > length_squared: return
+	var penetration: float = first_position.distance_to(second_position)
+	var direction: Vector3 = Vector3(first_normal+second_normal)
 	if direction == Vector3.ZERO:
-		var escape := _escape(first.cell,Vector3i(positions[a].floor()),Vector3i(positions[b].floor()))
+		var escape := _escape(first_cell,Vector3i(positions[a].floor()),Vector3i(positions[b].floor()))
 		if not escape.ok: return
 		direction = escape.direction
 		penetration = escape.distance+0.1
@@ -259,9 +320,36 @@ func _escape(hit: Vector3i, a: Vector3i, b: Vector3i) -> Dictionary:
 	return {"ok":best <= 10.0,"direction":direction,"distance":best}
 
 func _clip(position: Vector3) -> bool:
+	if _step_cache_enabled:
+		# Match VoxelData.clip_box exactly before using the shared occupancy key.
+		var cell := Vector3i(position.floor())
+		var size: Vector3i = _step_dimensions
+		if cell.x < 0 or cell.z < 0 or cell.x >= size.x or cell.z >= size.z or cell.y < 0:return true
+		if cell.y >= size.y:return false
+		if cell.y == 0:cell.y = 1
+		return _query_cell(cell)
+	if _step_world != null:return _step_world.clip_box(position)
+	if not is_instance_valid(world):return false
+	if world is VoxelWorld:return (world as VoxelWorld).clip_box(position)
 	return bool(world.call("clip_box",position)) if is_instance_valid(world) and world.has_method("clip_box") else false
 
 func _solid_wrapped(cell: Vector3i) -> bool:
+	if _step_world != null:
+		var size: Vector3i = _step_dimensions if _step_cache_enabled else _step_world.dimensions
+		if cell.y < 0:return true
+		if cell.y >= size.y:return false
+		cell.x = posmod(cell.x,size.x)
+		cell.z = posmod(cell.z,size.z)
+		return _query_cell(cell) if _step_cache_enabled else _step_world.get_block(cell) != 0
+	if not is_instance_valid(world):return false
+	if world is VoxelWorld:
+		var typed_world := world as VoxelWorld
+		var size: Vector3i = typed_world.dimensions
+		if cell.y < 0:return true
+		if cell.y >= size.y:return false
+		cell.x = posmod(cell.x,size.x)
+		cell.z = posmod(cell.z,size.z)
+		return typed_world.get_block(cell) != 0
 	if not is_instance_valid(world) or not world.has_method("get_block"): return false
 	var size_value = world.get("dimensions")
 	if size_value is Vector3i:
@@ -272,14 +360,39 @@ func _solid_wrapped(cell: Vector3i) -> bool:
 		cell.z = posmod(cell.z,size.z)
 	return int(world.call("get_block",cell)) != 0
 
+func _query_cell(cell: Vector3i) -> bool:
+	if not _step_cache_enabled:
+		if not is_instance_valid(world):return false
+		return (world as VoxelWorld).get_block(cell) != 0 if world is VoxelWorld else (world.has_method("get_block") and int(world.call("get_block",cell)) != 0)
+	if _step_cells.has(cell):return _step_cells[cell]
+	var solid: bool = _step_world.get_block(cell) != 0
+	if _step_cells.size() < MAX_QUERY_CELLS:_step_cells[cell] = solid
+	return solid
+
 func _ray(origin: Vector3, endpoint: Vector3, max_steps: int) -> Dictionary:
+	# Inspection/visibility callers own a fresh result. A local record also
+	# preserves correctness if a custom world's query re-enters this helper.
+	var result := LineRay.new()
+	_cast_ray_into(origin,endpoint,max_steps,result)
+	return {"hit":result.hit,"start_solid":result.start_solid,"position":result.position,"cell":result.cell,"normal":result.normal}
+
+func _cast_ray_into(origin: Vector3, endpoint: Vector3, max_steps: int, result: LineRay) -> void:
+	result.hit = false
+	result.start_solid = false
+	result.position = endpoint
+	result.cell = Vector3i.ZERO
+	result.normal = Vector3i.ZERO
 	var difference := endpoint-origin
 	var distance := difference.length()
-	var miss := {"hit":false,"start_solid":false,"position":endpoint,"cell":Vector3i.ZERO,"normal":Vector3i.ZERO}
-	if distance < 0.000001: return miss
+	if distance < 0.000001: return
 	var ray := difference/distance
 	var cell := Vector3i(origin.floor())
-	if _solid_wrapped(cell): return {"hit":true,"start_solid":true,"position":origin,"cell":cell,"normal":Vector3i.ZERO}
+	if _solid_wrapped(cell):
+		result.hit = true
+		result.start_solid = true
+		result.position = origin
+		result.cell = cell
+		return
 	var step := Vector3i(signi(roundi(ray.x*1000000)),signi(roundi(ray.y*1000000)),signi(roundi(ray.z*1000000)))
 	var delta := Vector3(INF,INF,INF)
 	var next := Vector3(INF,INF,INF)
@@ -293,14 +406,17 @@ func _ray(origin: Vector3, endpoint: Vector3, max_steps: int) -> Dictionary:
 		if next.z < next[axis]: axis = 2
 		if next.y < next[axis]: axis = 1
 		var traveled := next[axis]
-		if traveled > distance: return miss
+		if traveled > distance: return
 		next[axis] += delta[axis]
 		cell[axis] += step[axis]
 		if _solid_wrapped(cell):
 			var normal := Vector3i.ZERO
 			normal[axis] = -step[axis]
-			return {"hit":true,"start_solid":false,"position":origin+ray*traveled,"cell":cell,"normal":normal}
-	return miss
+			result.hit = true
+			result.position = origin+ray*traveled
+			result.cell = cell
+			result.normal = normal
+			return
 
 func _update_models() -> void:
 	if not _active or _parts.is_empty(): return

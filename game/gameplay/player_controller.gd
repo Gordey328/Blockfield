@@ -14,6 +14,7 @@ const NETWORK_SESSION = preload("res://network/network_session.gd")
 const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
 const NETWORK_CLIENT = preload("res://network/client_replica.gd")
 const SHARED_RULES = preload("res://simulation/player_rules.gd")
+const SHOT_POSES = preload("res://gameplay/shot_hit_pose_cache.gd")
 ## NexQuake: 180deg over 75% of its 60%-width look zone, at default gain.
 const TOUCH_TURN_PER_WIDTH: float = 400.0 * PI / 180.0
 
@@ -891,12 +892,13 @@ func _shoot() -> void:
 		if session.current_weapon != 2 and eject_brass:
 			effects.eject_shell(muzzle,accumulated_direction,head.global_basis.x,head.global_basis.y,session.current_weapon)
 	var destroyed_block := false
+	var shot_poses: SHOT_POSES = SHOT_POSES.new() if int(info.pellets) > 1 else null
 	for pellet in int(info.pellets):
 		# Player::FireWeapon accumulates all pellets into the unnormalized vector.
 		accumulated_direction += Vector3(randf()-randf(), randf()-randf(), randf()-randf()) * spread
 		var direction := accumulated_direction.normalized()
 		var map_hit := world.cast_source_ray(origin, direction, 500)
-		var result := raycast_targets(origin,direction,500.0)
+		var result := raycast_targets(origin,direction,500.0,shot_poses)
 		var chosen := source_weapon_hit(origin,map_hit,result)
 		var end := origin+direction*128.0
 		if chosen=="player":
@@ -943,12 +945,17 @@ static func source_weapon_hit(origin: Vector3,map_hit: Dictionary,player_hit: Di
 	if not player_hit.is_empty() and player_distance<128.0:return "player"
 	return "none"
 
-func raycast_targets(origin: Vector3,direction: Vector3,max_distance: float=500.0) -> Dictionary:
+func raycast_targets(origin: Vector3,direction: Vector3,max_distance: float=500.0,shot_poses: SHOT_POSES=null) -> Dictionary:
 	var result: Dictionary={}
 	var closest_horizontal:=INF
 	for target in session.targets:
 		if not bool(target.alive) or int(target.team)>=2:continue
-		var hit:=LabHitVolumes.cast_ray(origin,direction,target.position,float(target.get("yaw",0.0)),str(target.state)=="crouching",float(target.get("pitch",0.0)),max_distance)
+		var hit: Dictionary
+		if shot_poses == null or direction.length_squared() < 0.000001:
+			hit = LabHitVolumes.cast_ray(origin,direction,target.position,float(target.get("yaw",0.0)),str(target.state)=="crouching",float(target.get("pitch",0.0)),max_distance)
+		else:
+			var pose: LabHitVolumes.PreparedPose = shot_poses.prepare(int(target.id),target.position,float(target.get("yaw",0.0)),str(target.state)=="crouching",float(target.get("pitch",0.0)),0,int(target.get("deaths",0)),int(target.team))
+			hit = LabHitVolumes.cast_prepared(origin,direction,pose,max_distance)
 		if hit.hit:
 			var horizontal:=_horizontal_distance(origin,hit.position)
 			if horizontal<closest_horizontal:

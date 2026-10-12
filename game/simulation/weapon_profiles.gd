@@ -26,6 +26,14 @@ static func get_info(profile: String, weapon: int) -> Dictionary:
 	result.profile = profile
 	return result
 
+static func clip_size(profile: String, weapon: int) -> int:
+	# AI only reads this scalar. Public get_info still returns an owned mutable
+	# copy; no shared profile Dictionary escapes through this narrow provider.
+	return int(PROFILES[profile][weapon].clip_size) if valid(profile,weapon) else 0
+
+static func is_slow_reload(profile: String, weapon: int) -> bool:
+	return bool(PROFILES[profile][weapon].slow_reload) if valid(profile,weapon) else false
+
 static func damage(profile: String, weapon: int, part: String, horizontal_distance: float) -> float:
 	if not valid(profile, weapon) or not is_finite(horizontal_distance) or horizontal_distance < 0 or horizontal_distance >= 128:
 		return 0.0

@@ -20,6 +20,14 @@ var _mesh: ArrayMesh
 var _material: ShaderMaterial
 var _vertices := PackedVector3Array()
 var _colors := PackedColorArray()
+var _pose_cache_valid: bool = false
+var _cached_feet := Vector3.ZERO
+var _cached_yaw: float = 0.0
+var _cached_crouching: bool = false
+var _cached_pitch: float = 0.0
+var _cached_hit_mask: int = 0
+var _cached_color := Color.WHITE
+var _geometry_upload_count: int = 0
 
 func _init() -> void:
 	visible = false
@@ -28,16 +36,32 @@ func _init() -> void:
 
 func show_pose(feet: Vector3, yaw: float, crouching: bool, pitch: float,
 		hit_parts: Array[String], team_color: Color) -> bool:
-	if not feet.is_finite() or not is_finite(yaw) or not is_finite(pitch):
+	var hit_mask: int = _hit_mask(hit_parts)
+	if not feet.is_finite() or not is_finite(yaw) or not is_finite(pitch) or hit_mask < 0 or not _valid_color(team_color):
 		clear()
 		return false
+	var color := Color(team_color.r,team_color.g,team_color.b,1)
+	# Camera eligibility still runs every frame. Reuse only an identical valid
+	# world-space outline, including its hit-part colors, at full update rate.
+	if _pose_cache_valid and feet == _cached_feet and yaw == _cached_yaw and crouching == _cached_crouching and pitch == _cached_pitch and hit_mask == _cached_hit_mask and color == _cached_color:
+		transform = Transform3D.IDENTITY
+		visible = true
+		return true
 	var base := Transform3D(Basis(Vector3.UP, yaw), feet)
 	var matrices: Array[Transform3D] = []
 	var boxes: Array[AABB] = []
 	for volume: Dictionary in HITS.volumes(crouching, pitch):
 		matrices.append(base * Transform3D(volume.transform))
 		boxes.append(volume.box)
-	return _show_boxes(matrices, boxes, hit_parts, team_color)
+	if not _show_boxes(matrices, boxes, hit_parts, team_color):return false
+	_pose_cache_valid = true
+	_cached_feet = feet
+	_cached_yaw = yaw
+	_cached_crouching = crouching
+	_cached_pitch = pitch
+	_cached_hit_mask = hit_mask
+	_cached_color = color
+	return true
 
 func show_prepared(pose: LabHitVolumes.PreparedPose, hit_parts: Array[String],
 		team_color: Color) -> bool:
@@ -58,6 +82,7 @@ func hide_target() -> void:
 
 func clear() -> void:
 	visible = false
+	_pose_cache_valid = false
 	_vertices.clear()
 	_colors.clear()
 	if _mesh != null:
@@ -69,8 +94,25 @@ func get_line_vertices() -> PackedVector3Array:
 func get_line_colors() -> PackedColorArray:
 	return _colors.duplicate()
 
+func get_geometry_upload_count() -> int:
+	return _geometry_upload_count
+
+static func _hit_mask(hit_parts: Array[String]) -> int:
+	if hit_parts.size() > 4:return -1
+	var mask: int = 0
+	for part: String in hit_parts:
+		match part:
+			"head":mask |= 1
+			"torso":mask |= 2
+			"legs":mask |= 4
+			"arms":mask |= 8
+			_:return -1
+	return mask
+
 func _show_boxes(matrices: Array[Transform3D], boxes: Array[AABB],
 		hit_parts: Array[String], team_color: Color) -> bool:
+	# Prepared poses may change the renderer independently of show_pose's key.
+	_pose_cache_valid = false
 	if matrices.size() != 5 or boxes.size() != 5 or not _valid_color(team_color) or hit_parts.size() > 4:
 		clear()
 		return false
@@ -109,6 +151,7 @@ func _show_boxes(matrices: Array[Transform3D], boxes: Array[AABB],
 	arrays[Mesh.ARRAY_COLOR] = _colors
 	_mesh.clear_surfaces()
 	_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	_geometry_upload_count += 1
 	# Vertices are in world space even when parented beneath a transformed view.
 	transform = Transform3D.IDENTITY
 	visible = true

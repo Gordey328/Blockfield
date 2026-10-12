@@ -197,7 +197,7 @@ func _decide(brain: Brain, actor: SharedPlayerState, simulation: MatchSimulation
 	brain.decisions += 1
 	_observe(brain, actor, simulation, tick)
 	var feet: Vector3 = _ground_feet(actor)
-	var info: Dictionary = PROFILES.get_info(actor.profile, actor.weapon)
+	var weapon_clip: int = PROFILES.clip_size(actor.profile, actor.weapon)
 	if actor.reserve <= 0 and actor.magazine <= 2:
 		var spawns: Array = _arena.get("team_spawns", [])
 		var home: Vector3 = Vector3.INF
@@ -213,7 +213,7 @@ func _decide(brain: Brain, actor: SharedPlayerState, simulation: MatchSimulation
 			_plan(brain, feet, tick)
 			return
 	var needs_reload: bool = actor.reloading or actor.magazine <= 0 \
-		or (actor.magazine <= maxi(1, int(info.clip_size) >> 2) and not brain.visible)
+		or (actor.magazine <= maxi(1, weapon_clip >> 2) and not brain.visible)
 	var hurt: bool = actor.health < brain.health
 	brain.health = actor.health
 	var threatened: bool = brain.last_known.is_finite() and ((actor.health <= 35 and tick > brain.cover_until + 180) or (hurt and actor.health <= 60))
@@ -347,8 +347,8 @@ func _command(brain: Brain, actor: SharedPlayerState, simulation: MatchSimulatio
 	var near_goal: bool = brain.goal.is_finite() and feet.distance_squared_to(brain.goal) < 4.0
 	if brain.state in ["reload", "cover"] and near_goal:
 		command.buttons |= RULES.Buttons.CROUCH
-	var info: Dictionary = PROFILES.get_info(actor.profile, actor.weapon)
-	if brain.state == "reload" and not actor.reloading and actor.magazine < int(info.clip_size) \
+	var weapon_clip: int = PROFILES.clip_size(actor.profile, actor.weapon)
+	if brain.state == "reload" and not actor.reloading and actor.magazine < weapon_clip \
 			and actor.reserve > 0 and (near_goal or tick - brain.path_tick > 120 or brain.path.is_empty()) and tick % 8 == 0:
 		command.buttons |= RULES.Buttons.RELOAD
 		brain.reload_commands += 1

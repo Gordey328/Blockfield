@@ -134,9 +134,8 @@ static func cancel_actions(actor: SharedPlayerState) -> void:
 	actor.digging = false
 
 static func can_fire(actor: SharedPlayerState, tick: int) -> bool:
-	var info := PROFILES.get_info(actor.profile, actor.weapon)
-	return not info.is_empty() and can_use_tool(actor) and actor.tool == Tool.WEAPON and actor.magazine > 0 \
-		and tick + .000000001 >= actor.next_shot_tick and (not actor.reloading or bool(info.slow_reload))
+	return PROFILES.valid(actor.profile, actor.weapon) and can_use_tool(actor) and actor.tool == Tool.WEAPON and actor.magazine > 0 \
+		and tick + .000000001 >= actor.next_shot_tick and (not actor.reloading or PROFILES.is_slow_reload(actor.profile, actor.weapon))
 
 static func begin_reload(actor: SharedPlayerState, tick: int) -> Array[Dictionary]:
 	var info := PROFILES.get_info(actor.profile, actor.weapon)
@@ -256,13 +255,13 @@ static func step_fixed(actor: SharedPlayerState, tick: int, command: Command = n
 	var primary := allowed and actor.input_buttons & Buttons.PRIMARY != 0
 	if actor.tool == Tool.WEAPON:
 		var held := primary
-		var info := PROFILES.get_info(actor.profile, actor.weapon)
 		if actor.reloading:
-			if held and bool(info.slow_reload):
+			var slow_reload: bool = PROFILES.is_slow_reload(actor.profile, actor.weapon)
+			if held and slow_reload:
 				actor.reloading = false
 				actor.reload_deadline_tick = 0
 				events.append(event(actor, tick, "reload_cancelled"))
-			elif not bool(info.slow_reload): held = false
+			elif not slow_reload: held = false
 		if held and not actor.trigger_held: actor.next_shot_tick = maxf(actor.next_shot_tick, tick)
 		actor.trigger_held = held
 		if held:

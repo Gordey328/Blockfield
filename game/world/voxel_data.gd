@@ -409,28 +409,61 @@ func explode(position: Vector3, metadata: Dictionary = {}) -> Dictionary:
 	return remove_blocks(cells,true,metadata)
 
 func _collapse_neighbors(removed: Array[Vector3i], changes: Array, groups: Array) -> void:
-	# Existing source-adapted downward-priority traversal; stop as soon as a
-	# path to either bottom layer is proven. Only authority computes support.
-	var checked: Dictionary = {}
+	# Preserve the existing downward-priority DFS and its ordered transaction.
+	# Sparse integer marks avoid a full-map scratch allocation. Reuse work lists
+	# across components, then release them on return, including pathological cuts.
+	var checked: Dictionary[int, bool] = {}
+	var visited: Dictionary[int, bool] = {}
+	var stack: Array[int] = []
+	var component: Array[int] = []
+	var height: int = dimensions.y
+	var width: int = dimensions.x
+	var depth: int = dimensions.z
+	var plane: int = height * width
+	var offsets := PackedInt32Array([-1, -height, height, -plane, plane, 1])
 	for cell: Vector3i in removed:
 		for direction: Vector3i in DIRECTIONS:
-			var start: Vector3i = cell+direction
-			if get_block(start) == 0 or checked.has(start):
+			var start_cell: Vector3i = cell + direction
+			if not is_in_bounds(start_cell):
 				continue
-			var stack: Array[Vector3i] = [start]
-			var component: Array[Vector3i] = []
-			var visited: Dictionary = {start:true}
+			var start: int = index(start_cell)
+			if blocks[start] == 0 or checked.has(start):
+				continue
+			stack.clear()
+			component.clear()
+			visited.clear()
+			stack.append(start)
+			visited[start] = true
 			var supported: bool = false
 			while not stack.is_empty():
-				var current: Vector3i = stack.pop_back()
+				var current: int = stack.pop_back()
 				component.append(current)
-				if current.y <= 1:
+				var y: int = current % height
+				if y <= 1:
 					supported = true
 					break
+				var column: int = current / height
+				var x: int = column % width
+				var z: int = column / width
 				for i: int in range(DIRECTIONS.size()-1,-1,-1):
-					var neighbor: Vector3i = current+DIRECTIONS[i]
-					if get_block(neighbor) != 0 and not visited.has(neighbor):
-						if neighbor.y <= 1 or checked.has(neighbor):
+					# Each storage edge is checked before applying its stride: linear
+					# indices must never wrap between columns or horizontal planes.
+					match i:
+						5:
+							if y + 1 >= height: continue
+						4:
+							if z + 1 >= depth: continue
+						3:
+							if z == 0: continue
+						2:
+							if x + 1 >= width: continue
+						1:
+							if x == 0: continue
+						0:
+							if y == 0: continue
+					var neighbor: int = current + offsets[i]
+					if blocks[neighbor] != 0 and not visited.has(neighbor):
+						if neighbor % height <= 1 or checked.has(neighbor):
 							supported = true
 							break
 						visited[neighbor] = true
@@ -438,16 +471,23 @@ func _collapse_neighbors(removed: Array[Vector3i], changes: Array, groups: Array
 				if supported:
 					break
 			if supported:
-				for member: Vector3i in component:
+				for member: int in component:
 					checked[member] = true
 			else:
-				var colors: PackedInt32Array = PackedInt32Array()
-				for member: Vector3i in component:
-					colors.append(get_block(member))
-				for member: Vector3i in component:
+				var cells: Array[Vector3i] = []
+				var colors := PackedInt32Array()
+				colors.resize(component.size())
+				for ordinal: int in component.size():
+					var member: int = component[ordinal]
+					var column: int = member / height
+					var member_cell := Vector3i(column % width, member % height, column / width)
+					var before: int = blocks[member]
+					cells.append(member_cell)
+					colors[ordinal] = before
 					checked[member] = true
-					_record(member,0,changes,true)
-				groups.append({"cells":component,"colors":colors})
+					blocks[member] = 0
+					changes.append({"cell":member_cell,"before":before,"after":0,"flags":1})
+				groups.append({"cells":cells,"colors":colors})
 
 func _commit(changes: Array, groups: Array, metadata: Dictionary) -> Dictionary:
 	var changed: bool = not changes.is_empty()

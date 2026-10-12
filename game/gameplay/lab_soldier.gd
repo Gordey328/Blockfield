@@ -73,6 +73,8 @@ func _process(delta: float) -> void:
 	rotation.y=float(target.get("yaw",0.0))
 	var crouching: bool=bool(target.get("crouching",str(target.get("state","standing"))=="crouching"))
 	var sprinting: bool=bool(target.get("sprinting",str(target.get("state","standing"))=="sprinting"))
+	var batch_pose: bool=character.has_method("begin_pose_update") and character.has_method("end_pose_update")
+	if batch_pose:character.begin_pose_update()
 	character.set_team(int(target.get("team",1)),session.get_team_info(int(target.get("team",1))).color)
 	character.set_aim(float(target.get("pitch",0.0)))
 	character.set_pose(crouching,dead,sprinting)
@@ -92,6 +94,7 @@ func _process(delta: float) -> void:
 	if moving and not dead and not crouching and not bool(target.get("aiming",false)):_walk_distance+=Vector2(motion.x,motion.z).length()*delta*.15
 	if character.has_method("set_motion_state"):character.set_motion_state(motion.dot(-global_basis.z),motion.dot(global_basis.x),_walk_distance)
 	else:character.animate_motion((5.0 if sprinting else 3.0) if moving else 0.0,_phase)
+	if batch_pose:character.end_pose_update()
 	_update_hit_zones(crouching,float(target.get("pitch",0.0)))
 	_label.text="TARGET %02d  /  %d HP"%[target_id,int(target.get("health",100))] if health_known else str(target.get("name","TARGET %02d"%target_id))
 	_label.modulate=Color("ed806d") if dead else Color("e8efe6")

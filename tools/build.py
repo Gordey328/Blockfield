@@ -103,6 +103,12 @@ def main():
     suites += [('tdm-bots','tests/ai/test_tdm_bots.gd'),('offline-tdm','tests/session/test_offline_tdm.gd'),('offline-tdm-scene','tests/integration/test_offline_tdm_scene.gd')]
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
     suites += [('blockfield-map','tests/world/test_blockfield_map.gd'),('native-map-main','tests/integration/test_native_map_main.gd')]
+    suites += [('collapse-optimization','tests/world/test_collapse_optimization.gd'),
+               ('empty-chunk-optimization','tests/world/test_empty_chunk_optimization.gd'),
+               ('live-shot-acceleration','tests/gameplay/test_live_shot_acceleration.gd'),
+               ('presentation-optimization','tests/presentation/test_presentation_optimization.gd'),
+               ('corpse-optimization','tests/presentation/test_corpse_optimization.gd'),
+               ('main-optimization','tests/integration/test_main_optimization.gd')]
     for name,path in suites:
         path=ROOT/path
         if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)

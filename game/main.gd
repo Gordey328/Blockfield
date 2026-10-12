@@ -188,12 +188,15 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_vxl_progress()
 	if network_mode: _poll_network()
-	if not offline_tdm_mode: session.update(delta)
+	if not offline_tdm_mode and not network_mode: session.update(delta)
 	if network_mode: _network_update_views()
 	elif offline_tdm_mode: _update_shared_actor_views()
 	audio.positional=positional_audio
 	audio.environmental=environmental_audio
 	for corpse in _corpses:corpse.step(delta)
+	# Original skins publish the final pose once; extension skins retain setters.
+	var batch_pose: bool = _player_view.has_method("begin_pose_update") and _player_view.has_method("end_pose_update")
+	if batch_pose: _player_view.begin_pose_update()
 	_player_view.set_team(session.team,session.get_team_info(session.team).color)
 	_player_view.visible=player.camera_mode in [BlockfieldPlayer.CameraMode.THIRD_PERSON,BlockfieldPlayer.CameraMode.DEATH] and session.team<2
 	for target_node in _target_nodes:
@@ -211,6 +214,7 @@ func _process(delta: float) -> void:
 		_player_view.set_tool_action(action.type,action.progress,session.grenade_cook_time,action.ready)
 	var carries_intel:=session.is_local_intel_carrier()
 	_player_view.set_intel_carrier(carries_intel,session.get_team_info(1-session.team if session.team<2 else 1).color)
+	if batch_pose: _player_view.end_pose_update()
 	_notice_time+=delta
 	_update_objective_views()
 	_hurt_age+=delta
@@ -989,6 +993,9 @@ func _apply_graphics() -> void:
 		for key in post_effects.get_options():
 			if graphics_options.has(key):post_options[key]=graphics_options[key]
 		post_effects.set_options(post_options)
+		if not bool(graphics_options.lens_flare):
+			var empty_flare_sources: Array[Dictionary] = []
+			post_effects.set_flare_sources(empty_flare_sources)
 	if hdr_scene!=null:
 		var hdr_result: Dictionary=hdr_scene.set_options({"min_ev":float(graphics_options.hdr_min_ev),"max_ev":float(graphics_options.hdr_max_ev),"speed":float(graphics_options.hdr_speed),"bloom":bool(graphics_options.bloom)})
 		if bool(hdr_result.ok):
@@ -1020,10 +1027,11 @@ func _update_graphics(delta: float) -> void:
 		if bool(graphics_options.manual_focus):focus_control.sample(player.camera,world)
 		focus_control.advance(delta)
 		post_effects.update_state(delta,session.health,_hurt_age,player.sprinting,player.get_camera_aim_down_state(),focus_control.distance,player.camera_radial_blur)
-		var sun_direction: Vector3=$Sun.global_basis.z
-		var sun_occluded: bool=world.cast_voxel(player.camera.global_position,sun_direction,float(graphics_options.draw_distance)).hit
-		var flare_sources: Array[Dictionary]=[{"direction":sun_direction,"color":$Sun.light_color,"energy":0.6,"radius":0.03,"visible":not sun_occluded}]
-		post_effects.set_flare_sources(flare_sources)
+		if bool(graphics_options.lens_flare):
+			var sun_direction: Vector3=$Sun.global_basis.z
+			var sun_occluded: bool=world.cast_voxel(player.camera.global_position,sun_direction,float(graphics_options.draw_distance)).hit
+			var flare_sources: Array[Dictionary]=[{"direction":sun_direction,"color":$Sun.light_color,"energy":0.6,"radius":0.03,"visible":not sun_occluded}]
+			post_effects.set_flare_sources(flare_sources)
 		_update_hdr_correction()
 
 func screenshot(scene_only: bool=false) -> void:

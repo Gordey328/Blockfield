@@ -44,9 +44,24 @@ var _equipment: Node3D
 var _intel: Node3D
 var _carrying_intel := false
 var _intel_color := Color(-1,-1,-1,1)
+var _pose_update_depth: int = 0
+var _pose_update_pending: bool = false
 
 func _ready() -> void:
 	_ensure_built()
+
+func begin_pose_update() -> void:
+	# A rendered actor supplies several independent skin fields. Publish their
+	# final pose once, while preserving immediate setters for other callers.
+	_pose_update_depth += 1
+
+func end_pose_update() -> void:
+	if _pose_update_depth <= 0:
+		return
+	_pose_update_depth -= 1
+	if _pose_update_depth == 0 and _pose_update_pending:
+		_pose_update_pending = false
+		_apply_pose()
 
 func refresh_resources() -> void:
 	if not _built:
@@ -172,6 +187,8 @@ func set_tool_action(action: int = ToolAction.IDLE, progress: float = 0.0, cook_
 
 func set_block_color(color: Color) -> void:
 	_ensure_built()
+	if _block_color == color:
+		return
 	_block_color = color
 	if _tool == 1:
 		MODELS.set_tint(_equipment,color)
@@ -204,6 +221,9 @@ func _update_equipment_tint() -> void:
 	MODELS.set_tint(_equipment,_block_color if _tool == 1 else Color.BLACK)
 
 func _apply_pose() -> void:
+	if _pose_update_depth > 0:
+		_pose_update_pending = true
+		return
 	if not _built:
 		return
 	# The source changes player origin on crouch. A feet-anchored view must do so too.

@@ -179,7 +179,10 @@ func _build_halo_columns(world: Node3D, max_units: int, deadline_usec: int) -> i
 	job.blocks = blocks
 	job.solids = solids
 	if job.cursor == AO.HALO_SIZE * AO.HALO_SIZE:
-		job.stage = 1
+		# All-zero halo proves this chunk has no mesh or collider faces. The
+		# native packed scan avoids 256 empty mesh columns and 96 empty planes,
+		# while retaining the same atomic publication and existing chunk cache.
+		job.stage = 3 if blocks.count(0) == blocks.size() else 1
 		job.cursor = 0
 	_batch_max_unit_usec = maxi(_batch_max_unit_usec, max_unit)
 	return processed

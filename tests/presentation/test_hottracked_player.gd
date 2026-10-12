@@ -47,6 +47,18 @@ func _run() -> void:
 	_check((vertices[1]-vertices[0]).is_equal_approx(Vector3(.6,0,0)), "First source edge changes native X")
 	_check((vertices[9]-vertices[8]).is_equal_approx(Vector3(0,0,.6)), "Fifth source edge changes native Y")
 	_check((vertices[17]-vertices[16]).is_equal_approx(Vector3(0,-.6,0)), "Ninth source edge changes native Z-down")
+	var first_uploads: int = view.get_geometry_upload_count()
+	for frame in range(120):
+		view.hide_target()
+		_check(view.show_pose(feet,0,false,0,["torso","head","head"],Color(team.r,team.g,team.b,.9)), "Equivalent validated hit set and opaque color reuse accepted")
+	_check(view.get_geometry_upload_count() == first_uploads and view.get_line_vertices() == vertices, "Unchanged target redisplay keeps exact geometry without GPU publication")
+	view.show_pose(feet+Vector3(.000001,0,0),0,false,0,["head","torso"],team)
+	_check(view.get_geometry_upload_count() == first_uploads+1, "Subpixel motion invalidates the cache without approximate pose rounding")
+	view.show_pose(feet,0,false,0,["head"],team)
+	_check(view.get_geometry_upload_count() == first_uploads+2, "Changed hit parts republish their exact colors")
+	view.show_pose(feet,0,false,0,["head"],Color(.2,.4,.8))
+	_check(view.get_geometry_upload_count() == first_uploads+3, "Changed team color invalidates the cache")
+	view.show_pose(feet,0,false,0,["head","torso"],team)
 	_check(view.show_pose(feet,0,true,0,["legs","arms"],team), "Crouched pose accepted")
 	var crouched_bounds: Array[AABB] = [
 		AABB(Vector3(-.3,1.15,-.3),Vector3(.6,.6,.6)),
@@ -78,6 +90,14 @@ func _run() -> void:
 			var prepared := view.get_line_vertices()
 			for index in range(120):
 				_check(direct[index].distance_to(prepared[index]) < .00001, "Prepared inverse round-trip preserves source endpoints")
+	# A prepared pose can overwrite the scalar cached pose. Returning to the
+	# old scalar key must publish its old endpoints instead of reusing that mesh.
+	view.show_pose(feet,0,false,0,["head"],team)
+	var scalar_vertices := view.get_line_vertices()
+	view.show_prepared(HITS.prepare_pose(feet+Vector3.ONE,.3,true,.2),["arms"],team)
+	var before_scalar: int = view.get_geometry_upload_count()
+	view.show_pose(feet,0,false,0,["head"],team)
+	_check(view.get_geometry_upload_count() == before_scalar+1 and view.get_line_vertices() == scalar_vertices, "Prepared-pose adoption invalidates the scalar key")
 	var copied := view.get_line_vertices()
 	copied[0] = Vector3.INF
 	_check(view.get_line_vertices()[0].is_finite(), "Inspection returns owned geometry copies")
@@ -97,6 +117,13 @@ func _run() -> void:
 	_check(not view.show_pose(feet,0,false,0,["unknown"],team), "Unknown hit tags fail closed")
 	_check(not view.show_pose(feet,0,false,0,["head","head","head","head","head"],team), "Unbounded hit tags rejected")
 	_check(not view.show_pose(feet,0,false,0,[],Color(NAN,0,0)), "Nonfinite team color rejected")
+	view.show_pose(feet,0,false,0,["head"],team)
+	_check(not view.show_pose(feet,0,false,0,["unknown"],team) and not view.visible and view.get_line_vertices().is_empty(), "Invalid tags fail closed even after a valid cached pose")
+	view.show_pose(feet,0,false,0,["head"],team)
+	var before_clear: int = view.get_geometry_upload_count()
+	view.clear()
+	view.show_pose(feet,0,false,0,["head"],team)
+	_check(view.get_geometry_upload_count() == before_clear+1 and view.get_line_vertices().size() == 120, "Clear invalidates retained cache geometry")
 	_check(not view.show_prepared(null,[],team), "Null prepared pose fails closed")
 	view.show_pose(feet,0,false,0,[],team)
 	var renderer_id := view._instance.get_instance_id()

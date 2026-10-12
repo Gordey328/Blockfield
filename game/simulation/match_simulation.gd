@@ -6,6 +6,7 @@ const RULES = preload("res://simulation/player_rules.gd")
 const PROFILES = preload("res://simulation/weapon_profiles.gd")
 const MOTION = preload("res://gameplay/source_player_motion.gd")
 const HITS = preload("res://gameplay/lab_hit_volumes.gd")
+const SHOT_POSES = preload("res://gameplay/shot_hit_pose_cache.gd")
 const GRENADES = preload("res://simulation/grenade_rules.gd")
 const OBJECTIVES = preload("res://simulation/match_objectives.gd")
 const HISTORY = preload("res://network/hit_history.gd")
@@ -391,12 +392,17 @@ static func source_weapon_hit(origin: Vector3, map_hit: Dictionary, player_hit: 
 static func horizontal_distance(a: Vector3,b: Vector3) -> float:
 	return Vector2(a.x-b.x,a.z-b.z).length()
 
-func raycast_actors(owner_id: int, origin: Vector3, direction: Vector3) -> Dictionary:
+func raycast_actors(owner_id: int, origin: Vector3, direction: Vector3, shot_poses: SHOT_POSES = null) -> Dictionary:
 	var result: Dictionary = {}
 	var closest := INF
 	for target: SharedPlayerState in _ordered():
 		if target.player_id == owner_id or not RULES.can_act(target): continue
-		var hit := HITS.cast_ray(origin,direction,target.feet(),target.yaw,target.motion.crouch,target.pitch,500)
+		var hit: Dictionary
+		if shot_poses == null or direction.length_squared() < 0.000001:
+			hit = HITS.cast_ray(origin,direction,target.feet(),target.yaw,target.motion.crouch,target.pitch,500)
+		else:
+			var pose: HITS.PreparedPose = shot_poses.prepare(target.player_id,target.feet(),target.yaw,target.motion.crouch,target.pitch,target.match_epoch,target.spawn_generation,target.team)
+			hit = HITS.cast_prepared(origin,direction,pose,500)
 		if hit.hit:
 			var distance := horizontal_distance(origin,hit.position)
 			if distance < closest:
@@ -534,9 +540,10 @@ func _resolve_shot(owner: SharedPlayerState, shot: Dictionary) -> Array[Dictiona
 	var events: Array[Dictionary] = []
 	var destroyed := false
 	var pellet := 0
+	var shot_poses: SHOT_POSES = SHOT_POSES.new() if shot.directions.size() > 1 else null
 	for direction: Vector3 in shot.directions:
 		var map_hit: Dictionary = data.cast_source_ray(shot.origin,direction,500)
-		var hit := raycast_actors(owner.player_id,shot.origin,direction)
+		var hit := raycast_actors(owner.player_id,shot.origin,direction,shot_poses)
 		var chosen := source_weapon_hit(shot.origin,map_hit,hit)
 		var endpoint: Vector3 = shot.origin+direction*128
 		if chosen == "player":

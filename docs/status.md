@@ -1,7 +1,40 @@
 # Project status
 
-Updated: 2026-10-11 (Europe/Moscow). This page is the authoritative current entry point.
+Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
+
+## Quality-preserving Web optimization branch — 2026-10-12 (in progress)
+
+User requests a carefully audited maximum-practical optimization branch; graphical
+quality reductions require separate prior approval with an explained benefit.
+Branch `codex/web-max-optimization` starts at
+`d5516eb2bfd22bd5d03f32ac751dce7c01086876`. Godot remains
+`4.7.2.stable.official.ed1daf0bf`, OpenSpades remains
+`dcf449c845d509bbde9d79239b32d201c1389961`, Compatibility/single-thread Web.
+Root owns Main/post-effects integration, build registration, identical rendered
+probes, ADR0027/docs and serial validation/export. `presentation_opt` owns
+CharacterView/LabSoldier, hottracking, LabMap/Palette and presentation fixtures;
+`gameplay_opt` owns one-shot hit-pose cache, Player/Match adoption and equivalence
+fixtures; `world_opt` owns linear collapse traversal and empty-halo stages/fixtures.
+Contracts agreed before edits; engine leases serialize isolated checks. Existing
+optimization-plan and Steam investigation edits remain outside this task.
+Offline code audit shows network clients/polling/prediction are not instantiated
+in lab or TDM; TDM uses local shared rules and five bots. Removing multiplayer
+does not remove this authority/AI cost. No multiplayer removal or quality change.
+Baseline archived at `.cache/maxopt-baseline-d5516eb`; diagnostic baseline import
+and reduced-template Web export pass. Two diagnostic preparation mistakes
+(LabSoldier path and multiline signature wrapping) are corrected; failed copies
+remain retained. Private world/presentation/live-shot/Main/UI/source/AI checks pass,
+with paired native component improvements. Actual baseline Web lab/Title retain
+about55–58fps but sustained3×3 drops to about7–23fps and Main cost grows to64ms/frame.
+Presentation specialist adds exact corpse-query/physics optimization with a preserved
+original oracle under agreed exclusive ownership:1590/0, original9046/0, measured
+1599/0 and actual TDM62/0 pass;16-body native CPU49–54% lower. No quality/body-count/
+collision/substep reduction is authorized or applied. All specialist source handoffs
+and engine leases are returned; root integrates serially. Next: expanded paired
+actual-Main profile and frozen full validation/export. Detailed failures and
+component limits remain in the report.
+See [branch evidence](web-max-optimization.md), [ADR0027](decisions/0027-quality-preserving-web-optimization.md).
 
 ## Combined Mirage/effects Pages release — 2026-10-11 (published development build)
 

@@ -4,6 +4,13 @@ Baseline: OpenSpades `v0.1.3`, commit `dcf449c845d509bbde9d79239b32d201c1389961`
 
 This is the acceptance ledger for the full port. An exported sandbox does **not** establish full parity. Every row needs a Godot implementation location plus recorded verification before `VERIFIED`. The subsystem log records partial work separately from accepted rows.
 
+2026-10-12 optimization branch: [ADR0027](decisions/0027-quality-preserving-web-optimization.md)
+and [evidence](web-max-optimization.md) cover P06/P10/P13/W02/W09 and existing UI
+and corpse presentation, preserving quality/rules. Independent ordered-collapse,
+live-pellet and exact corpse-state fixtures validate the optimization contracts.
+Full-row acceptance and statuses below are unchanged; component CPU savings do
+not establish whole-game or physical-phone performance.
+
 Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION_2`. `IMPLEMENTED` requires complete code for the row but has not passed full acceptance. A partial subsystem is recorded in the evidence log while the row remains `NOT_STARTED`. When a requirement is intentionally adapted for the browser or new multiplayer stack, record the decision in an ADR and link it in the row; do not silently remove the row.
 
 Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. Iteration 2 delivers multiplayer. Rows marked `1+2` require offline behavior in iteration 1 and synchronized behavior in iteration 2.

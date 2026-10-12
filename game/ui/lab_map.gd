@@ -58,7 +58,9 @@ func get_focus_position() -> Vector2:
 	return Vector2(position.x,position.z)
 
 func map_point(position: Vector3) -> Vector2:
-	var view:=get_view_rect()
+	return _map_point_in_view(position,get_view_rect())
+
+func _map_point_in_view(position: Vector3, view: Rect2) -> Vector2:
 	return (Vector2(position.x,position.z)-view.position)/view.size*size
 
 func get_visible_target_ids() -> Array[int]:
@@ -180,18 +182,20 @@ func _draw() -> void:
 			if center.x>5 and center.x<size.x-6:draw_string(font,Vector2(center.x-5,14),String.chr(65+index),HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color.WHITE)
 			if center.y>20 and center.y<size.y-5:draw_string(font,Vector2(4,center.y+4),str(index+1),HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color.WHITE)
 	if session.mode=="ctf":
-		for index in session.ctf_bases.size():_draw_icon("CommandPost",map_point(session.ctf_bases[index]),team_color_for(session,index),0,22)
+		for index in session.ctf_bases.size():_draw_icon("CommandPost",_map_point_in_view(session.ctf_bases[index],view),team_color_for(session,index),0,22)
 		for flag in session.ctf_flags:
-			if int(flag.carrier)<0:_draw_icon("Intel",map_point(flag.position),team_color_for(session,int(flag.team)),0,22)
-			elif session.team<2:_draw_icon("Intel",map_point(flag.position),team_color_for(session,int(flag.team))*Color(1,1,1,absf(sin(session.session_time*4))),0,22)
+			if int(flag.carrier)<0:_draw_icon("Intel",_map_point_in_view(flag.position,view),team_color_for(session,int(flag.team)),0,22)
+			elif session.team<2:_draw_icon("Intel",_map_point_in_view(flag.position,view),team_color_for(session,int(flag.team))*Color(1,1,1,absf(sin(session.session_time*4))),0,22)
 	elif session.mode=="tc":
-		for territory in session.territories:_draw_icon("CommandPost",map_point(territory.position),team_color_for(session,int(territory.owner)),0,22)
+		for territory in session.territories:_draw_icon("CommandPost",_map_point_in_view(territory.position,view),team_color_for(session,int(territory.owner)),0,22)
 	for target in session.targets:
-		if int(target.id) not in get_visible_target_ids():continue
+		# Test each canonical target once instead of constructing the complete
+		# visible-ID list again for every icon.
+		if not bool(target.get("alive",false)) or (session.team<2 and int(target.team)!=session.team):continue
 		var kind: String=["Rifle","SMG","Shotgun"][clampi(int(target.get("weapon",0)),0,2)] if show_weapon_icons else "Player"
-		_draw_icon(kind,map_point(target.position),player_color(int(target.id),int(target.team)),float(target.get("yaw",0)))
+		_draw_icon(kind,_map_point_in_view(target.position,view),player_color(int(target.id),int(target.team)),float(target.get("yaw",0)))
 	if session.team<2 and session.health>0:
-		_draw_icon(["Rifle","SMG","Shotgun"][session.current_weapon] if show_weapon_icons else "Player",map_point(player.global_position),player_color(session.local_player_id(),session.team),player.rotation.y)
+		_draw_icon(["Rifle","SMG","Shotgun"][session.current_weapon] if show_weapon_icons else "Player",_map_point_in_view(player.global_position,view),player_color(session.local_player_id(),session.team),player.rotation.y)
 	var focus:=get_focus_position()
 	var facing:=-player.head.global_basis.z
 	if player.followed_target_id>=0:facing=Vector3.FORWARD.rotated(Vector3.UP,float(session.get_target(player.followed_target_id).get("yaw",0)))
@@ -199,6 +203,6 @@ func _draw() -> void:
 	_draw_icon("View",(focus-view.position)/view.size*size,Color(1,1,1,.65),atan2(facing.x,-facing.z),32)
 	for tracer in _tracers:
 		var segment:=get_tracer_segment(tracer)
-		if segment.size()==2:draw_line(map_point(segment[0]),map_point(segment[1]),Color(1,.8,.6),2)
+		if segment.size()==2:draw_line(_map_point_in_view(segment[0],view),_map_point_in_view(segment[1],view),Color(1,.8,.6),2)
 	draw_rect(Rect2(Vector2.ZERO,size),Color("74919e"),false,1.0)
 	if not large_map:draw_string(font,Vector2(size.x-44,size.y-5),"%d%%"%int(100.0/_scale),HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color.WHITE)
