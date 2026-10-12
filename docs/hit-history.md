@@ -1,5 +1,9 @@
 # Same-time hit history
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/network/hit_history.gd` is a pure bounded `BlockfieldHitHistory` service. It keeps public actor poses and inverse committed terrain changes at the same canonical server tick. It contains no socket, input admission, damage/kill decision, renderer, timer or complete-map snapshot. `ServerRuntime` now records closed frames and committed receipts, admits owned input ticks, and supplies this service to `MatchSimulation`'s shot planner. That integration exists; public WSS/browser multiplayer acceptance remains separate.
 
 ## API and clock

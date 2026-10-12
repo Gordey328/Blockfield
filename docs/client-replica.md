@@ -1,5 +1,9 @@
 # Connected client model
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `BlockfieldClientReplica` is a poll-driven RefCounted, independent of Input, scenes, sound and saved preferences. It owns two transports, private map staging, a live transaction assembler, full-owner ClientPrediction and per-remote interpolation buffers. Renderer installation is supplied through trusted `set_map_callbacks(install,apply_transaction)` callbacks; otherwise pure tests mutate only its private Data. The callbacks must adopt the same Data and apply each transaction exactly once through World, not Data then World.
 
 Current build/rules compatibility identities are `blockfield-godot-4.7.2-network-3` and `blockfield-source-v0.1.3-authority-3`; their SHA256 hashes must match HELLO/WELCOME. The protocol envelope version remains1. Replica consumes MATCH_STATE14, GAME_EVENTS15 and MATCH_PREPARING17, and sends PLAYER_REQUEST16 alongside input/chat/map families. A greater trusted preparation announcement pauses input and clears old presentation/prediction immediately; the later WELCOME must match that exact announced identity. See [match-preparation.md](match-preparation.md).

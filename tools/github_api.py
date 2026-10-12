@@ -39,7 +39,7 @@ def main():
     elif args.action=='create':
         user=api('/user')
         if user['login']!=args.repo.split('/')[0]: raise RuntimeError('Authenticated account does not match requested owner')
-        repo=api('/user/repos','POST',{'name':args.repo.split('/')[1],'description':'OpenSpades port to Godot: offline test lab and browser multiplayer','private':False,'auto_init':False})
+        repo=api('/user/repos','POST',{'name':args.repo.split('/')[1],'description':'OpenSpades port to Godot: offline voxel combat with bots and a browser test lab','private':False,'auto_init':False})
         print(json.dumps({'url':repo['html_url'],'clone_url':repo['clone_url']}))
     elif args.action=='pages':
         try: page=api('/repos/'+args.repo+'/pages')

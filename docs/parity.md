@@ -23,9 +23,9 @@ The user subsequently approves removal of corpse physics on this branch.
 presentation deviation and its verification contract. Authoritative death/respawn
 rules and existing body retention remain; no full-row status is promoted.
 
-Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION_2`. `IMPLEMENTED` requires complete code for the row but has not passed full acceptance. A partial subsystem is recorded in the evidence log while the row remains `NOT_STARTED`. When a requirement is intentionally adapted for the browser or new multiplayer stack, record the decision in an ADR and link it in the row; do not silently remove the row.
+Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION_2`. `IMPLEMENTED` requires complete code for the row but has not passed full acceptance. A partial subsystem is recorded in the evidence log while the row remains `NOT_STARTED`. When a requirement is intentionally adapted for the browser , record the decision in an ADR and link it in the row; do not silently remove the row.
 
-Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. Iteration 2 delivers multiplayer. Rows marked `1+2` require offline behavior in iteration 1 and synchronized behavior in iteration 2.
+Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. The user cancelled iteration2 on2026-10-12; only offline behavior is required. Historical networking measurements below remain evidence for their original revisions, not current code or pending acceptance.
 
 ## Current NexQuake mobile checkpoint1c046655fef2
 
@@ -69,22 +69,22 @@ promote full P01/P08–P16 or W03 acceptance.
 
 | ID | Feature and acceptance requirement | Original evidence | Iteration | Status |
 | --- | --- | --- | --- | --- |
-| P01 | First-person movement, yaw/pitch, world collision and map boundaries | `Sources/Client/Player.cpp:349,991,1108`; `Client_Scene.cpp` | 1+2 | IMPLEMENTED |
-| P02 | Jump, crouch, standing clearance, sneak, sprint, diagonal normalization, step climbing | `Player.h:36`; `Player.cpp:100,991,1099,1108,1213` | 1+2 | IMPLEMENTED |
-| P03 | Water wading, air/ground/water friction, fall slowdown and damage feedback | `Player.cpp:978,1084,1160`; `PhysicsConstants.h:28`; `Client_Update.cpp:589` | 1+2 | IMPLEMENTED |
-| P04 | 100 HP, hurt direction/screen feedback, death, respawn timer and resupply | `Player.cpp:66,286,370,1290`; `HurtRingView.cpp`; `Client_Draw.cpp:228,266,591` | 1+2 | IMPLEMENTED |
-| P05 | Team 0, team 1, spectator; names and colors supplied by match state | `World.h:51`; `Player.h:146`; `NetClient.cpp:1192`; `LimboView.cpp:56` | 1+2 | IMPLEMENTED |
-| P06 | Complete articulated soldier model: standing/crouching, walking/sprinting, arms, head, death and intel carrier; optimization branch uses approved static death model ([ADR0028](decisions/0028-static-death-models.md)) | `ClientPlayer.cpp:725,803,875,909,941,947,969` | 1+2 | IMPLEMENTED |
-| P07 | First-person viewmodel + third-person tool/weapon models for every item | `ClientPlayer.cpp:224-258`; `Resources/Scripts/Skin/` | 1+2 | IMPLEMENTED |
-| P08 | Rifle, both 0.75 and 0.76 tuning profiles | `Weapon.cpp:200,284,373` | 1+2 | IMPLEMENTED |
-| P09 | SMG, both 0.75 and 0.76 tuning profiles | `Weapon.cpp:227,317,373` | 1+2 | IMPLEMENTED |
-| P10 | Shotgun, 8 pellets, interruptible per-shell reload, both tuning profiles | `Weapon.cpp:254,345,373`; `Weapon.cpp:78,161` | 1+2 | IMPLEMENTED |
-| P11 | Ammo/stock, firing cadence, dry fire, magazine reload, resupply, depleted-item selection rules | `Weapon.cpp:48,76,86,161`; `Player.cpp:1398,1408` | 1+2 | IMPLEMENTED |
-| P12 | Aim down sights, half spread, crouch recoil reduction, viewmodel sway/bob and gun recoil | `Player.cpp:558,754`; `Client_Input.cpp:435`; `ClientPlayer.cpp:412,443` | 1+2 | IMPLEMENTED |
-| P13 | Distinct head/torso/arm/leg hit volumes, occlusion and horizontal hit range | `Player.cpp:542,1316`; `World.cpp:WeaponRayCast`; `PhysicsConstants.h:55` | 1+2 | IMPLEMENTED |
-| P14 | Spade primary melee/single-block damage and secondary three-block vertical dig | `Player.cpp:816,856,1250`; `NetClient.cpp:1142` | 1+2 | IMPLEMENTED |
-| P15 | Grenades: stock, press-edge pin pull, cook, manual/forced throw distinction, drop on death, inherited velocity, bounce, water and explosion | `Player.cpp:136,147-159,492,783`; `Grenade.cpp:49,63,82`; `NetClient.cpp:1156` | 1+2 | NOT_STARTED |
-| P16 | Weapon/team switching, all four tool hotkeys, wheel and last-tool selection | `LimboView.cpp`; `Client_Input.cpp:53,471,513,576`; `Player.cpp:1387` | 1+2 | IMPLEMENTED |
+| P01 | First-person movement, yaw/pitch, world collision and map boundaries | `Sources/Client/Player.cpp:349,991,1108`; `Client_Scene.cpp` | 1 | IMPLEMENTED |
+| P02 | Jump, crouch, standing clearance, sneak, sprint, diagonal normalization, step climbing | `Player.h:36`; `Player.cpp:100,991,1099,1108,1213` | 1 | IMPLEMENTED |
+| P03 | Water wading, air/ground/water friction, fall slowdown and damage feedback | `Player.cpp:978,1084,1160`; `PhysicsConstants.h:28`; `Client_Update.cpp:589` | 1 | IMPLEMENTED |
+| P04 | 100 HP, hurt direction/screen feedback, death, respawn timer and resupply | `Player.cpp:66,286,370,1290`; `HurtRingView.cpp`; `Client_Draw.cpp:228,266,591` | 1 | IMPLEMENTED |
+| P05 | Team 0, team 1, spectator; names and colors supplied by match state | `World.h:51`; `Player.h:146`; `NetClient.cpp:1192`; `LimboView.cpp:56` | 1 | IMPLEMENTED |
+| P06 | Complete articulated soldier model: standing/crouching, walking/sprinting, arms, head, death and intel carrier; optimization branch uses approved static death model ([ADR0028](decisions/0028-static-death-models.md)) | `ClientPlayer.cpp:725,803,875,909,941,947,969` | 1 | IMPLEMENTED |
+| P07 | First-person viewmodel + third-person tool/weapon models for every item | `ClientPlayer.cpp:224-258`; `Resources/Scripts/Skin/` | 1 | IMPLEMENTED |
+| P08 | Rifle, both 0.75 and 0.76 tuning profiles | `Weapon.cpp:200,284,373` | 1 | IMPLEMENTED |
+| P09 | SMG, both 0.75 and 0.76 tuning profiles | `Weapon.cpp:227,317,373` | 1 | IMPLEMENTED |
+| P10 | Shotgun, 8 pellets, interruptible per-shell reload, both tuning profiles | `Weapon.cpp:254,345,373`; `Weapon.cpp:78,161` | 1 | IMPLEMENTED |
+| P11 | Ammo/stock, firing cadence, dry fire, magazine reload, resupply, depleted-item selection rules | `Weapon.cpp:48,76,86,161`; `Player.cpp:1398,1408` | 1 | IMPLEMENTED |
+| P12 | Aim down sights, half spread, crouch recoil reduction, viewmodel sway/bob and gun recoil | `Player.cpp:558,754`; `Client_Input.cpp:435`; `ClientPlayer.cpp:412,443` | 1 | IMPLEMENTED |
+| P13 | Distinct head/torso/arm/leg hit volumes, occlusion and horizontal hit range | `Player.cpp:542,1316`; `World.cpp:WeaponRayCast`; `PhysicsConstants.h:55` | 1 | IMPLEMENTED |
+| P14 | Spade primary melee/single-block damage and secondary three-block vertical dig | `Player.cpp:816,856,1250`; `NetClient.cpp:1142` | 1 | IMPLEMENTED |
+| P15 | Grenades: stock, press-edge pin pull, cook, manual/forced throw distinction, drop on death, inherited velocity, bounce, water and explosion | `Player.cpp:136,147-159,492,783`; `Grenade.cpp:49,63,82`; `NetClient.cpp:1156` | 1 | NOT_STARTED |
+| P16 | Weapon/team switching, all four tool hotkeys, wheel and last-tool selection | `LimboView.cpp`; `Client_Input.cpp:53,471,513,576`; `Player.cpp:1387` | 1 | IMPLEMENTED |
 
 ## Voxel world and modes
 
@@ -92,32 +92,32 @@ promote full P01/P08–P16 or W03 acceptance.
 | --- | --- | --- | --- | --- |
 | W01 | Read genuine VXL maps at 512×512×64 with correct colors and solid interior | `GameMap.h:45`; `GameMap.cpp:519` | 1 | IMPLEMENTED |
 | W02 | Efficient voxel rendering, world collision, surface hit raycast and minimap projection | `GameMap.cpp:162,177,361`; `Sources/Draw/GLMapRenderer.cpp`; `MapView.cpp` | 1 | IMPLEMENTED |
-| W03 | Single-block placement, valid adjacent location, stock use, overlap/range restrictions and cursor feedback | `Player.cpp:161,379`; `World.cpp:281`; `ClientPlayer.cpp` | 1+2 | IMPLEMENTED |
-| W04 | Right-button drag line, cube-line ordering, stock limit and invalid-line feedback | `Player.cpp:173`; `World.cpp:CubeLine`; `NetClient.cpp:1167` | 1+2 | IMPLEMENTED |
-| W05 | Delayed block placement while jumping; cancel after landing or loss of stock | `Player.cpp:436` | 1+2 | IMPLEMENTED |
+| W03 | Single-block placement, valid adjacent location, stock use, overlap/range restrictions and cursor feedback | `Player.cpp:161,379`; `World.cpp:281`; `ClientPlayer.cpp` | 1 | IMPLEMENTED |
+| W04 | Right-button drag line, cube-line ordering, stock limit and invalid-line feedback | `Player.cpp:173`; `World.cpp:CubeLine`; `NetClient.cpp:1167` | 1 | IMPLEMENTED |
+| W05 | Delayed block placement while jumping; cancel after landing or loss of stock | `Player.cpp:436` | 1 | IMPLEMENTED |
 | W06 | Palette selection and eyedropper capture from existing map block | `PaletteView.cpp`; `Client_Input.cpp:374,534` | 1 | IMPLEMENTED |
-| W07 | Block health, weapon/spade damage and damaged-block darkening; permanent damage replaces source recovery by user request ([ADR0010](decisions/0010-persistent-block-damage.md)) | `Player.cpp:674,917`; `World.cpp:96,191`; `Sources/Draw/GLMapChunk.cpp:247-252` | 1+2 | IMPLEMENTED |
-| W08 | Dig removes vertical 3 cells; grenade removes 3×3×3; bedrock rules match baseline | `NetClient.cpp:1122`; `World.cpp:328` | 1+2 | IMPLEMENTED |
-| W09 | Unsupported structures detach; user-accepted simplified sampled falling groups without collisions/debris, retained completion feedback (ADR0025) | `GameMapWrapper.cpp`; `World.cpp:281`; `FallingBlock.cpp`; `Client_LocalEnts.cpp` + user replacement2026-10-11 | 1+2 | IMPLEMENTED |
+| W07 | Block health, weapon/spade damage and damaged-block darkening; permanent damage replaces source recovery by user request ([ADR0010](decisions/0010-persistent-block-damage.md)) | `Player.cpp:674,917`; `World.cpp:96,191`; `Sources/Draw/GLMapChunk.cpp:247-252` | 1 | IMPLEMENTED |
+| W08 | Dig removes vertical 3 cells; grenade removes 3×3×3; bedrock rules match baseline | `NetClient.cpp:1122`; `World.cpp:328` | 1 | IMPLEMENTED |
+| W09 | Unsupported structures detach; user-accepted simplified sampled falling groups without collisions/debris, retained completion feedback (ADR0025) | `GameMapWrapper.cpp`; `World.cpp:281`; `FallingBlock.cpp`; `Client_LocalEnts.cpp` + user replacement2026-10-11 | 1 | IMPLEMENTED |
 | W10 | Save/export edited map as VXL | `GameMap.cpp:93`; `Client_Input.cpp:562`; `Client_Draw.cpp:TakeMapShot` | 1 | IMPLEMENTED |
-| M01 | CTF: bases/intel, pickup, carrier, drop, capture, scores/capture limit, winner and round reset | `CTFGameMode.h`; `CTFGameMode.cpp:PlayerHasIntel`; `NetClient.cpp:1192,1427,1447,1461`; `Client_NetHandler.cpp:121` | 1+2 | IMPLEMENTED |
-| M02 | TC: neutral/owned territories, contested capture progress, ownership, winner and round reset | `TCGameMode.h`; `TCGameMode.cpp:47`; `NetClient.cpp:1367,1398`; `TCProgressView.cpp` | 1+2 | IMPLEMENTED |
+| M01 | CTF: bases/intel, pickup, carrier, drop, capture, scores/capture limit, winner and round reset | `CTFGameMode.h`; `CTFGameMode.cpp:PlayerHasIntel`; `NetClient.cpp:1192,1427,1447,1461`; `Client_NetHandler.cpp:121` | 1 | IMPLEMENTED |
+| M02 | TC: neutral/owned territories, contested capture progress, ownership, winner and round reset | `TCGameMode.h`; `TCGameMode.cpp:47`; `NetClient.cpp:1367,1398`; `TCProgressView.cpp` | 1 | IMPLEMENTED |
 | A01 | User addition: offline TDM 3×3 on Crossroads, five active bots, cover/flanks, score/time finish and restart | User 2026-10-11; ADR0020; original game/ai and OfflineTDMSession; [native/Web/Pages evidence](offline-tdm.md), smooth Web FPS remains open | 1 | VERIFIED |
 | M03 | Local authoritative offline rules for health, damage, respawn, restock and objectives | No offline server in original; client relies on `NetClient.cpp:919,1295,1482` | 1 | IMPLEMENTED |
-| M04 | Match reset restores map and all objective/player/resource state | Original reset/map change driven by `NetClient.cpp:1348` | 1+2 | IMPLEMENTED |
+| M04 | Match reset restores map and all objective/player/resource state | Original reset/map change driven by `NetClient.cpp:1348` | 1 | IMPLEMENTED |
 
 ## Presentation, UI and content
 
 | ID | Feature and acceptance requirement | Original evidence | Iteration | Status |
 | --- | --- | --- | --- | --- |
-| U01 | Main menu, profile/player name, startup/loading/disconnect/error feedback | `Resources/Scripts/Gui/MainScreen/`; `Gui/StartupScreen/`; `Client_Draw.cpp:185,211,852` | 1+2 | IMPLEMENTED |
+| U01 | Main menu, profile/player name, startup/loading/disconnect/error feedback | `Resources/Scripts/Gui/MainScreen/`; `Gui/StartupScreen/`; `Client_Draw.cpp:185,211,852` | 1 | IMPLEMENTED |
 | U02 | Limbo team/weapon chooser, pause menu, setup and return-to-game | `LimboView.cpp`; `Resources/Scripts/Gui/Client/Menu.as` | 1 | IMPLEMENTED |
 | U03 | HUD: HP, clip/stock, block/grenade stocks, crosshair, hit indicator, reload/cook states | `Client_Draw.cpp:393,446,764`; `ClientPlayer.cpp:Draw2D`; user-selected modern visual replacement [ADR0022](decisions/0022-modern-combat-ui.md), mobile layout/input addition [ADR0023](decisions/0023-mobile-thumb-layout-and-aim-friction.md), state/input evidence [UI](ui.md) | 1 | IMPLEMENTED |
-| U04 | Minimap + large map, scale/zoom, coordinate grid, players, teams, bases/intel/territories | `MapView.cpp:172,178,239,549,585`; `Client_Input.cpp:536` | 1+2 | IMPLEMENTED |
-| U05 | Scoreboard, team score, players/kills, map-linked player ID colors, spectator list and match result messages | `ScoreboardView.cpp:278,291-298`; `CenterMessageView.cpp`; `Client_NetHandler.cpp` | 1+2 | IMPLEMENTED |
-| U06 | Kill feed, alerts, hurt overlay, names under crosshair and TC progress bar | `ChatWindow.cpp`; `HurtRingView.cpp`; `TCProgressView.cpp`; `Client_Draw.cpp:288,675,790` | 1+2 | IMPLEMENTED |
-| U07 | Global/team chat, input history and scrollable log; offline event log for test sessions | `Resources/Scripts/Gui/Client/ChatSayWindow.as`; `FieldWithHistory.as`; `ChatLogWindow.as` | 1+2 | IMPLEMENTED |
-| U08 | Free spectator, first/third-person following, dead-player camera and third-person debug view | `ClientCameraMode.h`; `Client_Scene.cpp`; `Client_Input.cpp:327` | 1+2 | IMPLEMENTED |
+| U04 | Minimap + large map, scale/zoom, coordinate grid, players, teams, bases/intel/territories | `MapView.cpp:172,178,239,549,585`; `Client_Input.cpp:536` | 1 | IMPLEMENTED |
+| U05 | Scoreboard, team score, players/kills, map-linked player ID colors, spectator list and match result messages | `ScoreboardView.cpp:278,291-298`; `CenterMessageView.cpp`; `Client_NetHandler.cpp` | 1 | IMPLEMENTED |
+| U06 | Kill feed, alerts, hurt overlay, names under crosshair and TC progress bar | `ChatWindow.cpp`; `HurtRingView.cpp`; `TCProgressView.cpp`; `Client_Draw.cpp:288,675,790` | 1 | IMPLEMENTED |
+| U07 | Global/team chat, input history and scrollable log; offline event log for test sessions | `Resources/Scripts/Gui/Client/ChatSayWindow.as`; `FieldWithHistory.as`; `ChatLogWindow.as` | 1 | IMPLEMENTED |
+| U08 | Free spectator, first/third-person following, dead-player camera and third-person debug view | `ClientCameraMode.h`; `Client_Scene.cpp`; `Client_Input.cpp:327` | 1 | IMPLEMENTED |
 | U09 | Rebind controls; mouse sensitivity/exponent/invert; ADS hold/toggle and ADS sensitivity | `Client_Input.cpp:44-88`; `Resources/Scripts/Gui/Preferences.as:673` | 1 | IMPLEMENTED |
 | U10 | Persist player profile, control bindings, graphics/audio/game preferences in browser storage | `Sources/Core/Settings.cpp`; `Resources/Scripts/Gui/Preferences.as` | 1 | IMPLEMENTED |
 | U11 | Audio: spatial shots, reload/dry-fire, impacts, footsteps/water, grenade/collapse and objective/UI feedback | `Client_Update.cpp`; `Client_NetHandler.cpp`; `Resources/Scripts/Skin/` | 1 | IMPLEMENTED |
@@ -147,27 +147,22 @@ These are additions required by the user, rather than features to discover in th
 | B03 | Browser playtest: input/pointer lock, audio activation, fullscreen, reload/settings and graphics stability | Input/drag fallback, audio/fullscreen/export/storage paths and HDR browser probes implemented; full current-release interaction acceptance pending | 1 | IMPLEMENTED |
 | B04 | Publish source, license notices and resource provenance with build | `LICENSE`; original file headers; separate resource inventory | 1 | IMPLEMENTED |
 
-## Multiplayer iteration
+## Retired multiplayer requirements
 
-| ID | Feature and acceptance requirement | Original evidence / replacement contract | Iteration | Status | Godot implementation / evidence |
-| --- | --- | --- | --- | --- | --- |
-| N01 | Browser-compatible transport, lobby/join/reconnect and disconnect/error handling | Replacement for `NetClient.cpp:395,430,476`; [ADR0005](decisions/0005-authoritative-multiplayer.md) | 2 | IMPLEMENTED | `ws_transport.gd`, `session_registry.gd`, `client_replica.gd`, Main/NetworkMenu; [runtime](server-runtime.md), [client](client-replica.md), [menu](network-menu.md). Real native join/resume/reset tested; browser WSS/TLS remains pending. |
-| N02 | Authoritative server, player movement prediction/reconciliation and remote interpolation | Replacement for world/input/position packets in `NetClient.cpp:815,878,1592` | 2 | IMPLEMENTED | `simulation/player_rules.gd`, `match_simulation.gd`, `server_runtime.gd`, `client_prediction.gd`/RemotePoseBuffer, NetworkSession/controller; [prediction](client-prediction.md), [scene integration](server-runtime.md). |
-| N03 | Server validation for shots, hit zones, ammo/cadence, melee, grenades and lag compensation | Original `NetClient.cpp:1759`; server rules are outside OpenSpades | 2 | IMPLEMENTED | Shared player/grenade/Match rules and `hit_history.gd`; same-time actor/terrain firearm rewind, life/color guards and missing-history denial; [rewind policy](match-rewind.md), [native hostile/late traffic](network-adversarial.md). Shaped WAN latency is unaccepted. |
-| N04 | Synchronized block edits/collapse and snapshot + subsequent deltas for joining clients | Original `NetClient.cpp:1122,1167,1348`; `World.cpp:281` | 2 | IMPLEMENTED | VoxelData receipts, map transfer/transaction codecs, Replica barrier and World adoption; [runtime](server-runtime.md), [epoch reset](runtime-epoch.md). Native joins during real destruction/collapse converge exactly. |
-| N05 | Teams, respawn/restock, CTF/TC objectives, wins, score and round/map resets | Original `NetClient.cpp:1192,1295,1367,1427,1482` | 2 | IMPLEMENTED | `match_objectives.gd`, `match_simulation.gd`, Runtime180-tick respawn and dedicated round coordinator; [Match](match-simulation.md), [reset](match-reset.md), [runtime epochs](runtime-epoch.md). Authored server policies are explicit. |
-| N06 | Chat, server event log, scoreboard, spectator and team/weapon changes | Original `NetClient.cpp:1323,1505,1512,1775` | 2 | IMPLEMENTED | Runtime typed chat/request/events, `events_codec.gd`, NetworkSession and HUD/scoreboard/spectator adapters; [events](events-codec.md), [session](network-session.md), [menu/chat](network-menu.md). Owner-private outcomes and unknown remote HP are preserved. |
-| N07 | Server discovery/list, sorting/filtering/favorites or an explicitly documented replacement | `Resources/Scripts/Gui/MainScreen/ServerList.as`; `MainScreenUI.as`; [manual-endpoint replacement ADR0006](decisions/0006-multiplayer-lobby.md) | 2 | IMPLEMENTED | `network_menu.gd`, `server_book.gd`: named local favorites, filter/sort, explicit selection/connect; [menu](network-menu.md). Empty initial catalog; no legacy master-server interoperability or invented public hosts. |
-| N08 | Dedicated server packaging, configurable match/map, deployment, capacity and reconnect tests | New multiplayer backend requirement | 2 | IMPLEMENTED | Dedicated scene/entry, `tools/build_server.py`, Linux export preset, `deploy/` Docker/Caddy config and native capacity/reconnect fixtures; [deployment](server-deployment.md). Container/Linux execution, public WSS and sustained capacity are not verified. |
-| N09 | Document original Ace of Spades compatibility decision; new transport is authorized but compatibility must be explicit | Original ENet 0.75/0.76 in `NetClient.cpp:395`; user permits different multiplayer engine; ADR0005 documents no old-server interoperability | 2 | VERIFIED | [ADR0005](decisions/0005-authoritative-multiplayer.md); source tuning profiles are distinct from wire compatibility. |
-
-All N01–N08 statuses describe implemented production paths and test/configuration code, not completed multiplayer acceptance. Native localhost sockets and packaging export do not establish a hosted service, Docker execution, two exported browser clients, sustained60Hz capacity or shaped WAN/TCP behavior. The current public c4 development release predates these newer integrated slices.
+N01–N09 (transport/join, prediction/server, lag compensation, map replication,
+remote teams/objectives, chat/scoreboard, discovery, server deployment and old
+protocol compatibility) are withdrawn by the user's 2026-10-12 instruction.
+They have no active implementation or acceptance status. The original rows and
+pre-removal evidence are retained in the
+[historical ledger](history/multiplayer-before-removal.md); see
+[ADR0031](decisions/0031-offline-only-game.md). Local rules, objectives, equipment,
+HUD and human-plus-five-bot combat remain within the offline scope.
 
 ## Evidence rules and release gates
 
 Each row is accepted only after recording: implementation file(s), verification command or playtest scenario, result/date and any behavior difference with a linked ADR. Generated resource counts are not proof that animation, appearance or sound behavior matches. Passing parser/import checks is not proof of browser playability.
 
-Iteration 1 release gate: all iteration-1 and offline portions of `1+2` rows verified, with any agreed platform adaptation explicitly documented; T01–T06 and B01–B04 verified; deployed URL tested. Iteration 2 release gate: multiplayer portions verified, two independent browser clients tested against deployed server, including join-after-destruction and reconnect.
+Iteration 1 release gate: all iteration-1 and offline portions of `1+2` rows verified, with any agreed platform adaptation explicitly documented; T01–T06 and B01–B04 verified; deployed URL tested. The multiplayer gate is withdrawn under ADR0031.
 
 ## Subsystem evidence log
 

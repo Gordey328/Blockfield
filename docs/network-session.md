@@ -1,5 +1,9 @@
 # Network presentation session
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/network/network_session.gd` implements `NetworkSession extends LocalSession` as a presentation adapter over `BlockfieldClientReplica`. Existing HUD/player/character consumers can retain the typed session contract. It performs no socket polling, shared-rule step, local timer simulation or authoritative map/player mutation. Offline `LocalSession` remains a separate authority and keeps its lab behavior.
 
 The actual inherited `scenes/network.tscn` Main scene selects this adapter before ready, polls Replica, adopts validated Data through World's deferred presentation path and routes copied state/events to Controller/HUD/models/audio. Current negotiated identities are `blockfield-godot-4.7.2-network-3` and `blockfield-source-v0.1.3-authority-3`. Production consumes MATCH_STATE14, GAME_EVENTS15 and early MATCH_PREPARING17; team/color intentions use PLAYER_REQUEST16. Preparing/loading state clears old views and gates input/entry. See [world-preparation.md](world-preparation.md) and [match-preparation.md](match-preparation.md).

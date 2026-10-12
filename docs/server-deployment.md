@@ -1,5 +1,9 @@
 # Dedicated build and deployment preparation
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 The public client remains at https://gordey328.github.io/Blockfield/. A native host/domain has not been selected. No account, VPS, certificate, payment setting or public authoritative service has been created.
 
 The previous [frozen57 development package](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) uses network4/authority4 and automatic block recovery. The new permanent-damage client requires a matching network5/authority5-no-block-regen authority; handshake hashes reject the old package. The matching [frozen4c051639e286 package](https://github.com/Gordey328/Blockfield/releases/tag/godot-4c051639e286) is published and independently downloaded/hash-verified:29,335,660bytes, SHA256 `eb6997de1cd726068fa31acd2ec4a2209138aab4a5b34e86b36805bbdf43241f`. Current evidence is recorded in [persistent block damage](persistent-block-damage.md).

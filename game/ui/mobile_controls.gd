@@ -1,7 +1,7 @@
 class_name BlockfieldMobileControls
 extends Control
 ## Input presentation only. Main/HUD owns the InputEventAction bridge; Player
-## retains every original tool, ADS, spectator and network-intention rule.
+## retains every original tool, ADS, spectator and local match rule.
 signal action_changed(action: String, pressed: bool)
 signal movement_changed(axis: Vector2)
 signal look_moved(relative: Vector2)

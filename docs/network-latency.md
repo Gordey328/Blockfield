@@ -1,5 +1,9 @@
 # Local delayed TCP acceptance
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `tools/latency_proxy.py` runs one owned native Godot process with `tests/network/test_network_latency.gd` and two raw TCP relays. The actual `BlockfieldServerRuntime` and two actual `BlockfieldClientReplica` instances use their production WebSocket transports, codecs, map barriers, prediction and authenticated input admission. The test never loads Main, preferences, renderer or audio.
 
 The current fixture targets the newly authored `authority-4` stale-input retirement policy. Its updated 350 ms recovery scenario passes **460 assertions / 0 failures**, Godot exit0 and clean diagnostics, in the native run recorded below. The measured `authority-3` results are historical: they expected a late-input disconnect and two resumes, and do not verify the new policy.

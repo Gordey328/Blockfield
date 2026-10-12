@@ -25,12 +25,10 @@ def main():
             ('offline-tdm-scene', 'tests/integration/test_offline_tdm_scene.gd'),
             ('native-map-main', 'tests/integration/test_native_map_main.gd'),
             ('vxl-main', 'tests/integration/test_vxl_main.gd'),
-            ('network-menu', 'tests/ui/test_network_menu.gd'),
         ]
         for name, path in suites:
             build.run('ui-gate-' + name, ['--fixed-fps', '60', '--script', str(build.ROOT / path)], timeout=300)
         build.run('ui-shell-smoke', ['--quit-after', '120'])
-        build.run('ui-server-smoke', ['--quit-after', '60', '--', '--server', '--game-port=0', '--map-port=0'])
     finally:
         config.write_bytes(original)
 

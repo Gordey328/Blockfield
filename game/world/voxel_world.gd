@@ -567,7 +567,7 @@ func load_vxl_bytes(bytes: PackedByteArray, title: String = "Imported VXL", defe
 	_prepare_loaded_map(title, deferred_visuals)
 	return OK
 
-func set_map_data(validated: VOXEL_DATA, title: String = "Network map", deferred_visuals: bool = false, validated_spawn: Vector3 = Vector3.INF) -> Error:
+func set_map_data(validated: VOXEL_DATA, title: String = "Local map", deferred_visuals: bool = false, validated_spawn: Vector3 = Vector3.INF) -> Error:
 	# This adopts an already validated, uniquely coordinated writable model.
 	# No palette scan/copy: the receiver validated colors before this handoff.
 	if validated == null or validated.read_only or not VOXEL_DATA.valid_dimensions(validated.dimensions) or validated.blocks.size() != validated.dimensions.x * validated.dimensions.y * validated.dimensions.z:
@@ -608,7 +608,7 @@ func _prepare_loaded_map(title: String, deferred_visuals: bool = false, validate
 func encode_vxl() -> PackedByteArray:
 	return data.encode_vxl()
 
-## Only one local VXL load/save may run. Authority and network installation keep
+## Only one local VXL load/save may run. Local authority and map adoption keep
 ## their synchronous interfaces; no private partially decoded map is published.
 func cancel_vxl_jobs() -> void:
 	_vxl_operation_token += 1

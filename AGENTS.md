@@ -3,7 +3,7 @@
 ## Objective and accepted scope
 Port OpenSpades v0.1.3 (`dcf449c845d509bbde9d79239b32d201c1389961`) to Godot, with a browser build published on GitHub Pages.
 Iteration 1 includes the full offline client, a local authoritative simulation, and a test lab exposing every original weapon/tool and both team appearances without starting a server.
-Iteration 2 adds a dedicated multiplayer server and browser-compatible transport. Changing the original networking stack is authorized.
+The user cancelled iteration 2 and requested complete multiplayer removal on 2026-10-12. The game is offline only; preserve local authority and bots. See docs/decisions/0031-offline-only-game.md.
 Do not describe a prototype, imported assets, or a successful export as a complete port.
 
 ## Resume
@@ -17,7 +17,7 @@ Durable decisions belong in docs, not in skill instructions or chat history. Do 
 ## Code and modules
 `game/` is the Godot project. Use typed GDScript and the Compatibility renderer; browser export is an acceptance target throughout development.
 `game/world/` owns voxel data/meshing/collision. `game/gameplay/` owns simulation and player/tool behavior. `game/ui/` owns menus/HUD. `game/assets/` contains imported resources with provenance. `tools/` contains reproducible import/build/check scripts.
-Keep offline rules separate from presentation and network transport. Never add one node per map voxel.
+Keep offline rules separate from presentation and input adapters. Never add one node per map voxel.
 
 ## Collaboration
 The user approved the proposed team. Use at most three specialist subagents plus the coordinator. Agree on data contracts and assign non-overlapping file ownership before parallel edits. Shared project config and release integration belong to the coordinator.

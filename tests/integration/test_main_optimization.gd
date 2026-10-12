@@ -47,7 +47,7 @@ func _run() -> void:
 	app.graphics_options = graphics
 	app._apply_graphics()
 	check(app.get_graphics_options()==graphics,"all original quality options survive optimization checks")
-	check(app.network_client==null,"offline lab never creates a multiplayer client")
+	check(app.session is LocalSession and not app.offline_tdm_mode,"offline lab retains its local simulation adapter")
 	var body: OpenSpadesCorpse = app.spawn_corpse({"feet_position":app.player.global_position,"yaw":0.5,"team":1})
 	check(body.is_static(),"actual Main death presentation selects static body mode")
 	var frozen_center: Vector3 = body.get_center()

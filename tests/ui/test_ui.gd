@@ -355,23 +355,6 @@ func test_scoreboard_colors() -> bool:
 	check(not board.per_player_colors and not checkbox.button_pressed and not hud._map.per_player_colors and not hud._large_map.per_player_colors,"saved disabled ID-color preference reloads into real scoreboard, maps and widget")
 	check(hud.touch_controls_mode==saved_touch_mode,"loading ID-color preference preserves mobile mode")
 
-	# Exercise the real network identity adapter without sockets or authority:
-	# local slot35 must use its stable ID, never the offline slot0 convention.
-	var replica:=BlockfieldClientReplica.new()
-	replica.actor_id=35
-	var network_view:=NetworkSession.new()
-	network_view.bind_replica(replica)
-	network_view.team=1
-	network_view.health=100
-	network_view.score=99
-	network_view.targets.assign([{"id":7,"name":"Remote canonical","team":1,"score":4,"deaths":0,"alive":true}])
-	board.session=network_view
-	board._process(0)
-	var network_text: String=board._columns[1].get_parsed_text()
-	check(network_text.contains("#35   Local [b]   99\n") and network_text.contains("#07   Remote canonical   4\n") and not network_text.contains("#00"),"real NetworkSession scoreboard uses canonical owner and remote identities instead of offline slot0")
-	check(int(board.get_rows()[0].id)==35 and bool(board.get_rows()[0].local),"scoreboard score sorting preserves canonical network owner identity")
-	board.session=session
-	network_view.free()
 	board.hide()
 	session.targets.assign(saved_targets)
 	session.score=saved_score

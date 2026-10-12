@@ -34,9 +34,7 @@ var displayed_weapon: int = Weapon.RIFLE
 var sprint_state: float = 0.0
 var aim_down_state: float = 0.0
 var spawn_generation: int = 0
-var input_ack: int = 0
 var player_kills: int = 0
-var confirmed_tick: int = -1
 var round_remaining: float = 300.0
 
 var _director: TdmBotDirector
@@ -146,13 +144,16 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 		tool: int = 255, weapon: int = 255) -> Dictionary:
 	var empty_transactions: Array[Dictionary] = []
 	if simulation == null:
-		return {"ok": false, "error": "TDM is not configured", "tick": -1, "transactions": empty_transactions}
+		return {"ok": false, "error": "TDM is not configured", "tick": -1,
+			"transactions": empty_transactions, "presentation_refresh_required": false}
 	if paused or finished:
 		update(0.0)
-		return {"ok": true, "error": "", "advanced": false, "tick": simulation.tick, "transactions": empty_transactions}
+		return {"ok": true, "error": "", "advanced": false, "tick": simulation.tick,
+			"transactions": empty_transactions, "presentation_refresh_required": false}
 	var owner: SharedPlayerState = simulation.get_actor(OWNER_ID)
 	if owner == null or _input_sequence >= RULES.MAX_UINT32:
-		return {"ok": false, "error": "TDM owner/input sequence unavailable", "tick": simulation.tick, "transactions": empty_transactions}
+		return {"ok": false, "error": "TDM owner/input sequence unavailable", "tick": simulation.tick,
+			"transactions": empty_transactions, "presentation_refresh_required": false}
 	var command: PlayerRules.Command = RULES.Command.new()
 	command.sequence = _input_sequence + 1
 	command.spawn_generation = owner.spawn_generation
@@ -163,7 +164,8 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 	command.tool = tool if tool != 255 else _pending_tool
 	command.weapon = weapon if weapon != 255 else _pending_weapon
 	if not command.valid():
-		return {"ok": false, "error": "Invalid TDM input", "tick": simulation.tick, "transactions": empty_transactions}
+		return {"ok": false, "error": "Invalid TDM input", "tick": simulation.tick,
+			"transactions": empty_transactions, "presentation_refresh_required": false}
 	if not owner.is_alive() and command.weapon != 255:
 		# A class chosen on the exact eligible respawn tick must apply to that
 		# spawn, rather than becoming pending immediately after the new life.
@@ -183,6 +185,10 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 	simulation.step_fixed(commands)
 	_restock_at_supply()
 	var transactions: Array[Dictionary] = simulation.drain_transactions()
+	# Receipts describe edits already owned by the adopted Data. A final marker
+	# asks Main to rebuild presentation from that same Data after bounded overflow.
+	var refresh_required: bool = not transactions.is_empty() \
+		and bool(transactions[-1].get("refresh_required", false))
 	_recount_scores()
 	var should_finish: bool = team_scores[0] >= kill_limit or team_scores[1] >= kill_limit \
 		or simulation.tick + 1 >= match_duration_ticks
@@ -206,7 +212,8 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 		objectives_changed.emit()
 		if winning_team >= 0:
 			round_won.emit(winning_team)
-	return {"ok": true, "error": "", "advanced": true, "tick": simulation.tick, "transactions": transactions}
+	return {"ok": true, "error": "", "advanced": true, "tick": simulation.tick,
+		"transactions": transactions, "presentation_refresh_required": refresh_required}
 
 
 func drain_presentation_events() -> Array[Dictionary]:
@@ -258,7 +265,6 @@ func update(delta: float) -> void:
 	sprint_state = _owner.sprint_state
 	aim_down_state = _owner.aim_down_state
 	spawn_generation = _owner.spawn_generation
-	input_ack = _owner.consumed_input_sequence
 	magazine = _owner.magazine
 	reserve = _owner.reserve
 	grenades = _owner.grenades
@@ -272,7 +278,6 @@ func update(delta: float) -> void:
 	player_position = _owner.feet()
 	session_time = float(maxi(0, simulation.tick + 1)) / RULES.HZ
 	round_remaining = maxf(0.0, float(match_duration_ticks - maxi(0, simulation.tick + 1)) / RULES.HZ)
-	confirmed_tick = simulation.tick
 	is_reloading = _owner.reloading
 	reload_remaining = maxf(0.0, (_owner.reload_deadline_tick - _owner.last_tick) / RULES.HZ) if _owner.reloading else 0.0
 	fire_cooldown = (_owner.next_shot_tick - _owner.last_tick) / RULES.HZ
@@ -326,7 +331,7 @@ func _mirror_targets() -> void:
 			"reloading": actor.reloading, "profile": actor.profile, "phase": session_time,
 			"respawn_remaining": maxf(0.0, float(actor.respawn_tick - simulation.tick) / RULES.HZ) if not alive else 0.0,
 			"death_crouch": actor.motion.crouch, "death_velocity": actor.motion.native_velocity * 32.0,
-			"carries_intel": false, "visual_only": true, "poor_connection": false})
+			"carries_intel": false, "visual_only": true})
 
 
 func _respawn_ready_actors() -> void:

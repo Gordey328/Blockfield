@@ -1,6 +1,6 @@
 class_name MatchSimulation
 extends RefCounted
-## Shared authority coordinator. Server scheduling/transport are external.
+## Fixed-step offline match coordinator for local actors, tools and objectives.
 const PLAYER = preload("res://simulation/player_state.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const PROFILES = preload("res://simulation/weapon_profiles.gd")
@@ -9,9 +9,7 @@ const HITS = preload("res://gameplay/lab_hit_volumes.gd")
 const SHOT_POSES = preload("res://gameplay/shot_hit_pose_cache.gd")
 const GRENADES = preload("res://simulation/grenade_rules.gd")
 const OBJECTIVES = preload("res://simulation/match_objectives.gd")
-const HISTORY = preload("res://network/hit_history.gd")
 const MAX_ACTORS := 32
-const MAX_SHOT_PELLETS := 8
 const MAX_GRENADES := 256 # At least five live short-cooked grenades per actor.
 const MAX_EVENTS := 2048
 const MAX_STEP_EVENTS := 16384
@@ -29,7 +27,7 @@ var friendly_fire: bool = true # Authored offline-compatible damage policy.
 var objectives: MatchObjectives
 var grenades: Dictionary[int,SharedGrenadeState] = {}
 var event_sequence: int = 0 # Global, distinct from per-actor ordinals.
-var resync_required: bool = false
+var presentation_refresh_required: bool = false
 var last_error: String = ""
 var _next_actor_id: int = 1
 var _issued_actor_ids: Dictionary[int,bool] = {} # Includes removed actors for this epoch.
@@ -44,40 +42,6 @@ var _pending_cell: Dictionary[int,Vector3i] = {}
 var _secondary: Dictionary[int,bool] = {}
 var _block_health: Dictionary[Vector3i,Dictionary] = {} # Persists until terrain edit/destruction or match reset.
 var _grenade_team: Dictionary[int,int] = {}
-var _rewind_query_factory: Callable
-var _rewind_enabled: bool = false
-var _rewind_stats: Dictionary = {}
-
-func set_rewind_query_factory(factory: Callable) -> void:
-	# Trusted coordinator only. An empty factory keeps the offline rules intact.
-	_rewind_query_factory = factory
-	_rewind_enabled = not factory.is_null()
-	_reset_rewind_stats()
-
-func _reset_rewind_stats() -> void:
-	_rewind_stats = {"planned_shots":0,"denied_shots":0,"denied_pellets":0,
-		"applied_player_hits":0,"blocked_generation_hits":0,"blocked_ineligible_hits":0,
-		"blocked_color_hits":0,"last_reason":"","denials":{}}
-
-func get_rewind_stats() -> Dictionary:
-	if _rewind_stats.is_empty(): _reset_rewind_stats()
-	var result := _rewind_stats.duplicate(true)
-	result.enabled = _rewind_enabled
-	return result
-
-func _rewind_count(key: String, amount: int = 1) -> void:
-	if _rewind_stats.is_empty(): _reset_rewind_stats()
-	_rewind_stats[key] = mini(RULES.MAX_UINT32,int(_rewind_stats[key])+amount)
-
-func _rewind_denial(reason: String, shot: Dictionary) -> Dictionary:
-	_rewind_count("denied_shots")
-	_rewind_count("denied_pellets",mini(MAX_SHOT_PELLETS,shot.directions.size()))
-	_rewind_stats.last_reason = reason
-	# Reasons are fixed strings below; external errors never grow this registry.
-	var denials: Dictionary = _rewind_stats.denials
-	denials[reason] = mini(RULES.MAX_UINT32,int(denials.get(reason,0))+1)
-	return {"ok":false,"shot":shot,"pellets":[]}
-
 func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: String = "sandbox") -> Dictionary:
 	if map_data == null or map_data.read_only or map_data.blocks.size() != map_data.dimensions.x*map_data.dimensions.y*map_data.dimensions.z \
 			or map_data.epoch <= 0 or map_data.epoch > RULES.MAX_UINT32 or map_data.last_tick > 0 \
@@ -112,14 +76,13 @@ func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: S
 	_transactions.clear()
 	_transaction_changes = 0
 	_events_overflow = false
-	resync_required = false
+	presentation_refresh_required = false
 	_colors.clear()
 	_line_start.clear()
 	_pending_cell.clear()
 	_secondary.clear()
 	_block_health.clear()
 	_grenade_team.clear()
-	_reset_rewind_stats()
 	objectives = new_objectives
 	return _result(true)
 
@@ -141,7 +104,7 @@ func add_actor(player_name: String, team: int = 2, seed_value: int = 1,
 	elif not _spawn_clear(point): return _result(false,"invalid initial actor position")
 	if team < 2 and not point.is_finite(): return _result(false,"no unoccupied spawn")
 	var actor := PLAYER.new(id,player_name,epoch,profile,seed_value)
-	actor.spawn_generation = 1 # Valid inactive spectator in wire snapshots.
+	actor.spawn_generation = 1 # Valid inactive spectator before its first spawn.
 	actor.last_tick = tick
 	if team == 2 and point.is_finite(): actor.motion = MOTION.create_state(point)
 	actors[id] = actor
@@ -170,7 +133,7 @@ func get_actor(id: int) -> SharedPlayerState:
 func spawn_actor(id: int, team: int, weapon: int = -1, feet: Vector3 = Vector3.INF) -> Dictionary:
 	var actor := get_actor(id)
 	var now := _next_tick()
-	if actor == null or not actor.connected or team not in [0,1] or actor.is_alive() \
+	if actor == null or team not in [0,1] or actor.is_alive() \
 			or (actor.respawn_tick >= 0 and now < actor.respawn_tick): return _result(false,"actor not eligible to spawn")
 	var selected := actor.pending_weapon if weapon < 0 and actor.pending_weapon >= 0 else (actor.weapon if weapon < 0 else weapon)
 	var point := _find_spawn(team) if feet == Vector3.INF else feet
@@ -208,49 +171,21 @@ func clear_controls(id: int) -> bool:
 	actor.input_buttons = 0
 	return true # Cook/previous input edge survive until the next fixed step.
 
-func disconnect_actor(id: int) -> Dictionary:
-	var actor := get_actor(id)
-	if actor == null: return _result(false,"unknown actor")
-	var events: Array[Dictionary] = []
-	if actor.connected:
-		events.append_array(RULES.release_grenade(actor,_next_tick(),true))
-		events.append_array(objectives.drop_actor(actor,_next_tick()))
-		actor.connected = false
-		clear_controls(id)
-		RULES.cancel_actions(actor)
-		_clear_build(id)
-		events.append(RULES.event(actor,_next_tick(),"actor_disconnected"))
-		_process_releases(events)
-	_record_events(events)
-	var result := _result(true)
-	result.events = RULES.frozen(events)
-	return result
-
-func reconnect_actor(id: int) -> Dictionary:
-	var actor := get_actor(id)
-	if actor == null: return _result(false,"unknown actor")
-	var events: Array[Dictionary] = []
-	if not actor.connected:
-		actor.connected = true
-		clear_controls(id)
-		actor.last_tick = tick
-		events.append(RULES.event(actor,_next_tick(),"actor_reconnected"))
-	_record_events(events)
-	var result := _result(true)
-	result.events = RULES.frozen(events)
-	return result
-
 func remove_actor(id: int) -> Dictionary:
 	var actor := get_actor(id)
 	if actor == null: return _result(false,"unknown actor")
 	var events: Array[Dictionary] = []
-	events.append_array(disconnect_actor(id).events)
+	events.append_array(RULES.release_grenade(actor,_next_tick(),true))
+	events.append_array(objectives.drop_actor(actor,_next_tick()))
+	clear_controls(id)
+	RULES.cancel_actions(actor)
+	_process_releases(events)
 	events.append(RULES.event(actor,_next_tick(),"actor_removed"))
 	actors.erase(id)
 	_colors.erase(id)
 	_clear_build(id)
 	_secondary.erase(id)
-	_record_events([events[-1]])
+	_record_events(events)
 	var result := _result(true)
 	result.events = RULES.frozen(events)
 	return result
@@ -260,13 +195,12 @@ func set_block_color(id: int, packed_rgb: int) -> bool:
 	_colors[id] = (packed_rgb & 0xffffff)|0x01000000
 	return true
 
-func step_fixed(commands: Dictionary = {}, admitted_shot_ticks: Dictionary = {}) -> Array[Dictionary]:
+func step_fixed(commands: Dictionary = {}) -> Array[Dictionary]:
 	var current: Array[Dictionary] = []
 	if data == null or data.epoch != epoch or tick >= RULES.MAX_UINT32 or data.read_only: return RULES.frozen(current)
 	tick += 1
 	var ordered := _ordered()
 	var block_gates: Dictionary[int,bool] = {}
-	var shot_fronts: Dictionary[int,Vector3] = {}
 	for actor: SharedPlayerState in ordered:
 		var displayed := actor.displayed_tool
 		var desired := actor.tool
@@ -274,9 +208,8 @@ func step_fixed(commands: Dictionary = {}, admitted_shot_ticks: Dictionary = {})
 		var sprint := actor.sprint_state
 		var supplied: Variant = commands.get(actor.player_id,null)
 		var input: PlayerRules.Command = supplied if supplied is PlayerRules.Command else null
-		# Every live cook reserves its eventual projectile. This server policy
-		# bounds even rapid disconnect/rejoin churn without consuming a grenade
-		# whose authoritative projectile would have to be discarded.
+		# Every live cook reserves its eventual projectile, so a capacity gate
+		# cannot consume a grenade whose local projectile would be discarded.
 		if actor.tool == RULES.Tool.GRENADE and not actor.cooking and not _cook_capacity():
 			actor.input_buttons &= ~RULES.Buttons.PRIMARY
 			if input != null:
@@ -290,12 +223,6 @@ func step_fixed(commands: Dictionary = {}, admitted_shot_ticks: Dictionary = {})
 				bounded.tool=input.tool
 				bounded.weapon=input.weapon
 				input=bounded
-		# fire() applies recoil to the actor after producing its rays. Preserve
-		# the accepted pre-fire aim for the historical .01 muzzle offset.
-		var shot_front := actor.front()
-		if input != null and input.valid() and input.spawn_generation == actor.spawn_generation and input.sequence > actor.consumed_input_sequence:
-			shot_front = Vector3(-sin(input.yaw)*cos(input.pitch),sin(input.pitch),-cos(input.yaw)*cos(input.pitch))
-		shot_fronts[actor.player_id] = shot_front
 		var actor_events := RULES.step_fixed(actor,tick,input,data)
 		current.append_array(actor_events)
 		_process_releases(actor_events)
@@ -303,28 +230,12 @@ func step_fixed(commands: Dictionary = {}, admitted_shot_ticks: Dictionary = {})
 			and raise >= .999 and displayed == actor.tool and desired == actor.tool
 	# Every shot sees all actors after the same fixed movement step.
 	var intents := current.duplicate()
-	var shot_plans: Dictionary[int,Dictionary] = {}
-	if _rewind_enabled:
-		var shot_count := 0
-		# Resolve ALL same-time historical rays before any intent can damage an
-		# actor or change terrain. The query's borrowed live identity then ends.
-		for index: int in range(intents.size()):
-			var intent: Dictionary = intents[index]
-			if intent.type != "shot": continue
-			var owner := get_actor(intent.owner_id)
-			if owner == null: continue
-			shot_count += 1
-			var plan := _rewind_denial("step_shot_limit",intent) if shot_count > MAX_ACTORS else _plan_rewound_shot(owner,intent,admitted_shot_ticks.get(owner.player_id),shot_fronts[owner.player_id])
-			shot_plans[index] = plan
-			# Replace our event copy, never the frozen Rules event/caller data.
-			current[index] = plan.shot
-			intents[index] = plan.shot
 	for index: int in range(intents.size()):
 		var intent: Dictionary = intents[index]
 		var actor := get_actor(intent.owner_id)
 		if actor == null: continue
 		match String(intent.type):
-			"shot": current.append_array(_commit_rewound_shot(actor,shot_plans[index]) if shot_plans.has(index) else _resolve_shot(actor,intent))
+			"shot": current.append_array(_resolve_shot(actor,intent))
 			"spade_bash": current.append_array(_resolve_spade(actor,false,intent.event_id))
 			"spade_dig": current.append_array(_resolve_spade(actor,true,intent.event_id))
 			"death": current.append_array(objectives.drop_actor(actor,tick))
@@ -349,7 +260,7 @@ func step_fixed(commands: Dictionary = {}, admitted_shot_ticks: Dictionary = {})
 	current.append_array(objectives.step_fixed(tick,ordered))
 	if current.size() > MAX_STEP_EVENTS:
 		current.resize(MAX_STEP_EVENTS-1)
-		current.append(_system_event("events_resync_required",{"resync_required":true}))
+		current.append(_system_event("events_overflow",{"overflow":true}))
 	_record_events(current)
 	return RULES.frozen(current)
 
@@ -410,131 +321,6 @@ func raycast_actors(owner_id: int, origin: Vector3, direction: Vector3, shot_pos
 				result = hit
 				result.actor_id = target.player_id
 	return result
-
-static func _valid_rewind_pose(pose: Dictionary) -> bool:
-	for key: String in ["id","epoch","spawn_generation","team"]:
-		if typeof(pose.get(key)) != TYPE_INT: return false
-	for key: String in ["alive","connected","pose_valid","crouch"]:
-		if typeof(pose.get(key)) != TYPE_BOOL: return false
-	for key: String in ["physics_eye","feet"]:
-		if typeof(pose.get(key)) != TYPE_VECTOR3 or not pose[key].is_finite(): return false
-	return pose.id > 0 and pose.id <= RULES.MAX_UINT32 and pose.spawn_generation > 0 and pose.spawn_generation <= RULES.MAX_UINT32 \
-		and pose.team in [0,1,2] and typeof(pose.get("yaw")) == TYPE_FLOAT and is_finite(pose.yaw) and absf(pose.yaw) <= PI+.000001 \
-		and typeof(pose.get("pitch")) == TYPE_FLOAT and is_finite(pose.pitch) and absf(pose.pitch) <= PI*.5+.000001
-
-func _failed_rewind_query(query: HISTORY.HistoricalVoxelQuery, reason: String, shot: Dictionary) -> Dictionary:
-	query.cancel()
-	RULES.freeze_value(shot)
-	return _rewind_denial(reason,shot)
-
-func _plan_rewound_shot(owner: SharedPlayerState, source: Dictionary, admitted_tick: Variant, front: Vector3) -> Dictionary:
-	var shot := source.duplicate(true)
-	if typeof(admitted_tick) != TYPE_INT or admitted_tick < 0 or admitted_tick > tick-1:
-		RULES.freeze_value(shot)
-		return _rewind_denial("missing_or_future_admitted_tick",shot)
-	if shot.directions.is_empty() or shot.directions.size() > MAX_SHOT_PELLETS:
-		RULES.freeze_value(shot)
-		return _rewind_denial("pellet_limit",shot)
-	if not _rewind_query_factory.is_valid():
-		RULES.freeze_value(shot)
-		return _rewind_denial("history_unavailable",shot)
-	var resolved: Variant = _rewind_query_factory.call(admitted_tick,tick-1)
-	if typeof(resolved) != TYPE_DICTIONARY or not bool(resolved.get("ok",false)):
-		RULES.freeze_value(shot)
-		return _rewind_denial("history_unavailable",shot)
-	var supplied_query: Variant = resolved.get("query")
-	if not supplied_query is HISTORY.HistoricalVoxelQuery:
-		RULES.freeze_value(shot)
-		return _rewind_denial("invalid_history_query",shot)
-	var query: HISTORY.HistoricalVoxelQuery = supplied_query
-	if resolved.get("tick") != admitted_tick or resolved.get("map_sequence") != query.map_sequence or query.last_tick != admitted_tick \
-			or query.epoch != epoch or query._live != data or not query.is_valid() or typeof(resolved.get("actors")) != TYPE_ARRAY or resolved.actors.size() > MAX_ACTORS:
-		return _failed_rewind_query(query,"invalid_or_stale_history",shot)
-	var poses: Array = resolved.actors
-	var shooter: Dictionary = {}
-	var previous_id := 0
-	for value: Variant in poses:
-		if typeof(value) != TYPE_DICTIONARY or not _valid_rewind_pose(value) or value.epoch != epoch or value.id <= previous_id:
-			return _failed_rewind_query(query,"invalid_history_pose",shot)
-		previous_id = value.id
-		if value.id == owner.player_id: shooter = value
-	if shooter.is_empty() or not shooter.alive or not shooter.connected or not shooter.pose_valid \
-			or shooter.spawn_generation != shot.spawn_generation or owner.spawn_generation != shot.spawn_generation or owner.match_epoch != epoch:
-		return _failed_rewind_query(query,"historical_shooter_ineligible",shot)
-	shot.origin = shooter.physics_eye + front*.01
-	# All poses have passed the closed-history/life checks above. Prepare each
-	# target once for this shot, then reuse its exact source matrices for every
-	# pellet. Nothing is cached across ticks, leases or authority mutations.
-	var targets: Array[Dictionary] = []
-	for pose: Dictionary in poses:
-		if pose.id == owner.player_id or not pose.alive or not pose.connected or not pose.pose_valid: continue
-		targets.append({"id":pose.id,"spawn_generation":pose.spawn_generation,
-			"volumes":HITS.prepare_pose(pose.feet,pose.yaw,pose.crouch,pose.pitch)})
-	var pellets: Array[Dictionary] = []
-	for direction: Vector3 in shot.directions:
-		var map_hit: Dictionary = query.cast_source_ray(shot.origin,direction,500)
-		if not bool(map_hit.get("valid",false)): return _failed_rewind_query(query,"invalid_or_stale_history",shot)
-		var hit := _raycast_rewound_actors(shot.origin,direction,targets)
-		var chosen := source_weapon_hit(shot.origin,map_hit,hit)
-		var pellet := {"chosen":chosen,"position":shot.origin+direction*128}
-		if chosen == "player":
-			pellet.merge({"position":hit.position,"actor_id":hit.actor_id,"spawn_generation":hit.spawn_generation,"part":hit.part},true)
-		elif chosen == "map":
-			pellet.merge({"position":map_hit.position,"cell":map_hit.cell,"normal":map_hit.normal,"color":query.get_block(map_hit.cell)},true)
-		pellets.append(pellet)
-	# Queries borrow live storage: no reference may survive planning into damage.
-	if not query.is_valid(): return _failed_rewind_query(query,"invalid_or_stale_history",shot)
-	query.cancel()
-	RULES.freeze_value(shot)
-	RULES.freeze_value(pellets)
-	_rewind_count("planned_shots")
-	return {"ok":true,"shot":shot,"pellets":pellets}
-
-static func _raycast_rewound_actors(origin: Vector3, direction: Vector3, targets: Array[Dictionary]) -> Dictionary:
-	var result: Dictionary = {}
-	var closest := INF
-	for pose: Dictionary in targets:
-		var hit := HITS.cast_prepared(origin,direction,pose.volumes,500)
-		if hit.hit:
-			var distance := horizontal_distance(origin,hit.position)
-			if distance < closest:
-				closest = distance
-				result = hit
-				result.actor_id = pose.id
-				result.spawn_generation = pose.spawn_generation
-	return result
-
-func _commit_rewound_shot(owner: SharedPlayerState, plan: Dictionary) -> Array[Dictionary]:
-	var events: Array[Dictionary] = []
-	var shot: Dictionary = plan.shot
-	var destroyed := false
-	for index: int in range(mini(MAX_SHOT_PELLETS,shot.directions.size())):
-		var direction: Vector3 = shot.directions[index]
-		var endpoint: Vector3 = shot.origin+direction*128
-		if plan.ok:
-			var pellet: Dictionary = plan.pellets[index]
-			endpoint = pellet.position
-			if pellet.chosen == "player":
-				var victim := get_actor(pellet.actor_id)
-				if victim == null or not RULES.can_act(victim):
-					_rewind_count("blocked_ineligible_hits")
-				elif victim.match_epoch != epoch or victim.spawn_generation != pellet.spawn_generation:
-					_rewind_count("blocked_generation_hits")
-				else:
-					var amount := PROFILES.damage(profile,int(shot.weapon),pellet.part,horizontal_distance(shot.origin,pellet.position))
-					var damage_events := _damage(victim,amount,owner.player_id,"weapon",shot.event_id,owner.team)
-					events.append_array(damage_events)
-					if not damage_events.is_empty():
-						_rewind_count("applied_player_hits")
-						events.append(RULES.event(owner,tick,"hit_confirmed",{"victim_id":victim.player_id,"part":pellet.part,"damage":damage_events[0].amount,"position":pellet.position,"friendly":owner.team==victim.team,"source_event_id":shot.event_id,"pellet":index}))
-			elif pellet.chosen == "map" and data.is_in_bounds(pellet.cell):
-				if data.get_block(pellet.cell) != pellet.color:
-					_rewind_count("blocked_color_hits")
-				else:
-					if _damage_block(owner,pellet.cell,PROFILES.get_info(profile,int(shot.weapon)).block,not destroyed): destroyed = true
-					events.append(RULES.event(owner,tick,"block_hit",{"cell":pellet.cell,"position":pellet.position,"normal":pellet.normal,"source_event_id":shot.event_id,"pellet":index}))
-		events.append(RULES.event(owner,tick,"tracer",{"origin":shot.origin,"position":endpoint,"weapon":shot.weapon,"source_event_id":shot.event_id,"pellet":index}))
-	return events
 
 func _resolve_shot(owner: SharedPlayerState, shot: Dictionary) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
@@ -718,7 +504,6 @@ func _process_releases(events: Array[Dictionary]) -> void:
 				and state.created_tick == int(event.tick) and state.action_sequence == int(event.cook_action_sequence): exists = true; break
 		if exists: continue
 		if grenades.size() >= MAX_GRENADES:
-			resync_required = true
 			last_error = "grenade capacity exhausted"
 			continue
 		var state := GRENADES.create(_next_grenade_id,event.owner_id,event.spawn_generation,epoch,event.tick,event.position,event.native_velocity*32,event.fuse,event.cook_action_sequence)
@@ -750,15 +535,13 @@ func _metadata(actor: SharedPlayerState) -> Dictionary:
 func _commit(transaction: Dictionary) -> void:
 	if not bool(transaction.get("ok",false)):
 		last_error = "map transaction rejected"
-		resync_required = true
+		presentation_refresh_required = true
 		return
 	if not bool(transaction.changed): return
 	for change: Dictionary in transaction.changes: _block_health.erase(change.cell)
-	if resync_required: return
+	if presentation_refresh_required: return
 	if _transactions.size() >= MAX_TRANSACTIONS or _transaction_changes+transaction.changes.size() > MAX_TRANSACTION_CHANGES:
-		_transactions.clear()
-		_transaction_changes = 0
-		resync_required = true
+		presentation_refresh_required = true
 		return
 	var copy := transaction.duplicate(true)
 	RULES.freeze_value(copy)
@@ -766,23 +549,17 @@ func _commit(transaction: Dictionary) -> void:
 	_transaction_changes += transaction.changes.size()
 
 func drain_transactions() -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	if resync_required:
-		result.append({"ok":false,"type":"map_resync_required","resync_required":true,"epoch":epoch,"tick":maxi(0,tick),"map_sequence":data.map_sequence if data != null else 0})
-	else: result = _transactions.duplicate()
+	# Data already owns every edit. Present bounded valid receipts first, then
+	# refresh from that Data when the tail no longer fits this frame's queue.
+	var result: Array[Dictionary] = _transactions.duplicate()
+	if presentation_refresh_required:
+		result.append({"ok":false,"type":"map_refresh_required","refresh_required":true,
+			"epoch":epoch,"tick":maxi(0,tick),"map_sequence":data.map_sequence if data != null else 0})
 	_transactions.clear()
 	_transaction_changes = 0
+	presentation_refresh_required = false
 	RULES.freeze_value(result)
 	return result
-
-func acknowledge_map_resync() -> bool:
-	# Trusted runtime: invalidate old streams/start fresh immutable baselines
-	# before this call. Draining the marker alone is not an acknowledgement.
-	var required := resync_required
-	_transactions.clear()
-	_transaction_changes = 0
-	resync_required = false
-	return required
 
 func _record_events(events: Array[Dictionary]) -> void:
 	for event: Dictionary in events:
@@ -798,7 +575,7 @@ func _record_events(events: Array[Dictionary]) -> void:
 
 func drain_events() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	if _events_overflow: result.append(_system_event("events_resync_required",{"resync_required":true,"event_sequence":event_sequence,"match_sequence":event_sequence}))
+	if _events_overflow: result.append(_system_event("events_overflow",{"overflow":true,"event_sequence":event_sequence,"match_sequence":event_sequence}))
 	else: result = _events.duplicate()
 	_events.clear()
 	_events_overflow = false
@@ -806,8 +583,8 @@ func drain_events() -> Array[Dictionary]:
 	return result
 
 func get_damaged_blocks() -> Dictionary[Vector3i,bool]:
-	# Freeze this presentation-only copy with the joining map barrier. Live
-	# wire snapshots need no private HP copy or periodic damaged-cell scan.
+	# Restore local damage marks after a rendered-world refresh without copying
+	# health into every routine presentation update.
 	var damaged: Dictionary[Vector3i,bool] = {}
 	if data == null: return damaged
 	for cell: Vector3i in _block_health:
@@ -817,7 +594,7 @@ func get_damaged_blocks() -> Dictionary[Vector3i,bool]:
 			damaged[cell] = true
 	return damaged
 
-func snapshot_for(id: int, include_block_health: bool = true) -> Dictionary:
+func capture_state(id: int) -> Dictionary:
 	if data == null or not actors.has(id): return {}
 	var copied: Array[SharedPlayerState] = []
 	for actor: SharedPlayerState in _ordered(): copied.append(actor.copy())
@@ -825,8 +602,8 @@ func snapshot_for(id: int, include_block_health: bool = true) -> Dictionary:
 	var ids := grenades.keys()
 	ids.sort()
 	for grenade_id: int in ids: projectiles.append(grenades[grenade_id].copy())
-	# Copied objects are owned by the caller; this is NOT a wire serializer.
-	var block_health: Dictionary = _block_health.duplicate(true) if include_block_health else {}
+	# Local diagnostics own copies; editing them cannot change the running match.
+	var block_health: Dictionary = _block_health.duplicate(true)
 	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":block_health,"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate()}
 
 func _system_event(type: String, details: Dictionary = {}) -> Dictionary:

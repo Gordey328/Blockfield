@@ -1,5 +1,9 @@
 # Authoritative shot rewind
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `MatchSimulation` has an optional historical firearm resolver, enabled by the native Runtime. `BlockfieldHitHistory` selects actor hit volumes and terrain from the same exact completed frame. This is an authored multiplayer policy built on the existing source weapon/hit rules, not a claim about the original Ace of Spades server. Upstream OpenSpades is a client.
 
 ## Coordinator contract

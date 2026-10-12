@@ -1,5 +1,5 @@
 extends SceneTree
-## Actual input edges from Client_Input.cpp, without synthetic server authority.
+## Actual offline input edges from Client_Input.cpp.
 const SCENE=preload("res://scenes/main.tscn")
 var checks:=0
 var failures:=0
@@ -31,7 +31,7 @@ func ready_tool() -> void:
 	check(false,"actual source equipment reaches ready state")
 
 func _run() -> void:
-	for path: String in ["user://settings.cfg","user://servers.cfg"]:
+	for path: String in ["user://settings.cfg"]:
 		var exists:=FileAccess.file_exists(path)
 		saved[path]={"exists":exists,"bytes":FileAccess.get_file_as_bytes(path) if exists else PackedByteArray()}
 	app=SCENE.instantiate();root.add_child(app)
@@ -139,9 +139,6 @@ func _run() -> void:
 		var active:=voices(path)
 		check(not active.is_empty() and active.back().get_meta("origin")==Vector3.ZERO and not active.back().get_meta("efx_eligible"),"map UI sound uses actual dry source playback: "+path)
 	app.hud.map_sound_requested.disconnect(map_callback)
-	app._network_cosmetic_audio("dry_fire",{"owner_id":app.session.local_player_id()},true)
-	var dry:=voices("Weapons/DryFire")
-	check(not dry.is_empty() and dry.back().get_meta("gain")==1.0 and dry.back().get_meta("origin")==OpenSpadesAudio.LOCAL_ORIGIN,"confirmed private network dry-fire preserves native gain and weapon listener offset")
 	var slash:=InputEventKey.new();slash.keycode=KEY_SLASH;slash.unicode=47;slash.pressed=true
 	Input.parse_input_event(slash);Input.flush_buffered_events()
 	check(app.hud.is_chat_open() and app.hud._chat.get_input_text()=="/" and not app.player.controls_enabled,"native slash shortcut opens command input with one prefix and captures gameplay")

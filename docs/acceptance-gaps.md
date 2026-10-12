@@ -1,5 +1,9 @@
 # Port implementation and remaining acceptance
 
+The user withdrew multiplayer on2026-10-12 under [ADR0031](decisions/0031-offline-only-game.md).
+Historical N01–N09/server/network gaps below are no longer pending requirements.
+Offline source-parity gaps remain unless separately verified or explicitly adapted.
+
 Updated after the integrated renderer/network/UI handoffs on2026-10-10, against pinned OpenSpades v0.1.3. This report separates implemented code from acceptance evidence. Public57ad43b2b740 includes normalization/network/favorites changes and passed the complete registered frozen suite plus Web/Linux exports. Public metadata and PCK identity were verified separately; these checks do not make the full port complete.
 
 ## Discussion-only fidelity audit 2026-10-10

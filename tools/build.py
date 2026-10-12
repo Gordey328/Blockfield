@@ -73,24 +73,15 @@ def main():
     suites += [('source-motion','tests/gameplay/test_source_motion.gd'),('spectator-view','tests/presentation/test_spectator_view.gd'),('reflection','tests/world/test_reflection.gd')]
     suites += [('console','tests/ui/test_console.gd'),('camera-effects','tests/presentation/test_camera_effects.gd')]
     suites += [('hdr-exposure','tests/presentation/test_hdr_exposure.gd'),('audio-pcm','tests/audio/render_audio.gd')]
-    suites += [('protocol','tests/network/test_protocol.gd')]
-    suites += [('ws-transport','tests/network/test_ws_transport.gd'),('shared-grenade','tests/network/test_grenade_rules.gd')]
-    suites += [('voxel-data','tests/world/test_voxel_data.gd'),('voxel-adapter','tests/world/test_voxel_adapter.gd'),('player-rules','tests/network/test_player_rules.gd'),('match-objectives','tests/network/test_match_objectives.gd')]
-    suites += [('match-simulation','tests/network/test_match_simulation.gd'),('client-prediction','tests/network/test_client_prediction.gd'),('map-transfer','tests/network/test_map_transfer.gd')]
-    suites += [('session-registry','tests/network/test_session_registry.gd'),('input-queue','tests/network/test_input_queue.gd'),('server-runtime','tests/network/test_server_runtime.gd')]
-    suites += [('simulation-codec','tests/network/test_simulation_codec.gd'),('client-replica','tests/network/test_client_replica.gd')]
-    suites += [('events-codec','tests/network/test_events_codec.gd'),('hit-history','tests/network/test_hit_history.gd'),('match-rewind','tests/network/test_match_rewind.gd'),('events-delivery','tests/network/test_events_delivery.gd'),('network-session','tests/network/test_network_session.gd'),('network-controller','tests/network/test_network_controller.gd'),('network-identity','tests/ui/test_network_identity.gd'),('network-menu','tests/ui/test_network_menu.gd'),('weapon-simulation','tests/presentation/test_weapon_simulation.gd'),('network-adversarial','tests/network/test_network_adversarial.gd'),('match-reset','tests/network/test_match_reset.gd'),('epoch-reset-contract','tests/network/test_epoch_reset_contract.gd'),('runtime-epoch','tests/network/test_runtime_epoch.gd'),('network-scene','tests/network/test_network_scene.gd')]
-    suites += [('dedicated-round','tests/network/test_dedicated_round.gd'),('server-book','tests/ui/test_server_book.gd')]
-    suites += [('snapshot-fanout','tests/network/test_snapshot_fanout.gd'),('hit-volume-acceleration','tests/gameplay/test_hit_volume_acceleration.gd'),('network-scene-epoch','tests/network/test_network_scene_epoch.gd')]
-    suites += [('world-preparation','tests/world/test_world_preparation.gd'),('long-reset','tests/network/test_long_reset.gd')]
+    suites += [('voxel-data','tests/world/test_voxel_data.gd'),('voxel-adapter','tests/world/test_voxel_adapter.gd')]
+    suites += [('weapon-simulation','tests/presentation/test_weapon_simulation.gd')]
+    suites += [('hit-volume-acceleration','tests/gameplay/test_hit_volume_acceleration.gd')]
+    suites += [('world-preparation','tests/world/test_world_preparation.gd')]
     suites += [('offline-lifecycle','tests/integration/test_offline_lifecycle.gd')]
     suites += [('source-input','tests/integration/test_source_input.gd')]
     suites += [('camera-target-rays','tests/gameplay/test_camera_target_rays.gd')]
     suites += [('hottracked-player','tests/presentation/test_hottracked_player.gd')]
     suites += [('source-rays','tests/world/test_source_rays.gd'),('audio-environment','tests/audio/test_environment.gd'),('audio-environment-pcm','tests/audio/render_environment.gd')]
-    suites += [('client-schedule','tests/network/test_client_schedule.gd')]
-    suites += [('client-input-clock','tests/network/test_client_input_clock.gd')]
-    suites += [('map-backpressure','tests/network/test_map_backpressure.gd')]
     suites += [('mobile-controls','tests/ui/test_mobile_controls.gd')]
     suites += [('mobile-look','tests/integration/test_mobile_look.gd')]
     suites += [('mobile-aim-assist','tests/integration/test_mobile_aim_assist.gd')]
@@ -98,7 +89,6 @@ def main():
     suites += [('block-impact-optimization','tests/world/test_block_impact_optimization.gd'),('minimap-impact-upload','tests/ui/test_minimap_impact_upload.gd')]
     suites += [('impact-fragment-updates','tests/presentation/test_impact_fragment_updates.gd')]
     suites += [('impact-pcm','tests/audio/test_impact_pcm.gd')]
-    suites += [('network-block-damage','tests/network/test_network_block_damage.gd')]
     suites += [('audio-optimization','tests/audio/test_audio_optimization.gd'),('vxl-jobs','tests/world/test_vxl_jobs.gd'),('model-cache-bounds','tests/presentation/test_model_cache_bounds.gd'),('vxl-main','tests/integration/test_vxl_main.gd')]
     suites += [('tdm-bots','tests/ai/test_tdm_bots.gd'),('offline-tdm','tests/session/test_offline_tdm.gd'),('offline-tdm-scene','tests/integration/test_offline_tdm_scene.gd')]
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
@@ -114,17 +104,11 @@ def main():
                ('player-state-copy-optimization','tests/gameplay/test_player_state_copy_optimization.gd'),
                ('world-dirty-optimization','tests/world/test_world_dirty_optimization.gd'),
                ('main-optimization','tests/integration/test_main_optimization.gd')]
+    suites += [('shared-grenade','tests/simulation/test_grenade_rules.gd'),('player-rules','tests/simulation/test_player_rules.gd'),('match-objectives','tests/simulation/test_match_objectives.gd'),('match-simulation','tests/simulation/test_match_simulation.gd'),('match-reset','tests/simulation/test_match_reset.gd'),('actor-presentation','tests/ui/test_actor_presentation.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
-    latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
-    run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
-                '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)
-    latency_log=latency_report.with_suffix('.log').read_text(encoding='utf-8',errors='replace')
-    if re.search(r'SCRIPT ERROR|Parse Error|^ERROR:|FAIL:',latency_log,re.MULTILINE):
-        raise SystemExit('Network latency engine diagnostics failed; see '+str(latency_report.with_suffix('.log')))
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
-    run('server-launcher-smoke',['--quit-after','60','--','--server','--game-port=0','--map-port=0'])
     if args.export: export_web()
 
 def export_web():

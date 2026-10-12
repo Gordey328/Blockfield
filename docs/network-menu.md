@@ -1,5 +1,9 @@
 # Network menu and HUD routing
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/ui/network_menu.gd` provides the connection form inside `LabHUD`'s existing menu. `Main.network_mode` selects this branch; offline mode retains the arsenal, soldiers, world, checks and settings tabs and adds a Multiplayer scene action. Network mode exposes Connection, saved Servers and the same input/display/audio/graphics settings. It has no local map editor, target controls, profile switch, restock or invulnerability toggles.
 
 The form starts with empty game/map addresses. `wss://host/play` and `wss://host/map` are placeholders, not configured public servers. The user supplies both addresses, a name and an optional spectator request. URL validation, browser HTTPS/WSS requirements, socket ownership and reconnect capabilities belong to Main. The UI forwards a trimmed request and displays Main's concise rejection. It reads only client `get_stats()` status/error/map phase and the safe `network_can_resume()` boolean; it neither reads nor displays tokens.

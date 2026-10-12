@@ -1,8 +1,8 @@
 extends SceneTree
 ## Actual Main/Player/HUD touch-look integration. Owns a temporary preference
-## fixture and restores original settings/servers bytes and process globals.
+## fixture and restores original settings bytes and process globals.
 const SCENE = preload("res://scenes/main.tscn")
-const FILES: Array[String] = ["user://settings.cfg", "user://servers.cfg"]
+const FILES: Array[String] = ["user://settings.cfg"]
 const DESKTOP := {"sensitivity":0.006,"mouse_exponent":1.8,"ads_sensitivity":0.43,"invert_mouse":true}
 const TOUCH_KEYS: Array[String] = ["touch_sensitivity","touch_ads_sensitivity","invert_touch"]
 const UI_KEYS: Array[String] = ["floating_stick","touch_control_scale","fire_drag_look","left_handed_touch"]
@@ -15,26 +15,23 @@ var saved: Dictionary = {}
 var globals: Dictionary = {}
 var finishing := false
 
-## Records the actual controller's command boundary; transport and prediction
-## are deliberately absent. Socket/recoil behavior remains covered separately.
-class RecordingReplica extends BlockfieldClientReplica:
-	var owner: SharedPlayerState = SharedPlayerState.new()
+## Records the actual TDM controller's command boundary without advancing bots.
+class RecordingMatch extends OfflineTDMSession:
+	var actor_state: SharedPlayerState = SharedPlayerState.new(1, "Player", 1)
 	var submitted: Array[Dictionary] = []
-	var objectives: Dictionary = {}
+	func _init() -> void:
+		paused = false
+		_owner = actor_state
 
 	func get_owner_state() -> SharedPlayerState:
-		return owner.copy() if owner != null else null
+		return actor_state.copy() if actor_state != null else null
 
-	func get_public_state() -> Dictionary:
-		if owner == null:
-			return {}
-		return {"epoch":owner.match_epoch,"tick":owner.last_tick,"actors":[],"grenades":[],"objectives":objectives}
-
-	func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: int = 255, weapon: int = 255) -> Dictionary:
+	func step_local(buttons: int, move: Vector2, yaw: float, pitch: float, tool: int = 255, weapon: int = 255) -> Dictionary:
 		submitted.append({"buttons":buttons,"move":move,"yaw":yaw,"pitch":pitch,"tool":tool,"weapon":weapon})
-		owner.yaw = yaw
-		owner.pitch = pitch
-		return {"ok":true}
+		actor_state.yaw = yaw
+		actor_state.pitch = pitch
+		var transactions: Array[Dictionary] = []
+		return {"ok":true,"transactions":transactions}
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -302,102 +299,85 @@ func orbit_effects_preserved() -> void:
 	app.effects._slow_shake = saved_slow
 	defaults()
 
-func network_command_boundary() -> void:
+func match_command_boundary() -> void:
 	defaults()
 	LabInputBindings.release_actions()
-	var replica := RecordingReplica.new()
-	replica.status = "live"
-	replica.actor_id = 1
-	replica.epoch = 1
-	replica.owner.team = 0
-	replica.owner.health = 100
-	replica.owner.spawn_generation = 1
-	replica.owner.last_tick = 0
-	replica.owner.tool_raise = 1.0
-	replica.owner.magazine = 10
-	replica.owner.reserve = 50
-	replica.owner.motion = SourcePlayerMotion.create_state(app.player.global_position)
+	var match_session := RecordingMatch.new()
+	match_session.actor_state.team = 0
+	match_session.actor_state.health = 100
+	match_session.actor_state.spawn_generation = 1
+	match_session.actor_state.last_tick = 0
+	match_session.actor_state.tool_raise = 1.0
+	match_session.actor_state.magazine = 10
+	match_session.actor_state.reserve = 50
+	match_session.actor_state.motion = SourcePlayerMotion.create_state(app.player.global_position)
 	var offline: LocalSession = app.player.session
-	replica.objectives = {"mode":offline.mode,"capture_limit":offline.capture_limit,"winning_team":offline.winning_team,"scores":offline.team_scores.duplicate(),"bases":offline.ctf_bases.duplicate(true),"flags":offline.ctf_flags.duplicate(true),"territories":offline.territories.duplicate(true)}
-	var network := NetworkSession.new()
-	network.bind_replica(replica)
-	var previous_replica: BlockfieldClientReplica = app.network_client
 	var previous_connected: LocalSession = app.player._connected_session
-	app.network_client = replica
-	app.player.session = network
-	app.player._connected_session = network
-	app.player._network_epoch = 0
-	app.player._network_generation = -1
+	app.player.session = match_session
+	app.player._connected_session = match_session
+	app.player._match_epoch = 0
+	app.player._match_generation = -1
 	app.player._physics_process(0.0)
-	replica.submitted.clear()
+	match_session.submitted.clear()
 	reset_pose()
 	var extent := Vector2(1000,600)
 	app.player.queue_touch_motion(Vector2(20,8),extent)
 	app.player.queue_touch_motion(Vector2(30,12),extent)
-	check(pose() == Vector4.ZERO,"network touch waits for the production command boundary")
+	check(pose() == Vector4.ZERO,"TDM touch waits for the production command boundary")
 	app.player._physics_process(1.0 / 60.0)
-	check(replica.submitted.size() == 1,"one physics callback samples exactly one network command")
-	if not replica.submitted.is_empty():
-		var command: Dictionary = replica.submitted.back()
-		check(yaw_near(command.yaw,-TURN * 0.05) and near(command.pitch,-TURN * 0.02),"all queued events enter network yaw/pitch before command submission")
+	check(match_session.submitted.size() == 1,"one physics callback samples exactly one TDM command")
+	if not match_session.submitted.is_empty():
+		var command: Dictionary = match_session.submitted.back()
+		check(yaw_near(command.yaw,-TURN * 0.05) and near(command.pitch,-TURN * 0.02),"all queued events enter TDM yaw/pitch before the local step")
 	var before := pose()
 	app.player._process(0.001)
 	app.player._physics_process(1.0 / 60.0)
-	check(replica.submitted.size() == 2 and pose().is_equal_approx(before),"render and following physics do not replay already submitted motion")
+	check(match_session.submitted.size() == 2 and pose().is_equal_approx(before),"render and following physics do not replay already submitted motion")
 	app.player.queue_touch_motion(Vector2(100,20),extent)
 	app.player.controls_enabled = false
 	app.player.controls_enabled = true
 	app.player._physics_process(1.0 / 60.0)
-	check(pose().is_equal_approx(before),"canceled queued motion cannot enter a later network command")
+	check(pose().is_equal_approx(before),"canceled queued motion cannot enter a later TDM command")
 	app.player.queue_touch_motion(Vector2(100,20),extent)
-	replica.owner.spawn_generation += 1
+	match_session.actor_state.spawn_generation += 1
 	app.player._physics_process(1.0 / 60.0)
-	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"network spawn transition clears old gesture before new command sample")
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"TDM spawn transition clears old gesture before new command sample")
 	app.player.queue_touch_motion(Vector2(100,20),extent)
-	replica.owner.spawn_generation += 1
-	var command_count: int = replica.submitted.size()
+	match_session.actor_state.spawn_generation += 1
+	var command_count: int = match_session.submitted.size()
 	app.player._process(0.001)
-	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion() and replica.submitted.size() == command_count,"render before network spawn adoption discards the old gesture without displaying or submitting it")
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion() and match_session.submitted.size() == command_count,"render before TDM spawn adoption discards the old gesture without displaying or submitting it")
 	app.player._physics_process(1.0 / 60.0)
-	check(pose().is_equal_approx(before) and app.player._network_generation == replica.owner.spawn_generation,"physics adopts the new network life after the render guard")
+	check(pose().is_equal_approx(before) and app.player._match_generation == match_session.actor_state.spawn_generation,"physics adopts the new TDM life after the render guard")
 	app.player.queue_touch_motion(Vector2(100,20),extent)
-	replica.owner.match_epoch += 1
-	replica.epoch = replica.owner.match_epoch
+	match_session.actor_state.match_epoch += 1
 	app.player._process(0.001)
-	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"render before network epoch adoption discards old queued look")
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"render before TDM round adoption discards old queued look")
 	app.player._physics_process(1.0 / 60.0)
-	check(pose().is_equal_approx(before) and app.player._network_epoch == replica.owner.match_epoch,"physics adopts the new epoch without replaying the old gesture")
+	check(pose().is_equal_approx(before) and app.player._match_epoch == match_session.actor_state.match_epoch,"physics adopts the new round without replaying the old gesture")
 	app.player.queue_touch_motion(Vector2(100,20),extent)
-	replica.status = "loading"
+	var saved_owner: SharedPlayerState = match_session.actor_state
+	match_session.actor_state = null
 	app.player._process(0.001)
-	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"nonlive network render cannot consume stale queued look")
-	replica.status = "live"
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"TDM render without an owner discards queued look")
+	match_session.actor_state = saved_owner
 	app.player.queue_touch_motion(Vector2(100,20),extent)
-	var saved_owner: SharedPlayerState = replica.owner
-	replica.owner = null
+	match_session.actor_state.player_id += 1
 	app.player._process(0.001)
-	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"network render without an owner discards queued look")
-	replica.owner = saved_owner
-	app.player.queue_touch_motion(Vector2(100,20),extent)
-	replica.owner.player_id += 1
-	replica.actor_id = replica.owner.player_id
-	app.player._process(0.001)
-	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"network render for a changed actor discards a previous actor's gesture")
-	replica.owner.player_id -= 1
-	replica.actor_id = replica.owner.player_id
+	check(pose().is_equal_approx(before) and not app.player.flush_touch_motion(),"TDM render for a changed actor discards a previous actor's gesture")
+	match_session.actor_state.player_id -= 1
 	app.player.queue_touch_motion(Vector2(10,5),extent)
 	app.player._process(0.001)
-	check(yaw_near(app.player.rotation.y,before.x - TURN * 0.01) and near(app.player.head.rotation.x,before.y - TURN * 0.005),"current network owner still receives responsive render look")
+	check(yaw_near(app.player.rotation.y,before.x - TURN * 0.01) and near(app.player.head.rotation.x,before.y - TURN * 0.005),"current TDM owner still receives responsive render look")
 	var rendered := pose()
 	app.player._physics_process(1.0 / 60.0)
-	check(pose().is_equal_approx(rendered),"next network command retains responsive render look exactly once")
+	check(pose().is_equal_approx(rendered),"next TDM command retains responsive render look exactly once")
 	app.player.session = offline
 	app.player._connected_session = previous_connected
-	app.network_client = previous_replica
-	app.player._network_owner = null
-	app.player._network_epoch = 0
-	app.player._network_generation = -1
-	network.free()
+	app.player._match_owner = null
+	app.player._match_epoch = 0
+	app.player._match_generation = -1
+	match_session.free()
 	defaults()
 
 func ads_and_mouse_independence() -> void:
@@ -701,7 +681,7 @@ func run() -> void:
 	if finishing:return
 	queued_permissions()
 	orbit_effects_preserved()
-	network_command_boundary()
+	match_command_boundary()
 	ads_and_mouse_independence()
 	spectator_and_permissions()
 	await hud_bridge()

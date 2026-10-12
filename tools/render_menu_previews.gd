@@ -74,7 +74,7 @@ func _render_map(entry: Dictionary) -> void:
 			source = "res://world/voxel_data.gd"
 		"title":
 			error = map_data.load_vxl_bytes(FileAccess.get_file_as_bytes(source))
-		"mirage":
+		"mirage", "dust2":
 			var loaded: Dictionary = MAP_PACKAGE.load_bytes(FileAccess.get_file_as_bytes(source))
 			error = loaded.error
 			if error == OK:

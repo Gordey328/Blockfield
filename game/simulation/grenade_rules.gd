@@ -1,7 +1,7 @@
 class_name GrenadeRules
 extends RefCounted
 ## Grenade.cpp flight/collision/roll, GPL-3.0-or-later (yvt / Mathias Kaerlev).
-## Radial damage is the documented authored offline/server policy.
+## Radial damage is the documented authored offline policy.
 const STATE = preload("res://simulation/grenade_state.gd")
 const HZ: int = 60
 const DT: float = 1.0 / HZ

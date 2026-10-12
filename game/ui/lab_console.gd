@@ -11,7 +11,7 @@ const LOCAL_COMMANDS: Array[String] = ["help", "restock", "reset", "mode", "team
 const UNSUPPORTED: Dictionary[String, String] = {
 	"cg_smp": "native worker scheduling is replaced by Godot",
 	"cg_unicode": "Unicode is always enabled in the port",
-	"cg_serveralert": "server alerts require iteration 2 transport",
+	"cg_serveralert": "multiplayer has been removed; server alerts are unavailable",
 	"cg_skipdeadplayerswhendead": "the offline camera uses the port's follow policy",
 	"cg_debughittest": "native hit-test debugger is not available",
 	"cg_debugcorpse": "native debug-only corpse command is not available",

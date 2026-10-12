@@ -6,4 +6,3 @@ game/assets/local_maps/
 *.tmp
 __pycache__/
 .DS_Store
-deploy/.env

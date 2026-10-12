@@ -4,13 +4,7 @@ extends SceneTree
 const MOBILE = preload("res://ui/mobile_controls.gd")
 const PLAYER = preload("res://gameplay/player_controller.gd")
 const LOCAL = preload("res://gameplay/local_session.gd")
-const NETWORK = preload("res://network/network_session.gd")
-const CLIENT = preload("res://network/client_replica.gd")
-const SERVER = preload("res://network/server_runtime.gd")
-const MATCH = preload("res://simulation/match_simulation.gd")
 const DATA = preload("res://world/voxel_data.gd")
-const COMPAT = preload("res://network/compatibility.gd")
-const RULES = preload("res://simulation/player_rules.gd")
 const DT := 1.0 / 60.0
 const BUTTONS: Array[String] = ["primary", "secondary", "reload", "jump", "crouch", "sprint", "tool_spade", "tool_block", "tool_weapon", "tool_grenade", "map", "view_toggle", "menu"]
 const ACTIONS: Array[String] = ["left", "right", "forward", "back", "jump", "crouch", "sprint", "sneak", "primary", "secondary", "reload", "tool_spade", "tool_block", "tool_weapon", "tool_grenade", "map", "view_toggle", "eyedropper", "last_tool"]
@@ -27,10 +21,6 @@ var player: PLAYER
 var session: LOCAL
 var world: VoxelWorld
 var lab: MinimalLab
-var server: SERVER
-var simulation: MATCH
-var client: CLIENT
-var started := {}
 
 class CSSPreview extends MOBILE:
 
@@ -40,7 +30,6 @@ class CSSPreview extends MOBILE:
 
 class MinimalLab extends Node3D:
 
-	var network_client: CLIENT
 	var audio: Object
 	var effects: Object
 	var hud: Object
@@ -940,7 +929,7 @@ func make_player(bound_session: LOCAL, data: DATA) -> void:
 	root.add_child(world)
 	check(world.set_map_data(data, "Mobile controls fixture") == OK, "real source-query world adopts validated fixture terrain")
 	world.set_process(false)
-	lab = MinimalLab.new(); lab.network_client = client; root.add_child(lab)
+	lab = MinimalLab.new(); root.add_child(lab)
 	player = PLAYER.new()
 	var head := Node3D.new(); head.name = "Head"; player.add_child(head)
 	var camera := Camera3D.new(); camera.name = "Camera3D"; head.add_child(camera)
@@ -1041,80 +1030,6 @@ func offline_handoff() -> void:
 	check(overlay.handle_touch(0, center("move") + Vector2(62, 0), true) and player.touch_movement.x > 0.999, "menu close allows clean stick reentry")
 	destroy_player()
 
-func pump_network() -> void:
-	server.poll()
-	client.poll()
-	check(server.step_once(), "actual runtime fixed step")
-	if session is NETWORK: session.update(0)
-	for event: Dictionary in client.drain_events():
-		var network_session := session as NETWORK
-		if network_session == null: continue
-		if event.get("predicted", false):
-			network_session.ingest_cosmetic(event)
-			if player != null: player.apply_network_cosmetic(event)
-		elif event.get("type", "") != "map_installed": network_session.ingest_event(event, event.get("predicted_already_played", false))
-	await create_timer(DT).timeout
-
-func wait_network(predicate: Callable, message: String) -> bool:
-	var deadline := Time.get_ticks_msec() + 10000
-	while Time.get_ticks_msec() < deadline:
-		if client.status == "failed":
-			check(false, message + ": " + client.last_error)
-			return false
-		if predicate.call(): check(true, message); return true
-		await pump_network()
-	check(false, message + " timed out")
-	return false
-
-func network_handoff() -> void:
-	var data := DATA.new()
-	check(data.clear(Vector3i(32, 16, 32), 302) == OK, "network fixture map")
-	data.seed_box(Vector3i.ZERO, Vector3i(32, 4, 32), 0x01607080)
-	simulation = MATCH.new()
-	check(simulation.configure(data, "0.75", "sandbox").ok, "real source network match")
-	server = SERVER.new()
-	check(server.configure(simulation, COMPAT.build_hash(), COMPAT.rules_hash()), "real network runtime compatibility")
-	started = server.start()
-	check(started.ok, "actual loopback game/map listeners")
-	if not started.ok: return
-	client = CLIENT.new()
-	check(client.connect_to("ws://127.0.0.1:%d/play" % started.game_port, "ws://127.0.0.1:%d/map" % started.map_port, "Mobile fixture").ok, "actual authenticated replica connection")
-	if not await wait_network(func(): return client.status == "live", "real map/state barriers become live"): return
-	var net_session := NETWORK.new()
-	net_session.bind_replica(client)
-	make_player(net_session, client.data)
-	if not await wait_network(func(): return client.prediction.get_status().pending == 0, "initial controller input acknowledged"): return
-	# World adoption may take wall time. Let genuine new snapshots synchronize
-	# the clock; no fixture edits to timestamps, prediction or authority state.
-	for i: int in range(6): await pump_network()
-	player._physics_process(DT)
-	if not await wait_network(func(): return client.prediction.get_status().pending == 0, "fresh installed-world controller input acknowledges"): return
-	if not await wait_network(func(): return client.get_owner_state().tool_raise >= 0.999, "actual source weapon becomes ready"): return
-	var actor := simulation.get_actor(client.actor_id)
-	check(actor != null and actor.is_alive(), "mobile fixture has actual playing authority owner")
-	if actor == null or not actor.is_alive(): return
-	var start := actor.feet()
-	var rounds := actor.magazine
-	overlay.handle_touch(0, center("move") + Vector2(0, -62), true)
-	overlay.handle_touch(1, center("primary"), true)
-	await process_frame
-	for i: int in range(8):
-		client.poll()
-		player._physics_process(DT)
-		await pump_network()
-	check(client.status == "live" and client.get_owner_state().input_move.is_equal_approx(Vector2(0, -1)), "touch axis reaches the actual replica command/prediction")
-	check(actor.feet().z < start.z - 0.02 and actor.magazine == rounds - 1, "actual socket authority moves and fires from touch intent")
-	check((actor.input_buttons & RULES.Buttons.PRIMARY) != 0, "held touch fire remains an authenticated shared button")
-	overlay.release_all()
-	await process_frame
-	for i: int in range(6):
-		client.poll(); player._physics_process(DT); await pump_network()
-	check(actor.input_move == Vector2.ZERO and actor.input_buttons == 0 and player.touch_movement == Vector2.ZERO, "touch release reaches authority as neutral command")
-	check(server.get_stats().totals.input_rejections == 0 and server.get_stats().totals.stale_inputs == 0, "short real socket fixture needs no admission relaxation or stale retirement")
-	check(client.prediction.get_status().pending <= 32, "touch handoff keeps bounded prediction history")
-	client.close(); server.stop()
-	destroy_player()
-
 func run() -> void:
 	for action: String in ACTIONS:
 		if not InputMap.has_action(action): InputMap.add_action(action); new_actions.append(action)
@@ -1135,14 +1050,10 @@ func run() -> void:
 	await desktop_pointer()
 	await mouse_preview_policy()
 	await offline_handoff()
-	await network_handoff()
 	finish()
 
 func finish() -> void:
 	destroy_player()
-	if client != null: client.close(); client = null
-	if server != null: server.stop(); server = null
-	simulation = null
 	release_inputs()
 	for action: String in new_actions: InputMap.erase_action(action)
 	print("MOBILE CONTROLS: %d assertions, %d failures" % [assertions, failures])

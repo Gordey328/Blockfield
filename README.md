@@ -1,10 +1,20 @@
 # Blockfield
 
-OpenSpades v0.1.3 port to Godot. **Development: neither iteration has passed full acceptance.**
+OpenSpades v0.1.3 port to Godot. **Development: full offline-port acceptance remains open.**
 
-The offline lab starts without a server and exposes rifle, SMG, shotgun, spade/block/grenade, both team appearances, targets and local CTF/TC rules. The Multiplayer menu joins the new dedicated server using separate game/map WebSocket addresses. Its Servers tab keeps named local favorites with search and sorting; selecting one fills the form and connecting remains a separate action. The initial list is empty.
+Start from Home, choose a map and rifle/SMG/shotgun, then enter the game. Crossroads
+supports offline3×3: one human and five bots. The lab, Title, Mirage and Dust2 are
+training maps. The lab exposes both team appearances, spade/block/grenade, targets,
+local CTF/TC rules and terrain editing. Selection and preferences are saved locally.
 
-The Godot project is in `game/`. It uses Godot 4.7.2 standard, GDScript and Compatibility. Original assets are converted reproducibly; licensing/provenance is in [docs/assets.md](docs/assets.md) and `game/assets/openspades/licenses/`. Source code is GPL-3.0-or-later; third-party assets retain their individual licenses.
+The user cancelled multiplayer; all game transport, server, prediction, replication,
+reconnect and networking menus are removed. Shared local simulation remains for
+bots and combat. See [scope decision](docs/decisions/0031-offline-only-game.md).
+
+The Godot project is in `game/`, with pinned Godot4.7.2 standard, typed GDScript
+and Compatibility. [Original asset provenance](docs/assets.md) and notices under
+`game/assets/openspades/licenses/` remain. Code is GPL-3.0-or-later; third-party
+assets retain their own rights and notices, including [bundled maps](game/assets/maps/README.md).
 
 ## Run and build
 
@@ -14,34 +24,26 @@ python tools/build.py --export
 python tools/serve.py
 ```
 
-Open http://127.0.0.1:8060. On Windows without Python on PATH, use the bundled runtime documented in [docs/status.md](docs/status.md). For desktop development open `game/project.godot` in the pinned engine.
+Open http://127.0.0.1:8060. On Windows without Python on PATH, use the bundled
+runtime recorded in [status](docs/status.md). Desktop development opens
+`game/project.godot` in the pinned engine. Exports include source/version/hash
+metadata in `build-info.json`. See [release evidence](docs/offline-only-release.md).
 
-The [public development build](https://gordey328.github.io/Blockfield/) contains frozen source [`96c36cdc740d19a9ab9c32928482dff06b76cade`](https://github.com/Gordey328/Blockfield/tree/96c36cdc740d19a9ab9c32928482dff06b76cade), Pages bundle `e5c246c8f1135b54b69fa64bea19aae8403d7de0`, with clean-source build metadata. Public HTML/PCK were downloaded independently and hash-match the tested local export. This update adds mobile input and responsive menus/HUD to the existing client. Publication does not complete either iteration.
+The [public development game](https://gordey328.github.io/Blockfield/) is served by
+GitHub Pages. A checked browser build does not establish full OpenSpades parity or
+physical-phone performance. Historical sibling builds and old server packages
+describe their original source revisions; they are not current multiplayer support.
 
-Phones automatically enable a movement stick, right-side look, fire/aim/reload/jump/crouch/sprint and tool/map/camera/menu buttons. Settings → Mobile controls offers Auto/On/Off; On also previews the controls with a desktop mouse. Both screen orientations are supported. Input/regression evidence and physical-phone testing limits are in [mobile controls](docs/mobile-controls.md).
+Phones use the existing movement/look/fire/aim/reload/jump/crouch/tool controls.
+Settings → Mobile controls offers Auto/On/Off; On previews them with a desktop
+mouse. The new Home/setup supports portrait and landscape. Physical-phone comfort
+and FPS remain open; [mobile evidence](docs/mobile-controls.md) records the limits.
 
-GitHub Actions is currently blocked by an account billing condition before any build steps start. Checked local exports are published with `python tools/publish_pages.py` to the `gh-pages` branch. See [publication decision](docs/decisions/0003-pages-publication.md). Each export includes its source revision in `build-info.json`.
-
-## Multiplayer development and server preparation
-
-Native local authority:
-
-```powershell
-& ./.tools/godot/Godot_v4.7.2-stable_win64_console.exe --headless --path game -- --server --bind=127.0.0.1 --game-port=8765 --map-port=8766 --mode=ctf --profile=0.75
-```
-
-Use `ws://127.0.0.1:8765/play` and `ws://127.0.0.1:8766/map` in a native or local HTTP client. Public HTTPS clients require WSS. Original Ace of Spades ENet servers cannot join this replacement protocol; the0.75/0.76 weapon profiles are retained separately.
-
-Download the [compatible server/Docker package](https://github.com/Gordey328/Blockfield/releases/tag/godot-57ad43b2b740) for the published client. The mobile update leaves the network-4 IDs and production network/simulation files unchanged. The package contains the frozen Linux binary/PCK, Dockerfile, Compose/Caddy configuration, hashes, license notices and deployment instructions. Extract it and copy `deploy/.env.example` to `deploy/.env`; set the DNS domain and match options for your host:
-
-```sh
-docker compose --env-file deploy/.env -f deploy/compose.yaml up --build -d
-```
-
-When building from source, run `python tools/build_server.py` first. Public browser endpoints are `wss://YOUR-DOMAIN/play` and `wss://YOUR-DOMAIN/map`.
-
-Pages hosts the client; the authority needs a separate host. No public multiplayer endpoint is configured or running. Native export/configuration checks passed, but Docker/Linux execution, public TLS/WSS, sustained capacity and full browser multiplayer play remain unverified. See [server deployment](docs/server-deployment.md), [multiplayer decision](docs/decisions/0005-authoritative-multiplayer.md) and [acceptance gaps](docs/acceptance-gaps.md).
+Local checked exports can be published with `tools/publish_pages.py`; the
+[publication decision](docs/decisions/0003-pages-publication.md) describes hosting.
 
 ## Durable project context
 
-Start with [AGENTS.md](AGENTS.md) and [docs/status.md](docs/status.md). Scope: [iterations](docs/iterations.md). Feature ledger: [parity](docs/parity.md). Architecture: [architecture](docs/architecture.md). Skills and context recovery: [skills](docs/skills.md).
+Start with [AGENTS.md](AGENTS.md) and [current status](docs/status.md), then
+[accepted scope](docs/iterations.md), [parity](docs/parity.md),
+[architecture](docs/architecture.md) and [skills](docs/skills.md).

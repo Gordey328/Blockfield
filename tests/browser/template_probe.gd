@@ -8,7 +8,6 @@ const PACK_ID: String = "web-template-original-fixture"
 var app: Node3D
 var status: Label
 var button: Button
-var socket_button: Button
 var multilingual: RichTextLabel
 var busy: bool = false
 var phase: String = "Preparing actual Main"
@@ -18,7 +17,6 @@ var rows: Array[Dictionary] = []
 var details: Dictionary = {}
 var throws: Array[Dictionary] = []
 var blasts: Array[Dictionary] = []
-var socket_callback: JavaScriptObject
 var proof_player: AudioStreamPlayer
 var capture: AudioEffectCapture
 var bus: int = -1
@@ -51,13 +49,6 @@ func _ready() -> void:
 	button.custom_minimum_size = Vector2(350, 46)
 	button.pressed.connect(_run_checks)
 	panel.add_child(button)
-	socket_button = Button.new()
-	socket_button.text = "Run localhost WebSocket echo"
-	socket_button.focus_mode = Control.FOCUS_NONE
-	socket_button.custom_minimum_size = Vector2(350, 46)
-	socket_button.disabled = true
-	socket_button.pressed.connect(_socket.bind("ws://127.0.0.1:8088/"))
-	panel.add_child(socket_button)
 	status = Label.new()
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status.custom_minimum_size = Vector2(350, 90)
@@ -74,9 +65,7 @@ func _ready() -> void:
 	multilingual.custom_minimum_size = Vector2(350, 32)
 	panel.add_child(multilingual)
 	if OS.has_feature("web"):
-		socket_callback = JavaScriptBridge.create_callback(_socket_js)
-		JavaScriptBridge.get_interface("window").templateProbeSocket = socket_callback
-		JavaScriptBridge.eval("if(!document.getElementById('template-probe-report')){var r=document.createElement('pre');r.id='template-probe-report';r.hidden=true;document.body.appendChild(r);}if(!document.getElementById('template-probe-socket')){var b=document.createElement('button');b.id='template-probe-socket';b.textContent='Check WebSocket echo';b.disabled=true;b.style='position:fixed;top:12px;right:12px;z-index:10000';b.onclick=function(){window.templateProbeSocket('ws://127.0.0.1:8088/');};document.body.appendChild(b);}", true)
+		JavaScriptBridge.eval("if(!document.getElementById('template-probe-report')){var r=document.createElement('pre');r.id='template-probe-report';r.hidden=true;document.body.appendChild(r);}", true)
 	phase = "Ready — click the canvas button to activate audio and run"
 	_publish("ready")
 	if "--template-probe-native" in OS.get_cmdline_user_args():
@@ -100,10 +89,8 @@ func _publish(state: String = "running") -> void:
 	if OS.has_feature("web"):
 		var serialized: String = JSON.stringify(result)
 		JavaScriptBridge.eval("window.templateProbeResult=" + serialized
-			+ ";document.getElementById('template-probe-report').textContent=" + JSON.stringify(serialized)
-			+ ";document.getElementById('template-probe-socket').disabled="
-			+ str(state not in ["complete", "socket-complete"]).to_lower() + ";", true)
-	if state in ["complete", "socket-complete"]:
+			+ ";document.getElementById('template-probe-report').textContent=" + JSON.stringify(serialized) + ";", true)
+	if state == "complete":
 		print("TEMPLATE_WEB: " + JSON.stringify(result))
 
 
@@ -221,7 +208,6 @@ func _run_checks() -> void:
 	_release()
 	phase = "Complete — %d checks / %d failures" % [assertions, failures]
 	busy = false
-	socket_button.disabled = false
 	_publish("complete")
 
 
@@ -291,7 +277,7 @@ func _nodes(node: Node) -> Array[Node]:
 func _modules() -> void:
 	var optional_classes: Dictionary = {}
 	for name: String in ["CharacterBody2D", "NavigationAgent2D", "NavigationAgent3D", "XROrigin3D", "CSGBox3D", "GridMap",
-		"VideoStreamTheora", "ENetMultiplayerPeer", "WebRTCPeerConnection", "UPNP", "VisualShader", "AudioStreamMP3"]:
+		"VideoStreamTheora", "WebSocketPeer", "ENetMultiplayerPeer", "WebRTCPeerConnection", "UPNP", "VisualShader", "AudioStreamMP3"]:
 		optional_classes[name] = ClassDB.class_exists(name)
 	details["optional_classes"] = optional_classes
 	var expression: RegEx = RegEx.new()
@@ -516,46 +502,6 @@ func _optional_tdm() -> void:
 		"rendered_bots": app._target_nodes.size(), "bots_moved": moved}
 	# Leave the actual TDM visible for the coordinator's final browser screenshot.
 	app.hud.set_menu_visible(false)
-
-
-func _socket_js(arguments: Array) -> void:
-	if not busy and not arguments.is_empty():
-		_socket(str(arguments[0]))
-
-
-func _socket(url: String) -> void:
-	if busy:
-		return
-	busy = true
-	socket_button.disabled = true
-	phase = "Local WebSocket echo: " + url
-	_publish()
-	var peer: WebSocketPeer = WebSocketPeer.new()
-	var error: Error = peer.connect_to_url(url)
-	check(error == OK, "WebSocketPeer accepts isolated echo endpoint")
-	var deadline: int = Time.get_ticks_msec() + 8000
-	while peer.get_ready_state() == WebSocketPeer.STATE_CONNECTING and Time.get_ticks_msec() < deadline:
-		peer.poll()
-		await get_tree().process_frame
-	var open: bool = peer.get_ready_state() == WebSocketPeer.STATE_OPEN
-	check(open, "retained WebSocket module completes genuine browser handshake")
-	var payload: String = "Blockfield — Русский 中文 日本語 한국어"
-	if open:
-		check(peer.send_text(payload) == OK, "WebSocketPeer sends Unicode payload")
-		while peer.get_available_packet_count() == 0 and Time.get_ticks_msec() < deadline:
-			peer.poll()
-			await get_tree().process_frame
-		check(peer.get_available_packet_count() == 1 and peer.get_packet().get_string_from_utf8() == payload,
-			"WebSocket echo returns exact Unicode bytes across the real browser transport")
-	peer.close(1000, "Template probe complete")
-	deadline = Time.get_ticks_msec() + 1000
-	while peer.get_ready_state() != WebSocketPeer.STATE_CLOSED and Time.get_ticks_msec() < deadline:
-		peer.poll()
-		await get_tree().process_frame
-	phase = "Complete with WebSocket echo — %d checks / %d failures" % [assertions, failures]
-	busy = false
-	socket_button.disabled = false
-	_publish("socket-complete")
 
 
 func _exit_tree() -> void:

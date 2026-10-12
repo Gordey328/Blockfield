@@ -87,7 +87,7 @@ func commands(simulation: MatchSimulation) -> Dictionary:
 	var tick: int = simulation.tick + 1
 	for brain: Brain in _brains:
 		var actor: SharedPlayerState = simulation.get_actor(brain.actor_id)
-		if actor == null or not actor.is_alive() or not actor.connected:
+		if actor == null or not actor.is_alive():
 			brain.state = "dead"
 			brain.visible = false
 			continue
@@ -157,7 +157,7 @@ func _observe(brain: Brain, actor: SharedPlayerState, simulation: MatchSimulatio
 	var heard_distance: float = 27.0 * 27.0
 	for id: int in simulation.actors:
 		var candidate: SharedPlayerState = simulation.get_actor(id)
-		if candidate == null or candidate.team == actor.team or not candidate.connected or not candidate.is_alive():
+		if candidate == null or candidate.team == actor.team or not candidate.is_alive():
 			continue
 		if _sees(actor, candidate):
 			var distance: float = actor.feet().distance_squared_to(candidate.feet())

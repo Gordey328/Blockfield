@@ -3,6 +3,23 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Multiplayer removal — 2026-10-12 (implementation and serial verification)
+
+The UI predecessor thread01a12ee6-71f9-7001-865b-5bda7c4116df completed its
+implementation and release turn at2026-10-12; all leases returned. This chat now
+uses the attached isolated offline-only/Blockfield worktree and codex/offline-only.
+Base UI53f9670 plus unchanged Dust2 commit021122b (cherry-pick1356b2b) preserves
+Home/map/loadout/start, Mirage, Dust2, lab and five-bot TDM. Three agreed specialists
+return controller/simulation/tooling source; root owns Main/HUD/routes/config/docs
+and serial engine/browser/publication. Networking/server paths and support are
+removed, with offline rules retained. ADR0031 records cancellation of iteration2.
+Initial parser/import and normal Compatibility Dust2 preview8/0 pass; static and
+whitespace checks pass. Full frozen behavior/export/public checks are next, with
+exact results recorded in [release evidence](offline-only-release.md).
+Godot4.7.2.stable.official.ed1daf0bf and upstream OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned. Shared concurrent docs
+and original checkout are preserved. No port or physical-phone acceptance claim.
+
 ## Game UI first delivery — 2026-10-12 (published development build)
 
 User authorizes implementation of Home, map/loadout selection and game start,

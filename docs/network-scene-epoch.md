@@ -1,5 +1,9 @@
 # Actual network scene across a match reset
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `tests/network/test_network_scene_epoch.gd` exercises the real inherited `game/scenes/network.tscn`, `Main`, `NetworkSession`, controller, original character/weapon meshes, HUD, mini/full maps and connection menu. A native `ServerRuntime` and a second independent `ClientReplica` exchange genuine WebSocket packets on two ephemeral loopback ports. No fake transport, replacement Main or optimistic objective/projectile simulator is used.
 
 The scenario starts a 32×16×32 CTF map at epoch1101/profile0.75. The connection form's real Connect/Enter buttons, weapon buttons and team selector drive actual client intents. It verifies pending class selection cannot refill a living inventory, spectator selection preserves the positive canonical ID, and the authored180-tick respawn applies the queued shotgun class. A trusted server-only HP fixture distinguishes the second owner's private37HP from the first client's explicitly unknown remote HP; the actual original soldier remains alive, named and animated. Remote input packets exercise crouch, ADS, view angles and interpolated feet.

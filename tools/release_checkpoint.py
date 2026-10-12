@@ -7,7 +7,6 @@ import subprocess
 import sys
 import zipfile
 import build
-import build_server
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--revision', default='HEAD')
-    parser.add_argument('--server', action='store_true', help='Also export the same frozen authority revision')
     parser.add_argument('--import-cache', type=Path, help='Seed the frozen project with an existing .godot cache; parser/import and all checks still run')
     args = parser.parse_args()
     revision = subprocess.run(['git', 'rev-parse', '--verify', args.revision + '^{commit}'],
@@ -47,9 +45,6 @@ def main():
     finally:
         config.write_bytes(original_config)
     build.export_web()
-    if args.server:
-        build_server.main()
-        shutil.copytree(folder / 'build' / 'server', ROOT / 'build' / 'server', dirs_exist_ok=True)
     source_web = folder / 'build' / 'web'
     destination = ROOT / 'build' / 'web'
     destination.mkdir(parents=True, exist_ok=True)

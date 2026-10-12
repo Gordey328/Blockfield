@@ -13,17 +13,22 @@ Test lab acceptance:
 
 Release gate: parser/import pass; gameplay and voxel checks pass; all iteration-1 parity rows VERIFIED or an explicit user-accepted replacement is recorded; release web export; browser interaction checks; published Pages URL checked.
 
-## Iteration 2 — full multiplayer
-Dedicated authoritative simulation, compatible browser transport, movement prediction/reconciliation/interpolation, validated shooting/block operations, map snapshot + ordered changes, joining mid-round, respawn/team/spectator, chat/scoreboard/CTF/TC, disconnect/reconnect and latency tests. Hosting the game simulation requires a server host separate from static GitHub Pages.
+## Accepted scope change — 2026-10-12
 
-Old AoS server protocol compatibility is not required by the approved replacement-networking scope. If later requested, track it as additional work rather than silently replacing the chosen stack.
+The user cancels iteration2 and requests removal of all multiplayer code after
+the first game UI delivery. The accepted game is offline only: the lab, local
+CTF/TC equivalents and one-human/five-bot TDM remain. Transport, dedicated server,
+prediction, lag compensation, remote state/terrain replication, reconnect,
+discovery and hosting are no longer requirements. This is explicit scope removal,
+not deferred implementation or verified multiplayer. See
+[ADR0031](decisions/0031-offline-only-game.md).
 
 ## Accepted gameplay replacement — 2026-10-11
 
 The user explicitly removed automatic block regeneration. Surviving blocks retain
 damage and darkening until an actual replacement or explicit map/round reset;
-destroyed blocks remain air. Waiting, respawn and reconnect do not heal them.
-This overrides OpenSpades' ten-second recovery in both iterations; see
+destroyed blocks remain air. Waiting and respawn do not heal them.
+This overrides OpenSpades' ten-second recovery in the offline game; see
 [ADR0010](decisions/0010-persistent-block-damage.md).
 
 ## Accepted gameplay addition — 2026-10-11
@@ -32,7 +37,7 @@ The user requested offline team combat 3×3: one human and five bots. Add a sepa
 playable match with shared movement, shooting, damage and respawn rules, cover and
 flanking behavior. Initial acceptance uses one authored compact arena; see
 [ADR0020](decisions/0020-offline-team-bots.md). This addition does not replace the
-full-port or multiplayer acceptance gates.
+full offline-port acceptance gate.
 
 ## Accepted presentation replacement — 2026-10-11
 

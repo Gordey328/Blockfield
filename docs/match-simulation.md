@@ -1,5 +1,9 @@
 # Shared match authority
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/simulation/match_simulation.gd` (`MatchSimulation`, `RefCounted`) coordinates `SharedPlayerState`/`PlayerRules`, `VoxelData`, `GrenadeRules`, source hit volumes and `MatchObjectives`. It has no scene tree, camera, Input, audio, transport or global random dependency. The offline main/controller/session are not replaced by this file. This is implemented pure authority, not evidence of a working browser multiplayer game or a complete network snapshot schema.
 
 Source references are the pinned OpenSpades v0.1.3 `dcf449c845d509bbde9d79239b32d201c1389961`: `Player.cpp` firearm/spade/build rules, `Weapon.cpp` profiles and `World.cpp::CubeLine`; existing Godot source goldens remain applicable. OpenSpades is a client. Admission, server scoring, spawn choice, friendly-fire enforcement, disconnect policy, queue limits and match scheduling below are explicitly authored authority policies.

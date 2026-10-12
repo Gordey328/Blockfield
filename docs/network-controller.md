@@ -1,5 +1,9 @@
 # Network player controller
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/gameplay/player_controller.gd` preserves its offline branch and takes an early network branch when its session is `NetworkSession`. The coordinator supplies `lab.network_client`, polls `ClientReplica`, installs authoritative map transactions and refreshes the presentation session. The controller does not poll sockets, advance the match, decide hits or edit terrain.
 
 ## Fixed input and owned pose

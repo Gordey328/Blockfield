@@ -1,5 +1,9 @@
 # Native runtime, connection ownership and input admission
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `BlockfieldServerRuntime` owns two poll-driven transports, `BlockfieldSessionRegistry`, one `BlockfieldInputQueue` per bound actor and the shared `MatchSimulation`. No renderer, settings, Input singleton, HUD, sound or visual grenade node is instantiated. `configure(simulation,build_hash,rules_hash)` is trusted; `start(game_port=0,map_port=0,bind_address="127.0.0.1")` returns actual native ports; `poll()` handles sockets/joins between steps; `step_once()` advances exactly one authority tick; `stop()` releases both listeners.
 
 `game/entry.gd` selects the dedicated scene only for the `dedicated_server` feature or explicit user argument `--server`. Ordinary headless offline tests retain the original lab. The dedicated Node calls `poll` in process and one `step_once` per engine 60 Hz physics callback. Large workload/catch-up behavior is not yet a sustained-performance acceptance result.

@@ -6,12 +6,15 @@ var app: Node3D
 var hud: LabHUD
 var session: LocalSession
 var board: LabScoreboard
-var network_view: NetworkSession
+var shared_view: LocalSession
 var assertions: int=0
 var failures: int=0
 var output: String
 var _settings_before:=PackedByteArray()
 var _settings_existed: bool=false
+
+class IdentifiedSession extends LocalSession:
+	func local_player_id() -> int: return 35
 
 func _initialize() -> void:call_deferred("_run")
 
@@ -99,26 +102,23 @@ func _run() -> void:
 	check_id_pixels(loaded,1,3,Color.WHITE,"loaded disabled preference")
 	check(not board.per_player_colors and not checkbox.button_pressed,"preference reload reaches scoreboard and widget")
 
-	# Real adapter identity: source slots wrap through the shared 32-color
-	# palette while protocol IDs remain unchanged in the printed scoreboard.
-	var replica:=BlockfieldClientReplica.new()
-	replica.actor_id=35
-	network_view=NetworkSession.new()
-	network_view.bind_replica(replica)
-	network_view.team=1
-	network_view.health=100
-	network_view.score=99
-	network_view.targets.assign([
-		{"id":7,"name":"Remote canonical","team":1,"score":4,"deaths":0,"alive":true},
+	# Shared actor identities keep their printed IDs while source colors wrap
+	# through the same 32-slot palette used for local matches.
+	shared_view=IdentifiedSession.new()
+	shared_view.team=1
+	shared_view.health=100
+	shared_view.score=99
+	shared_view.targets.assign([
+		{"id":7,"name":"Bot canonical","team":1,"score":4,"deaths":0,"alive":true},
 		{"id":3,"name":"Dead canonical","team":1,"score":2,"deaths":1,"alive":false}
 	])
-	board.session=network_view
+	board.session=shared_view
 	hud.set_console_setting("minimap_player_colors",true)
-	var network: Image=await capture("network_canonical_ids")
-	check_id_pixels(network,1,35,Color(13.0/15.0,13.0/15.0,7.0/15.0),"canonical owner35 wraps source palette to slot3")
-	check_id_pixels(network,1,7,Color(1.0/3.0,11.0/15.0,1.0/3.0),"canonical remote7")
-	check_id_pixels(network,1,3,Color(13.0/15.0,13.0/15.0,7.0/15.0),"canonical dead3")
-	check(board._columns[1].get_parsed_text().contains("#35   Local [b]") and not board._columns[1].get_parsed_text().contains("#00"),"network text retains canonical owner ID and literal name")
+	var shared: Image=await capture("shared_canonical_ids")
+	check_id_pixels(shared,1,35,Color(13.0/15.0,13.0/15.0,7.0/15.0),"canonical local35 wraps source palette to slot3")
+	check_id_pixels(shared,1,7,Color(1.0/3.0,11.0/15.0,1.0/3.0),"canonical bot7")
+	check_id_pixels(shared,1,3,Color(13.0/15.0,13.0/15.0,7.0/15.0),"canonical dead3")
+	check(board._columns[1].get_parsed_text().contains("#35   Local [b]") and not board._columns[1].get_parsed_text().contains("#00"),"shared actor text retains canonical local ID and literal name")
 	await finish()
 
 func capture(name: String) -> Image:
@@ -176,7 +176,7 @@ func restore_settings() -> void:
 
 func finish() -> void:
 	if is_instance_valid(board):board.session=session
-	if is_instance_valid(network_view):network_view.free()
+	if is_instance_valid(shared_view):shared_view.free()
 	if is_instance_valid(app):
 		if app.has_method("stop_audio"):app.stop_audio()
 		await process_frame

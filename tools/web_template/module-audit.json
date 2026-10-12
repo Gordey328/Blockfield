@@ -9,13 +9,13 @@
   },
   "profile": {
     "path": "tools/web_template/blockfield.py",
-    "sha256": "17ac32fffba5b52fe9becd7c9e4313d79c3d53d6cd9e0c9d894a9aebcf5726c1",
+    "sha256": "aeca21e421172b1b4c223527ad47fb1a9ae4e7ec70b1ad5ac474347ebb199dbb",
     "class_pruning": false,
     "all_modules_disabled_by_default": false
   },
   "comparison_source_commit": "fe843a1fa369670dea92ea15643639543e61d44b",
   "project_scan_includes_current_bot_files": true,
-  "scope": "Godot single-thread wasm32 release Web template only; no audio/font/resource compression changes.",
+  "scope": "Godot single-thread wasm32 release Web template for offline gameplay; no audio/font/resource compression changes. Current profile disables WebSocket; the previously accepted compiled template has not been rebuilt.",
   "flags": [
     {
       "flag": "modules_enabled_by_default",
@@ -78,7 +78,7 @@
     {
       "flag": "disable_advanced_gui",
       "value": false,
-      "rationale": "Keep RichTextLabel, ItemList, ColorPickerButton and FileDialog for chat/scoreboard/settings/menus.",
+      "rationale": "Keep RichTextLabel, ColorPickerButton and FileDialog for chat/scoreboard/settings/menus.",
       "source": [
         {
           "path": "SConstruct",
@@ -328,7 +328,7 @@
     {
       "flag": "module_enet_enabled",
       "value": false,
-      "rationale": "Browser network contract uses raw WebSocketPeer and project-owned frames/polling, not ENet UDP/high-level transport.",
+      "rationale": "Offline gameplay has no ENet UDP or high-level transport consumers.",
       "source": [
         {
           "path": "SConstruct",
@@ -346,7 +346,7 @@
     {
       "flag": "module_webrtc_enabled",
       "value": false,
-      "rationale": "No WebRTC peer or data-channel transport. WebSocket/WSS is retained.",
+      "rationale": "Offline gameplay has no WebRTC peer or data-channel transport consumers.",
       "source": [
         {
           "path": "SConstruct",
@@ -364,7 +364,7 @@
     {
       "flag": "module_upnp_enabled",
       "value": false,
-      "rationale": "No UPnP discovery/port mapping; browser clients use explicit WebSocket endpoints.",
+      "rationale": "Offline gameplay has no UPnP discovery or port-mapping consumers.",
       "source": [
         {
           "path": "SConstruct",
@@ -382,7 +382,7 @@
     {
       "flag": "module_jsonrpc_enabled",
       "value": false,
-      "rationale": "No JSONRPC game/probe consumers. GDScript lists it as an optional dependency solely for LSP; exact gdscript/SCsub compiles language_server only for env.editor_build. Web also defines GDSCRIPT_NO_LSP. Core JSON parsing and custom WebSocket framing are unrelated and retained.",
+      "rationale": "No JSONRPC game/probe consumers. GDScript lists it as an optional dependency solely for LSP; exact gdscript/SCsub compiles language_server only for env.editor_build. Web also defines GDSCRIPT_NO_LSP. Core JSON parsing remains available independently.",
       "source": [
         {
           "path": "SConstruct",
@@ -421,7 +421,7 @@
     {
       "flag": "module_multiplayer_enabled",
       "value": false,
-      "rationale": "No SceneMultiplayer/RPC/MultiplayerSpawner/MultiplayerSynchronizer or high-level multiplayer consumers. The project transports framed bytes through raw WebSocketPeer, with independent authoritative simulation. SceneTree still receives a valid core MultiplayerAPIExtension from create_default_interface when the module default is unset. Its empty poll returns OK, unique ID defaults to 1, and it has no peer list. WebSocket module has no dependency on module_multiplayer; core MultiplayerPeer/MultiplayerAPI remain.",
+      "rationale": "No SceneMultiplayer/RPC/MultiplayerSpawner/MultiplayerSynchronizer or high-level multiplayer consumers. Offline local simulation owns all actor state. SceneTree still receives a valid core MultiplayerAPIExtension from create_default_interface when the module default is unset. Its empty poll returns OK, unique ID defaults to 1, and it has no peer list. Core MultiplayerPeer/MultiplayerAPI remain engine interfaces.",
       "source": [
         {
           "path": "SConstruct",
@@ -755,8 +755,8 @@
     },
     {
       "flag": "module_websocket_enabled",
-      "value": true,
-      "rationale": "WSTransport constructs/polls WebSocketPeer; browser WSS uses browser TLS.",
+      "value": false,
+      "rationale": "Multiplayer, game/map transport and the socket echo probe are removed. The offline runtime has no WebSocket consumers; disable this module in the next custom-template rebuild.",
       "source": [
         {
           "path": "SConstruct",
@@ -936,7 +936,7 @@
     {
       "flag": "module_mbedtls_enabled",
       "value": true,
-      "rationale": "Retain native/core TLS, cryptography and certificates; browser WSS uses browser TLS, but removing this is unnecessary for a conservative profile.",
+      "rationale": "Retain general native/core TLS, cryptography and certificates. Removing multiplayer does not establish that these engine APIs are unused; the conservative profile keeps them.",
       "source": [
         {
           "path": "SConstruct",
@@ -1078,7 +1078,7 @@
       ]
     }
   ],
-  "module_inventory_method": "Executed exact config.can_build with Web release options and is_enabled defaults. Mandatory dependencies reviewed separately; this is expected static inventory, not compile/browser acceptance.",
+  "module_inventory_method": "Executed exact config.can_build with Web release options and is_enabled defaults. Mandatory dependencies reviewed separately; this is expected static inventory, not compile/browser acceptance. The offline update changes only WebSocket from explicit keep to explicit remove; these counts describe the next profile build, not the existing compiled binary.",
   "expected_module_inventory": [
     {
       "module": "astcenc",
@@ -1612,13 +1612,13 @@
     },
     {
       "module": "websocket",
-      "enabled_option": true,
+      "enabled_option": false,
       "can_build_web_release": true,
-      "expected_enabled": true,
+      "expected_enabled": false,
       "config_sha256": "c1f2419ac93a50ede07b3ff96c9e9c3aeaad6fb3b891e92c208ff3b88c37ee0b",
       "baseline_expected_enabled": true,
-      "removed_from_baseline": false,
-      "decision": "explicit_keep"
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
     },
     {
       "module": "webxr",
@@ -1653,8 +1653,8 @@
   ],
   "expected_counts": {
     "baseline": 46,
-    "reduced": 20,
-    "removed_from_baseline": 26
+    "reduced": 19,
+    "removed_from_baseline": 27
   },
   "unchanged_web_defaults": [
     {
@@ -1733,10 +1733,10 @@
     },
     {
       "path": "game/presentation/openspades_effects.gd",
-      "sha256": "c727df743b8c9c0504fb72124b8cc1d1a85a709a91018bba9a3f56ccc4ba2193",
+      "sha256": "38375332563804e1227200cf8211fabf7a2419c6f646820c5369e293a8020f3e",
       "matching_lines": {
         "FastNoiseLite.new()": [
-          59
+          137
         ]
       }
     },
@@ -1750,48 +1750,30 @@
       }
     },
     {
-      "path": "game/network/ws_transport.gd",
-      "sha256": "ab2b6d78dcfc22fca4352f0118d1eda37faa1a66bb3bec6044d017e0938dcbcc",
-      "matching_lines": {
-        "WebSocketPeer.new()": [
-          92
-        ]
-      }
-    },
-    {
       "path": "game/main.gd",
-      "sha256": "c27927e3ee81d39f671e6aa4cdab59086b0ab214a7e7ef4aef675ee5aee1ede4",
+      "sha256": "cf89d3c84b8197e4c28e7a0f2f54b93f5655aa606e15947dfa2e1bc46ff48576",
       "matching_lines": {
         "JavaScriptBridge.create_callback": [
-          160,
-          497,
-          705,
-          748
+          167,
+          622,
+          861,
+          904
         ],
         "JavaScriptBridge.js_buffer_to_packed_byte_array": [
-          539
+          664
         ]
       }
     },
     {
       "path": "game/ui/lab_hud.gd",
-      "sha256": "32b550cce0e660c372b84afe6b0ab423aa76495583218fd6dfbddd3ce71c4c0d",
+      "sha256": "d3a73b909214bb14eb726b3d121b5afd9618da7d4b55714f6a473754de373fd7",
       "matching_lines": {
         "RichTextLabel.new()": [
-          282
+          305
         ],
         "ColorPickerButton.new()": [
-          488,
-          1655
-        ]
-      }
-    },
-    {
-      "path": "game/ui/network_menu.gd",
-      "sha256": "db6f824971545c690c561dfce70806d233e2d64d18177f8482bdd6912ce72a32",
-      "matching_lines": {
-        "ItemList.new()": [
-          116
+          525,
+          1705
         ]
       }
     },
@@ -1853,7 +1835,6 @@
     "static embedded-PNG GLB imports",
     "WAV PCM and Ogg Vorbis playback",
     "JavaScript upload/download/input/fullscreen bridge",
-    "raw WebSocket/WSS",
     "FastNoiseLite effects",
     "project voxel bot navigation"
   ],
@@ -1862,7 +1843,8 @@
     "Additional accepted image/audio/model formats or physics/extensions/script resource-pack contracts require re-audit.",
     "Static audit does not establish runtime rendering/input/audio/performance/physical-device/full-port acceptance.",
     "Actual compiled module header, export and browser-probe results belong to coordinator build evidence.",
-    "The removed high-level multiplayer module changes SceneTree default interface to the core MultiplayerAPIExtension fallback. Actual-scene initialization and raw WebSocket roundtrip must be checked on the compiled template; static source proof alone is not browser acceptance."
+    "The disabled high-level multiplayer module leaves SceneTree with the core MultiplayerAPIExtension fallback. Rebuilt-template actual-scene initialization remains required; no socket roundtrip is an offline acceptance requirement.",
+    "The accepted compiled custom binary still contains WebSocket until rebuilt from the new offline profile. No binary-size or performance improvement is claimed by this source audit."
   ],
   "core_multiplayer_fallback_evidence": [
     {
@@ -1908,5 +1890,13 @@
         2100
       ]
     }
-  ]
+  ],
+  "offline_scope_update": {
+    "date": "2026-10-12",
+    "base_source_commit": "1356b2bb24f4e663e08aacf2ba3e0484fa388713",
+    "project_source_dirty": true,
+    "historical_audit": "docs/history/web-template-multiplayer-audit.json",
+    "historical_audit_sha256": "3f8cd759ac87548521acb4afeeb068fb6d9108e1914e6899896c6cad82c018a5",
+    "compiled_template_status": "The existing accepted custom Web binary still includes the WebSocket engine module. This source-profile update has not been compiled. A later custom-template rebuild and actual-scene/browser checks must adopt the new profile; offline game code no longer uses WebSocket."
+  }
 }

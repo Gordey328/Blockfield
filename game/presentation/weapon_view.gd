@@ -206,7 +206,7 @@ func set_motion_state(local_velocity: Vector3, walk_progress: float,
 	_manual_offset = manual_offset if manual_offset.is_finite() else Vector3.ZERO
 
 func set_simulation_state(values: Dictionary) -> bool:
-	# A network skin mirrors approved predicted/confirmed owner state. Validate
+	# A shared simulation skin mirrors committed actor state. Validate
 	# the complete scalar record atomically; render delta must not step gates.
 	if values.size()!=SIMULATION_FIELDS.size():return false
 	for field: String in SIMULATION_FIELDS:

@@ -43,8 +43,7 @@ func get_rows() -> Array[Dictionary]:
 func _process(_delta: float) -> void:
 	if session==null or not visible:return
 	var ru:=TranslationServer.get_locale().begins_with("ru")
-	var online: bool=main!=null and main.get("network_mode")==true
-	_title.text=(("СЕТЕВОЙ МАТЧ" if ru else "MULTIPLAYER MATCH") if online else ("ЛОКАЛЬНЫЙ МАТЧ" if ru else "OFFLINE MATCH"))+" · "+session.mode.to_upper()
+	_title.text=("ЛОКАЛЬНЫЙ МАТЧ" if ru else "OFFLINE MATCH")+" · "+session.mode.to_upper()
 	var rows:=get_rows()
 	for team_index in 2:
 		var label:=_columns[team_index]

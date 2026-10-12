@@ -157,17 +157,16 @@ func _test_shared_queries() -> void:
 			target.pitch = (index%7-3)*.08
 			target.motion.crouch = index%2 == 0
 			target.health = 0 if index%11 == 0 else 100
-			target.connected = index%13 != 0
 			target.team = 2 if index%17 == 0 else 1
 			target.spawn_generation = 2+(index >> 3)
 		var origin: Vector3 = simulation.get_actor(1).motion.physics_eye()
 		var direction: Vector3 = Vector3((index%9-4)*.012,(index%7-3)*.007,-1).normalized()
-		check(simulation.raycast_actors(1,origin,direction,cache) == reference.raycast_actors(1,origin,direction),"live shared cached query retains source result across pose/life/connectivity changes")
+		check(simulation.raycast_actors(1,origin,direction,cache) == reference.raycast_actors(1,origin,direction),"live shared cached query retains source result across pose/life/team changes")
 	# _ordered still consults current actors, rather than a frozen salvo roster.
 	for current: MatchSimulation in [simulation,reference]:
 		var target: SharedPlayerState = current.get_actor(2)
 		target.motion.feet_position = current.get_actor(3).feet()
-		target.health = 100; target.connected = true; target.team = 1
+		target.health = 100; target.team = 1
 		target.yaw = 0; target.pitch = 0; target.motion.crouch = false
 	var origin: Vector3 = simulation.get_actor(1).motion.physics_eye()
 	check(simulation.raycast_actors(1,origin,Vector3.FORWARD,cache).actor_id == 2,"shared coincident hit tie keeps ascending actor ID")
@@ -240,7 +239,7 @@ func _test_shared_shot(scenario: String) -> void:
 	var actual: Array[Dictionary] = simulation._resolve_shot(simulation.get_actor(1),shot.duplicate(true))
 	check(actual == expected,"actual shared shotgun commits exact source events with " + scenario)
 	check(simulation.data.blocks == reference.data.blocks and simulation.drain_transactions() == reference.drain_transactions(),"actual shared terrain transactions remain identical with " + scenario)
-	check(_plain_values(simulation.snapshot_for(1)) == _plain_values(reference.snapshot_for(1)),"actual shared private/public authority snapshot remains identical with " + scenario)
+	check(_plain_values(simulation.capture_state(1)) == _plain_values(reference.capture_state(1)),"actual local diagnostic state remains identical with " + scenario)
 	check(MATCH.events_of(actual,"tracer").size() == 8,"all source salvo pellets publish in original order with " + scenario)
 	if scenario == "death": check(simulation.get_actor(2).health == 0 and simulation.get_actor(3).health == 0,"later shared pellets pass dead nearer target and hit rear actor")
 

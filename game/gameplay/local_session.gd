@@ -124,8 +124,7 @@ func get_weapon_info() -> Dictionary:
 	return info
 
 func local_player_id() -> int:
-	# Offline authority historically uses actor0. NetworkSession overrides this
-	# with its authenticated positive actor ID without rewriting remote IDs.
+	# The lab owns actor0. OfflineTDMSession overrides this with its human actor ID.
 	return 0
 
 func is_local_intel_carrier() -> bool:

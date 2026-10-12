@@ -2,7 +2,7 @@ extends SceneTree
 ## Selected frontend configuration enters real Main/authority, never a test double.
 const LAB_SCENE = preload("res://scenes/main.tscn")
 const TDM_SCENE = preload("res://scenes/offline_tdm.tscn")
-const FILES: Array[String] = ["user://settings.cfg", "user://servers.cfg"]
+const FILES: Array[String] = ["user://settings.cfg"]
 var checks: int = 0
 var failures: int = 0
 var app: Node3D
@@ -50,6 +50,8 @@ func run() -> void:
 	await free_scene()
 	await test_training_lab()
 	await free_scene()
+	await test_dust2()
+	await free_scene()
 	await test_bundled_map()
 	await free_scene()
 	await test_invalid_launch()
@@ -82,8 +84,8 @@ func test_tdm() -> void:
 		return
 	var session: OfflineTDMSession = app.get_node("LocalSession")
 	var owner: SharedPlayerState = session.simulation.get_actor(session.local_player_id())
-	check(app.offline_tdm_mode and not app.network_mode and app.network_client == null,
-		"selected battle is serverless TDM with no network transport")
+	check(app.offline_tdm_mode,
+		"selected battle is local human-and-bot TDM")
 	check(session.simulation.actors.size() == 6 and session.get_diagnostics().team_counts == [3, 3],
 		"selected battle admits exactly one human and five bots")
 	check(app.world.data == session.simulation.data and app.world.map_name.contains("Crossroads"),
@@ -110,7 +112,7 @@ func test_training_lab() -> void:
 	check(state.status == "ready" and state.configuration == selected, "training launches its selected lab and shotgun")
 	if state.status != "ready":
 		return
-	check(not app.offline_tdm_mode and not app.network_mode and app.session.mode == "sandbox",
+	check(not app.offline_tdm_mode and app.session.mode == "sandbox",
 		"training retains the independent offline lab adapter")
 	check(app.world.dimensions == Vector3i(96, 32, 96) and app.session.targets.size() == 6,
 		"Lab selection installs the real laboratory map and its original test roster")
@@ -118,6 +120,21 @@ func test_training_lab() -> void:
 		"training starts with a replenished actual shotgun")
 	check(not app.hud.is_menu_open() and app.player.controls_enabled,
 		"training launch closes preparation and enables gameplay immediately")
+
+
+func test_dust2() -> void:
+	var selected := {"mode": "training", "map_id": "dust2", "weapon": 2}
+	var state: Dictionary = await launch(LAB_SCENE, selected)
+	check(state.status == "ready" and state.configuration == selected, "selected Dust2 finishes a bounded real load")
+	if state.status != "ready": return
+	check(app.world.dimensions == Vector3i(220, 44, 189) and app._map_baseline_name == "dust2.bfmap",
+		"Dust2 loads the existing bundled package and retains its reset baseline")
+	check(app.session.targets.is_empty() and not app.world.water_enabled,
+		"Dust2 retains a dry training map without misplaced lab actors")
+	check(app.player.global_position.distance_to(app.world.get_spawn_position()) < 0.2
+		and not app.hud.is_menu_open() and app.player.controls_enabled,
+		"Dust2 launch adopts the validated feet spawn and opens gameplay")
+	check(app.session.current_weapon == 2, "Dust2 retains the selected original shotgun")
 
 
 func test_bundled_map() -> void:

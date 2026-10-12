@@ -7,14 +7,13 @@ Project skills live in `.agents/skills/` so they travel with the repository. Eac
 - [blockfield-port-parity](../.agents/skills/blockfield-port-parity/SKILL.md): source audit, migration status and evidence.
 - [blockfield-voxel-world](../.agents/skills/blockfield-voxel-world/SKILL.md): chunk/VXL invariants and world verification.
 - [blockfield-web-release](../.agents/skills/blockfield-web-release/SKILL.md): reproducible Godot export and GitHub Pages checks.
-- [blockfield-multiplayer](../.agents/skills/blockfield-multiplayer/SKILL.md): shared authority, WSS protocol, prediction, map joins and multiplayer verification. [Multiplayer plan](multiplayer-plan.md) holds the original design and links current production contracts; the skill passed the system creator's quick_validate.py using existing isolated PyYAML dependencies.
 
 ## Engine knowledge
 
 Candidate source: https://github.com/jame581/GodotPrompter at commit 1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218 (queried 2026-10-10).
 Install selected skills with the standard skill installer into `.agents/skills/`; do not install its entire plugin, hooks or duplicate agent configuration. Record installed directories and source hashes below. Confirm examples against the pinned executable; third-party instructions may contain incorrect version-specific advice.
 
-Priority: gdscript-patterns, godot-project-setup, 3d-essentials, godot-optimization, godot-testing, export-pipeline. Add player-controller/input-handling/physics-system, assets-pipeline, shader-basics, audio-system and UI skills as their tasks begin. Network skills are for iteration 2.
+Priority: gdscript-patterns, godot-project-setup, 3d-essentials, godot-optimization, godot-testing, export-pipeline. Add player-controller/input-handling/physics-system, assets-pipeline, shader-basics, audio-system and UI skills as their tasks begin. Multiplayer is withdrawn under ADR0031.
 
 Installed 2026-10-10 using the standard skill-installer into this repository:
 `gdscript-patterns`, `godot-project-setup`, `3d-essentials`, `godot-optimization`,
@@ -24,7 +23,7 @@ using `install-skill-from-github.py --repo jame581/GodotPrompter --ref
 1e7d79d3cbbd6fd8016cd9cc77c6a79f342ea218 --path skills/input-handling
 skills/responsive-ui --dest .agents/skills`. Their touch/mobile references guide
 pointer ownership and responsive targets; pinned engine behavior takes precedence
-over generic examples. Four project-owned and eight engine skills are now installed.
+over generic examples. Three active project-owned and eight engine skills are now installed.
 
 Installed entry-point SHA256 (supporting references are committed alongside them):
 

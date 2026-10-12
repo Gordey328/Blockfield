@@ -1,5 +1,9 @@
 # Iteration 2 multiplayer implementation plan
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 Original design prepared on2026-10-10 against Godot **4.7.2** and OpenSpades v0.1.3 `dcf449c845d509bbde9d79239b32d201c1389961`. Production networking has since been implemented: N01–N08 are `IMPLEMENTED`, N09 is `VERIFIED`. This page retains design goals and acceptance scenarios; current contracts are [network-protocol.md](network-protocol.md), [server-runtime.md](server-runtime.md), [client-replica.md](client-replica.md) and [network-session.md](network-session.md). Current evidence and ownership live in [status.md](status.md) and [parity.md](parity.md). Neither iteration has passed full acceptance.
 
 ## Target deployment and transport

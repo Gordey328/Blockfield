@@ -1,5 +1,9 @@
 # Complete simulation snapshot body
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/network/simulation_codec.gd` implements `SimulationCodec`, a pure `RefCounted` codec. It reconstructs a complete owner replay checkpoint and public match state from explicit big-endian fields. It has no socket, renderer, physics nodes, scene, generic Variant serialization or dependency on `BlockfieldProtocol`. The protocol envelope and connection/runtime policy are separate; passing these tests does not establish two connected browser clients.
 
 ```gdscript

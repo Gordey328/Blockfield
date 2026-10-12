@@ -1,5 +1,9 @@
 # Confirmed game events body
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/network/events_codec.gd` is a pure, explicit binary codec for confirmed authority events. It has no Protocol preload, transport, nodes, main scene, preferences or Variant serialization. The runtime wraps these bytes in the agreed `GAME_EVENTS` envelope and validates that its epoch matches the decoded body. This file does not establish browser multiplayer acceptance.
 
 `encode({epoch,first_sequence,last_sequence,events})->{ok,error,bytes}` accepts only normalized fields below. `decode(bytes)->{ok,error,payload}` returns deeply immutable dictionaries/arrays. `from_events(epoch,events:Array[Dictionary])->{ok,error,payload}` adapts the current immutable `MatchSimulation.drain_events()` journal, then validates and copies the bounded result. A failure has an empty bytes/payload result; unknown types/fields are errors, never skipped. `visibility(type)` returns `public`, `owner` or `invalid` for the runtime router.

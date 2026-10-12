@@ -1,6 +1,0 @@
-**
-!build/
-!build/server/
-!build/server/**
-!deploy/
-!deploy/Dockerfile

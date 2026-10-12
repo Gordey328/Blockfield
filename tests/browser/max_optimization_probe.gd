@@ -100,7 +100,7 @@ func run(kind: String) -> void:
 			rows[-1]["finished"] = app.session.finished
 	var result: Dictionary = {"scenario":kind,"engine":Engine.get_version_info().string,
 		"renderer":RenderingServer.get_video_adapter_name(),"graphics":app.get_graphics_options(),"samples":rows,
-		"actors":app.session.targets.size(),"network_client_created":app.network_client!=null,
+		"actors":app.session.targets.size(),
 		"method":"Actual Main rendered Web, same diagnostic wrappers; paused terrain preparation, 5s warmup then three10s samples; TDM diagnostic kill limit10000; no physical-phone or universal FPS acceptance"}
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("window.maxoptResult="+JSON.stringify(result),true)

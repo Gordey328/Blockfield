@@ -33,11 +33,12 @@ module_jolt_physics_enabled = False
 module_vhacd_enabled = False
 module_visual_shader_enabled = False
 
-# Raw WebSocket/WSS is retained; these alternate transports are unused.
+# Offline gameplay does not use these transport modules.
 module_enet_enabled = False
 module_webrtc_enabled = False
 module_upnp_enabled = False
-# GDScript LSP is editor-only; raw WS uses neither JSONRPC nor SceneMultiplayer.
+module_websocket_enabled = False
+# GDScript LSP is editor-only; offline gameplay uses no JSONRPC or SceneMultiplayer.
 # SceneTree retains the core MultiplayerAPIExtension fallback interface.
 module_jsonrpc_enabled = False
 module_multiplayer_enabled = False
@@ -64,7 +65,6 @@ module_godot_physics_3d_enabled = True
 module_gltf_enabled = True
 module_zip_enabled = True
 module_regex_enabled = True
-module_websocket_enabled = True
 module_noise_enabled = True
 module_ogg_enabled = True
 module_vorbis_enabled = True

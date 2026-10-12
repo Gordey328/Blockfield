@@ -3,7 +3,7 @@ extends SceneTree
 ## godot --headless --path game --fixed-fps 60 --script ../tests/integration/test_mobile_aim_assist.gd
 const SCENE = preload("res://scenes/main.tscn")
 const ASSIST = preload("res://gameplay/touch_aim_assist.gd")
-const FILES: Array[String] = ["user://settings.cfg", "user://servers.cfg"]
+const FILES: Array[String] = ["user://settings.cfg"]
 const FEET := Vector3(48.5, 20.0, 70.5)
 const TARGET_FEET := Vector3(48.5, 20.0, 50.5)
 const TURN: float = 400.0 * PI / 180.0
@@ -18,21 +18,20 @@ var saved: Dictionary = {}
 var globals: Dictionary = {}
 
 
-class RecordingReplica extends BlockfieldClientReplica:
-	var owner := SharedPlayerState.new()
+class RecordingMatch extends OfflineTDMSession:
+	var actor_state: SharedPlayerState = SharedPlayerState.new(1, "Player", 1)
 	var submitted: Array[Dictionary] = []
-	var objectives: Dictionary = {}
-	var actors: Array[Dictionary] = []
+	func _init() -> void:
+		paused = false
+		_owner = actor_state
 	func get_owner_state() -> SharedPlayerState:
-		return owner.copy()
-	func get_public_state() -> Dictionary:
-		return {"epoch": owner.match_epoch, "tick": owner.last_tick,
-			"actors": actors.duplicate(true), "grenades": [], "objectives": objectives}
-	func submit_input(buttons: int, move: Vector2, yaw: float, pitch: float, tool: int = 255, weapon: int = 255) -> Dictionary:
+		return actor_state.copy()
+	func step_local(buttons: int, move: Vector2, yaw: float, pitch: float, tool: int = 255, weapon: int = 255) -> Dictionary:
 		submitted.append({"buttons": buttons, "move": move, "yaw": yaw, "pitch": pitch, "tool": tool, "weapon": weapon})
-		owner.yaw = yaw
-		owner.pitch = pitch
-		return {"ok": true}
+		actor_state.yaw = yaw
+		actor_state.pitch = pitch
+		var transactions: Array[Dictionary] = []
+		return {"ok": true, "transactions": transactions}
 
 
 func _initialize() -> void:
@@ -116,7 +115,7 @@ func run() -> void:
 	touch_behavior()
 	exclusions()
 	await hud_and_preferences()
-	network_command_boundary()
+	match_command_boundary()
 	await destroy_app()
 	await create_app()
 	check(not player.touch_aim_assist, "fresh Main loads the saved disabled assist setting")
@@ -164,7 +163,7 @@ func pure_visibility() -> void:
 	check(near(gain_for([enemy({"team": 0})]), 1.0), "ally does not attract friction")
 	check(near(gain_for([enemy({"alive": false, "health": 0})]), 1.0), "dead soldier does not attract friction")
 	check(near(gain_for([enemy({"health": 0})]), 1.0), "known zero health cannot retain friction during a stale alive snapshot")
-	check(near(gain_for([enemy({"health": -1, "health_known": false})]), 0.82), "public network actor uses alive status without private HP")
+	check(near(gain_for([enemy({"health": -1, "health_known": false})]), 0.82), "bot presentation uses alive status without hidden HP")
 	check(near(gain_for([enemy({"id": 0})]), 1.0), "owner identity is excluded")
 	check(near(gain_for([enemy({"team": 2})]), 1.0), "spectator actor is excluded")
 	check(near(gain_for([enemy({"position": FEET + Vector3.BACK * 20.0})]), 1.0), "actor behind the view is excluded")
@@ -319,62 +318,44 @@ func hud_and_preferences() -> void:
 	await frames(1)
 
 
-func network_command_boundary() -> void:
+func match_command_boundary() -> void:
 	defaults()
 	var offline := player.session
 	var previous_connected := player._connected_session
-	var previous_replica: BlockfieldClientReplica = app.network_client
-	var replica := RecordingReplica.new()
-	replica.status = "live"
-	replica.actor_id = 1
-	replica.epoch = 1
-	replica.owner.player_id = 1
-	replica.owner.team = 0
-	replica.owner.health = 100
-	replica.owner.spawn_generation = 1
-	replica.owner.tool_raise = 1.0
-	replica.owner.motion = SourcePlayerMotion.create_state(FEET)
-	var remote := SharedPlayerState.new(7, "Visible network enemy", 1)
-	remote.team = 1
-	remote.health = 100
-	remote.spawn_generation = 1
-	remote.motion = SourcePlayerMotion.create_state(TARGET_FEET)
-	replica.actors.assign([SimulationCodec._public_actor(remote)])
-	replica.objectives = {"mode": offline.mode, "capture_limit": offline.capture_limit,
-		"winning_team": offline.winning_team, "scores": offline.team_scores.duplicate(),
-		"bases": offline.ctf_bases.duplicate(true), "flags": offline.ctf_flags.duplicate(true),
-		"territories": offline.territories.duplicate(true)}
-	var network := NetworkSession.new()
-	network.bind_replica(replica)
-	app.network_client = replica
-	player.session = network
-	player._connected_session = network
-	player._network_epoch = 0
-	player._network_generation = -1
+	var match_session := RecordingMatch.new()
+	match_session.actor_state.team = 0
+	match_session.actor_state.health = 100
+	match_session.actor_state.spawn_generation = 1
+	match_session.actor_state.tool_raise = 1.0
+	match_session.actor_state.motion = SourcePlayerMotion.create_state(FEET)
+	match_session.targets.assign([enemy({"health": -1, "health_known": false})])
+	player.session = match_session
+	player._connected_session = match_session
+	player._match_epoch = 0
+	player._match_generation = -1
 	player._physics_process(0.0)
-	check(network.targets.size() == 1 and not bool(network.targets[0].health_known), "network adapter mirrors a live public actor without private HP")
-	replica.submitted.clear()
+	check(match_session.targets.size() == 1 and not bool(match_session.targets[0].health_known), "TDM adapter supplies a living bot without hidden HP")
+	match_session.submitted.clear()
 	player.rotation = Vector3.ZERO
 	player.head.rotation = Vector3.ZERO
 	player.camera_mode = BlockfieldPlayer.CameraMode.FIRST_PERSON
 	player.queue_touch_motion(Vector2(1.0, 0.5), Vector2(1000, 600))
 	player._physics_process(1.0 / 60.0)
-	check(replica.submitted.size() == 1, "network production boundary samples exactly one assisted command")
-	if not replica.submitted.is_empty():
-		var command: Dictionary = replica.submitted.back()
+	check(match_session.submitted.size() == 1, "TDM production boundary samples exactly one assisted command")
+	if not match_session.submitted.is_empty():
+		var command: Dictionary = match_session.submitted.back()
 		check(near(float(command.yaw), -TURN * 0.001 * 0.82) and near(float(command.pitch), -TURN * 0.0005 * 0.82),
-			"assisted user angles enter the normal authenticated network intent")
+			"assisted user angles enter the normal local match intent")
 	var before := pose()
 	player._process(0.001)
 	player._physics_process(1.0 / 60.0)
-	check(pose().is_equal_approx(before), "render and subsequent network sampling cannot replay assisted movement")
+	check(pose().is_equal_approx(before), "render and subsequent TDM sampling cannot replay assisted movement")
 	player.session = offline
 	player._connected_session = previous_connected
-	app.network_client = previous_replica
-	player._network_owner = null
-	player._network_epoch = 0
-	player._network_generation = -1
-	network.free()
+	player._match_owner = null
+	player._match_epoch = 0
+	player._match_generation = -1
+	match_session.free()
 	player.touch_aim_assist = false
 	# Keep the previously saved disabled setting for the fresh scene round trip.
 	app.save_settings()

@@ -24,6 +24,27 @@
 			"source": "res://ai/tdm_arena.gd",
 			"source_sha256": "f66fe45b87b1fa5fed21794b2d432ed51b5ee76a268f97973049d15058411c44"
 		},
+		"map_dust2.png": {
+			"camera_fov": 57.0,
+			"camera_position": [
+				157.5,
+				47.0100021362305,
+				186.5
+			],
+			"camera_target": [
+				117.5,
+				12.0100002288818,
+				146.5
+			],
+			"dimensions": [
+				640,
+				360
+			],
+			"image_sha256": "64f18d58aa1a590361dfbdf32d2673133aabe1c1d3b193a3693a9b3a11867e6d",
+			"kind": "actual_game_world",
+			"source": "res://assets/maps/dust2.bfmap",
+			"source_sha256": "d9d8e1f6f7e7d14719242def88c306f3af0dda681c765c3a41222bf91bcaab61"
+		},
 		"map_lab.png": {
 			"camera_fov": 57.0,
 			"camera_position": [
@@ -96,8 +117,8 @@
 			"camera_projection": "orthogonal",
 			"camera_size": 15.2933731079102,
 			"dimensions": [
-				512,
-				192
+				512.0,
+				192.0
 			],
 			"image_sha256": "087690ed6674f55944758cc836ea3418701fd0b8e896b43f67c3f340332c1e32",
 			"kind": "original_imported_weapon",
@@ -116,8 +137,8 @@
 			"camera_projection": "orthogonal",
 			"camera_size": 12.6641397476196,
 			"dimensions": [
-				512,
-				192
+				512.0,
+				192.0
 			],
 			"image_sha256": "2227cc237b0b16f4443af57b45279ed15b83470c31ee338d1efd2bad0f0d5479",
 			"kind": "original_imported_weapon",
@@ -136,8 +157,8 @@
 			"camera_projection": "orthogonal",
 			"camera_size": 14.4677839279175,
 			"dimensions": [
-				512,
-				192
+				512.0,
+				192.0
 			],
 			"image_sha256": "ebf888013264e4a580e3a8a8b6b8c500277a1e7d7af7b871903078631e8f1090",
 			"kind": "original_imported_weapon",

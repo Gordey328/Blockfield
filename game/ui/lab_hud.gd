@@ -66,7 +66,6 @@ var _palette: ColorPickerButton
 var _native_palette: LabPalette
 var _team_buttons: Array[Button] = []
 var _spawn_team: OptionButton
-var _network_menu: Control
 var _menu_tabs: TabContainer
 const MOBILE_CONTROLS=preload("res://ui/mobile_controls.gd")
 var mobile_controls: Control
@@ -83,7 +82,6 @@ var _desktop_aspect:=Window.CONTENT_SCALE_ASPECT_KEEP
 var _desktop_emulation:=true
 var _touch_mode_choice: OptionButton
 var _hud_brand: Label
-const NETWORK_MENU=preload("res://ui/network_menu.gd")
 const OFFLINE_TDM=preload("res://gameplay/offline_tdm_session.gd")
 var _tdm_score: Label
 var _combat_readout: CombatReadout
@@ -184,7 +182,6 @@ func _create_hud() -> void:
 	_hud.add_child(_combat_readout)
 	var top: Label
 	if _is_offline_tdm(): top=_ui_label("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE",18)
-	elif _is_network(): top=_ui_label("BLOCKFIELD  /  МУЛЬТИПЛЕЕР","BLOCKFIELD  /  MULTIPLAYER",18)
 	else: top=_label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
 	_hud_brand=top
 	top.add_theme_font_size_override("font_size",12)
@@ -348,14 +345,6 @@ func _create_menu() -> void:
 	for side in ["left","right"]:margin.add_theme_constant_override("margin_"+side,52)
 	for side in ["top","bottom"]:margin.add_theme_constant_override("margin_"+side,30)
 	_menu.add_child(margin)
-	if _is_network():
-		_network_menu=NETWORK_MENU.new()
-		margin.add_child(_network_menu)
-		_network_menu.setup(self,main,session,player)
-		var network_footer: Node = _network_menu.get_child(_network_menu.get_child_count()-1)
-		if main.has_method("open_game_home"):
-			network_footer.add_child(_game_home_button())
-		return
 	if _is_offline_tdm():
 		_create_tdm_menu(margin)
 		return
@@ -390,9 +379,6 @@ func _create_menu() -> void:
 	_build_world(_tab(tabs,"Мир и режимы"))
 	_build_settings(_tab(tabs,"Настройки"))
 	_build_checks(_tab(tabs,"Проверка"))
-	var multiplayer:=_tab(tabs,"Мультиплеер","Multiplayer")
-	multiplayer.add_child(_ui_label("Играйте с другими игроками.","Play with other players.",20))
-	multiplayer.add_child(_ui_button("Мультиплеер →","Multiplayer →",func():main.open_network_game()))
 	var footer:=HBoxContainer.new()
 	footer.add_theme_constant_override("separation",16)
 	layout.add_child(footer)
@@ -1237,9 +1223,6 @@ func open_chat(team_only: bool=false) -> void:
 func _close_chat() -> void:_sync_controls()
 
 func _send_chat(message: String, team_only: bool=false) -> void:
-	if _is_network():
-		_send_network_chat(message,team_only)
-		return
 	if main.get("console_service")!=null:
 		var result: Dictionary=main.console_service.execute(message)
 		if bool(result.get("handled",false)):
@@ -1259,30 +1242,6 @@ func _send_chat(message: String, team_only: bool=false) -> void:
 				return
 	_chat.receive(message,str(main.player_name),team_only,session.team)
 	chat_sound_requested.emit()
-
-func _is_network() -> bool:
-	return main!=null and main.get("network_mode")==true
-
-func _send_network_chat(message: String,team_only: bool) -> void:
-	if message.begins_with("/"):
-		var parts:=message.substr(1).split(" ",false)
-		var command:=parts[0].to_lower() if not parts.is_empty() else ""
-		if command=="help":
-			_chat.receive("/help /team blue|green|spectator; /cvars [prefix], /get name, /set name value, /reset name|all",_ui("Консоль","Console"))
-			return
-		if command in ["restock","mode"] or (command=="reset" and parts.size()==1):
-			_chat.receive(_ui("Эта команда доступна на локальном полигоне.","This command is available in the offline lab."),_ui("Консоль","Console"))
-			return
-		var console: Variant=main.get("console_service")
-		if console!=null:
-			var result: Dictionary=console.execute(message)
-			if bool(result.get("handled",false)):
-				if not str(result.get("message","")).is_empty():_chat.receive(str(result.message),_ui("Консоль","Console"))
-				return
-		_chat.receive(_ui("Неизвестная команда.","Unknown command."),_ui("Консоль","Console"))
-		return
-	var client: Variant=main.get("network_client")
-	if client==null or not bool(client.send_chat(message,team_only)):_chat.receive(_ui("Сообщение не отправлено.","Message was not sent."),_ui("Сеть","Network"))
 
 func clear_match_feedback() -> void:
 	_events.clear()

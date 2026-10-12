@@ -8,7 +8,7 @@ const MOTION = preload("res://gameplay/source_player_motion.gd")
 const HZ := 60
 const DT := 1.0 / HZ
 const MAX_UINT32 := 0xffffffff
-const RESPAWN_TICKS := 180 # Authored local/server policy, not an upstream server.
+const RESPAWN_TICKS := 180 # Authored offline respawn policy.
 enum Buttons { JUMP=1, CROUCH=2, SPRINT=4, SNEAK=8, PRIMARY=16, SECONDARY=32, RELOAD=64 }
 enum Tool { SPADE, BLOCK, WEAPON, GRENADE }
 
@@ -16,23 +16,11 @@ class Command extends RefCounted:
 	var sequence: int = 0
 	var spawn_generation: int = 0
 	var buttons: int = 0
-	var move: Vector2 = Vector2.ZERO # +X right, -Y forward (wire move_z).
+	var move: Vector2 = Vector2.ZERO # +X right, -Y forward.
 	var yaw: float = 0.0
 	var pitch: float = 0.0
 	var tool: int = 255
 	var weapon: int = 255 # Class request; live inventory never changes/refills.
-
-	static func from_record(record: Dictionary, generation: int) -> Command:
-		var result := Command.new()
-		result.sequence = int(record.get("input_sequence", 0))
-		result.spawn_generation = generation
-		result.buttons = int(record.get("buttons", 0))
-		result.move = Vector2(float(record.get("move_x", 0)), float(record.get("move_z", 0)))
-		result.yaw = float(record.get("yaw", 0))
-		result.pitch = float(record.get("pitch", 0))
-		result.tool = int(record.get("tool", 255))
-		result.weapon = int(record.get("weapon", 255))
-		return result
 
 	func valid() -> bool:
 		return sequence > 0 and sequence <= MAX_UINT32 and spawn_generation > 0 and spawn_generation <= MAX_UINT32 and buttons >= 0 and buttons & ~127 == 0 \
@@ -43,7 +31,7 @@ class Command extends RefCounted:
 
 static func spawn(actor: SharedPlayerState, tick: int, feet: Vector3, team: int,
 		weapon: int = -1) -> Array[Dictionary]:
-	if not actor.connected or actor.player_id <= 0 or actor.player_id > MAX_UINT32 or actor.match_epoch <= 0 \
+	if actor.player_id <= 0 or actor.player_id > MAX_UINT32 or actor.match_epoch <= 0 \
 			or actor.match_epoch > MAX_UINT32 or actor.spawn_generation >= MAX_UINT32 or tick < 0 or tick > MAX_UINT32 \
 			or team not in [0, 1] or not feet.is_finite(): return frozen([])
 	var selected := actor.pending_weapon if weapon < 0 and actor.pending_weapon >= 0 else (actor.weapon if weapon < 0 else weapon)
@@ -92,7 +80,7 @@ static func spawn(actor: SharedPlayerState, tick: int, feet: Vector3, team: int,
 	return frozen([event(actor, tick, "spawn", {"feet":feet,"team":team,"weapon":selected})])
 
 static func can_act(actor: SharedPlayerState) -> bool:
-	return actor.connected and actor.player_id > 0 and actor.is_alive()
+	return actor.player_id > 0 and actor.is_alive()
 
 static func is_changing_tool(actor: SharedPlayerState) -> bool:
 	return actor.displayed_tool != actor.tool or actor.tool_raise < .999
@@ -109,7 +97,7 @@ static func tool_selectable(actor: SharedPlayerState, tool: int) -> bool:
 	return false
 
 static func request_class(actor: SharedPlayerState, weapon: int, tick: int) -> Array[Dictionary]:
-	if not actor.connected or not PROFILES.valid(actor.profile, weapon) or weapon == actor.pending_weapon: return frozen([])
+	if not PROFILES.valid(actor.profile, weapon) or weapon == actor.pending_weapon: return frozen([])
 	if weapon == actor.weapon and actor.pending_weapon < 0: return frozen([])
 	actor.pending_weapon = weapon
 	return frozen([event(actor, tick, "class_pending", {"weapon":weapon})])
@@ -220,8 +208,8 @@ static func damage(actor: SharedPlayerState, amount: float, tick: int, attacker_
 	return frozen(events)
 
 static func step_fixed(actor: SharedPlayerState, tick: int, command: Command = null,
-		query: Variant = null, rng: RandomNumberGenerator = null, authoritative_damage: bool = true) -> Array[Dictionary]:
-	# Runtime chooses tick; command has neither trusted dt nor authoritative feet.
+		query: Variant = null, rng: RandomNumberGenerator = null) -> Array[Dictionary]:
+	# The local coordinator chooses tick; input carries no delta or feet position.
 	if tick < 0 or tick != actor.last_tick + 1 or not PROFILES.valid(actor.profile, actor.weapon): return frozen([])
 	actor.last_tick = tick
 	var events: Array[Dictionary] = []
@@ -250,7 +238,7 @@ static func step_fixed(actor: SharedPlayerState, tick: int, command: Command = n
 	actor.sneaking = can_act(actor) and actor.input_buttons & Buttons.SNEAK != 0
 	actor.aiming = can_use_tool(actor) and actor.tool == Tool.WEAPON and actor.input_buttons & Buttons.SECONDARY != 0 and not actor.reloading
 	if query != null:
-		events.append_array(advance_motion(actor, tick, query, authoritative_damage))
+		events.append_array(advance_motion(actor, tick, query))
 	var allowed := can_use_tool(actor)
 	var primary := allowed and actor.input_buttons & Buttons.PRIMARY != 0
 	if actor.tool == Tool.WEAPON:
@@ -374,7 +362,7 @@ static func integrated_velocity(actor: SharedPlayerState, active: bool = true) -
 		velocity.z /= friction
 	return velocity
 
-static func advance_motion(actor: SharedPlayerState, tick: int, query: Variant, authoritative_damage: bool = true) -> Array[Dictionary]:
+static func advance_motion(actor: SharedPlayerState, tick: int, query: Variant) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var jumping := can_act(actor) and actor.input_buttons & Buttons.JUMP != 0 and MOTION.is_on_ground_or_wade(actor.motion)
 	actor.motion.native_velocity = integrated_velocity(actor, can_act(actor))
@@ -384,8 +372,8 @@ static func advance_motion(actor: SharedPlayerState, tick: int, query: Variant, 
 	actor.motion = MOTION.finish_landing(MOTION.clip_move(query, actor.motion, DT, float(tick) / HZ), incoming)
 	if jumping: events.append(event(actor, tick, "jump"))
 	if actor.motion.landed: events.append(event(actor, tick, "land", {"hurt":actor.motion.fall_hurt}))
-	if authoritative_damage and actor.motion.fall_hurt: events.append_array(damage(actor, pow(incoming - .58, 2) * 4096, tick, 0, "fall"))
-	if authoritative_damage and can_act(actor) and actor.motion.feet_position.y < -5: events.append_array(damage(actor, 1000, tick, 0, "fall"))
+	if actor.motion.fall_hurt: events.append_array(damage(actor, pow(incoming - .58, 2) * 4096, tick, 0, "fall"))
+	if can_act(actor) and actor.motion.feet_position.y < -5: events.append_array(damage(actor, 1000, tick, 0, "fall"))
 	if can_act(actor) and -actor.motion.native_velocity.y >= 0 and -actor.motion.native_velocity.y < .017 \
 			and not actor.sneaking and not actor.motion.crouch and not actor.aiming:
 		actor.walk_distance += Vector2(actor.motion.native_velocity.x, actor.motion.native_velocity.z).length() * 32 * DT
@@ -422,9 +410,6 @@ static func source_recoil(front: Vector3, right: Vector3, up: Vector3, recoil: V
 	var phase := fposmod(time * .9788, 1)
 	var wave := phase * 4 - 1 if phase < .5 else 3 - phase * 4
 	return (front + up * minf(recoil.y, maxf(0, up_limit)) * multiplier + right * recoil.x * wave * multiplier).normalized()
-
-static func deadline_tick(value: float) -> int:
-	return ceili(value - .000000001)
 
 static func f32(value: float) -> float:
 	return Vector3(value, 0, 0).x

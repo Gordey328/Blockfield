@@ -1,5 +1,9 @@
 # Runtime match epoch reset verification
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `tests/network/test_runtime_epoch.gd` exercises trusted `BlockfieldServerRuntime.reset_match(new_writable_map, profile="", mode="")` through actual WebSocket sockets and full ClientReplica receivers. Reset immediately sends greater-epoch MATCH_PREPARING17 on the existing game connection; the later compatible WELCOME matches that announced identity. Clients complete a new baseline, ordered changes, map barrier and owner state before play. The separate [long-reset contract](match-preparation.md) proves paused prediction, queued FIFO/deadlines and supported physical water metadata.
 
 The suite prepares three connected owners with sparse IDs and one disconnected grace identity. Two owners pause polling while reset begins, proving that two active transfer jobs retain the bound and the third waits in the queue. A trusted authority edit after their frozen baseline0 must arrive as transaction1 before barrier1; the third queued baseline starts at sequence1. Completing a barrier releases the queued stream. It verifies exact new dimensions/colors/map sequence, stable actor IDs, original team/class preference restoration, source0.75→0.76 inventory, cleared scores/winner/objectives and spectator status. Replacement WELCOME observations check cleared old map, prediction, remote buffers, effect identities and input/chat/request/event cursors. Credentials rotate; old epoch input/request packets on a real preserved socket cannot change the new actor/map or disconnect its current owner.

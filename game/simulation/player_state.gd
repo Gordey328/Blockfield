@@ -1,11 +1,10 @@
 class_name SharedPlayerState
 extends RefCounted
-## Per-actor simulation only. IDs are stable actors, never transport peer IDs.
+## Per-actor offline simulation; IDs distinguish the human and local bots.
 const MOTION = preload("res://gameplay/source_player_motion.gd")
 var player_id: int = 1
 var match_epoch: int = 1
 var spawn_generation: int = 0
-var connected: bool = true
 var player_name: String = "Player"
 var team: int = 2
 var profile: String = "0.75"
@@ -84,7 +83,7 @@ func walk_progress() -> float:
 func copy() -> SharedPlayerState:
 	var result := SharedPlayerState.new(player_id, player_name, match_epoch, profile)
 	# Only this script's scalar/value properties are copied. Motion/RNG are owned
-	# copies, so replay cannot mutate another actor or cosmetic RNG stream.
+	# copies, so diagnostics cannot mutate another actor or cosmetic RNG stream.
 	if get_script() != SharedPlayerState:
 		# Retain the original reflective behavior for extension scripts, including
 		# their extra properties and setter semantics. Base actors use typed reads.
@@ -96,7 +95,6 @@ func copy() -> SharedPlayerState:
 		result.player_id = player_id
 		result.match_epoch = match_epoch
 		result.spawn_generation = spawn_generation
-		result.connected = connected
 		result.player_name = player_name
 		result.team = team
 		result.profile = profile

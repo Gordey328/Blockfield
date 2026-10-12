@@ -1,0 +1,1912 @@
+{
+  "schema": 1,
+  "kind": "static_module_contract_audit",
+  "engine": {
+    "version": "4.7.2.stable.official.ed1daf0bf",
+    "tag": "4.7.2-stable",
+    "commit": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "repository": "https://github.com/godotengine/godot"
+  },
+  "profile": {
+    "path": "tools/web_template/blockfield.py",
+    "sha256": "17ac32fffba5b52fe9becd7c9e4313d79c3d53d6cd9e0c9d894a9aebcf5726c1",
+    "class_pruning": false,
+    "all_modules_disabled_by_default": false
+  },
+  "comparison_source_commit": "fe843a1fa369670dea92ea15643639543e61d44b",
+  "project_scan_includes_current_bot_files": true,
+  "scope": "Godot single-thread wasm32 release Web template only; no audio/font/resource compression changes.",
+  "flags": [
+    {
+      "flag": "modules_enabled_by_default",
+      "value": true,
+      "rationale": "Standard module defaults plus concrete audited blacklist; no all-modules-off whitelist or per-class pruning.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            282,
+            476
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "optimize",
+      "value": "size",
+      "rationale": "Retain default Web -Os. Source explicitly avoids -Oz for its small saving/runtime cost. Builder owns LTO/toolchain.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            171,
+            537,
+            544,
+            842,
+            845,
+            847,
+            850,
+            852,
+            890,
+            893,
+            895,
+            897,
+            899,
+            901
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_3d",
+      "value": false,
+      "rationale": "Keep 3D scene/resources/rendering/camera/mesh/light behavior.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            264,
+            1059,
+            1076
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_advanced_gui",
+      "value": false,
+      "rationale": "Keep RichTextLabel, ItemList, ColorPickerButton and FileDialog for chat/scoreboard/settings/menus.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            265,
+            1060,
+            1081
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_physics_3d",
+      "value": false,
+      "rationale": "Keep 3D server/nodes and GodotPhysics3D; only alternate Jolt is removed.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            267,
+            1062,
+            1079,
+            1085
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "opengl3",
+      "value": true,
+      "rationale": "Compatibility/WebGL2 is the accepted renderer.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            198
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "javascript_eval",
+      "value": true,
+      "rationale": "Keep JS bridge eval/interfaces/callbacks/buffer conversion for input/uploads/saving/fullscreen.",
+      "source": [
+        {
+          "path": "platform/web/detect.py",
+          "sha256": "9b3ead90fddaab15f2ce647db54421e647553887d023b1842365dbb7863d08e6",
+          "matching_lines": [
+            54,
+            268
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "minizip",
+      "value": true,
+      "rationale": "ZIPReader/ZIPPacker contract; zip module can_build requires this flag.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            194,
+            1093
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_physics_2d",
+      "value": true,
+      "rationale": "Remove only unused 2D physics server/nodes; Control/Canvas rendering stays.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            266,
+            1061,
+            1083
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_navigation_2d",
+      "value": true,
+      "rationale": "No Godot 2D navigation consumers.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            268,
+            1063,
+            1087
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_navigation_3d",
+      "value": true,
+      "rationale": "Bots query project VoxelData via TdmVoxelNavigation, not engine navigation.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            269,
+            1064,
+            1078,
+            1089
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "disable_xr",
+      "value": true,
+      "rationale": "No XR server, nodes, VR/WebXR camera or pose contract.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            270,
+            1080,
+            1091
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "module_csg_enabled",
+      "value": false,
+      "rationale": "No CSG nodes/authoring. GLTF declares this dependency optional and guards its adapters; uploaded static GLBs reject node extensions.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/csg/config.py",
+          "sha256": "17ab56196a3a6f2b3cf513eb9cd879755a48c4010b3586c483ddf0be39e27ab0"
+        }
+      ]
+    },
+    {
+      "flag": "module_gridmap_enabled",
+      "value": false,
+      "rationale": "VoxelData/chunk ArrayMesh owns world data/rendering/collision; no GridMap. Its GLTF adapter is optional and guarded.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/gridmap/config.py",
+          "sha256": "ea4d056707640bb9428e3ab7e06100899d9db1e1691a6630aef25c2dd4229456"
+        }
+      ]
+    },
+    {
+      "flag": "module_fbx_enabled",
+      "value": false,
+      "rationale": "Built-in models are imported to PackedScene. Runtime uploaded models must be .glb; FBX/ufbx is outside that contract.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/fbx/config.py",
+          "sha256": "95860b5807e2168ca9a7bbcb1322f57af09ea4d554a284c62f15854cecceca8e"
+        }
+      ]
+    },
+    {
+      "flag": "module_jolt_physics_enabled",
+      "value": false,
+      "rationale": "Project has no physics-engine override. Exact GodotPhysics3D registration sets the default; Jolt only registers an alternate. GodotPhysics3D stays enabled.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/jolt_physics/config.py",
+          "sha256": "f5307daa7374fe6cba2f1944308a53bc3c149c8c4cefb0c208b0becddc780a52"
+        }
+      ]
+    },
+    {
+      "flag": "module_vhacd_enabled",
+      "value": false,
+      "rationale": "World creates ConcavePolygonShape3D faces directly; no convex-decomposition call. Uploaded GLBs are static meshes, reject required/node extensions and have no physics import contract.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/vhacd/config.py",
+          "sha256": "f5307daa7374fe6cba2f1944308a53bc3c149c8c4cefb0c208b0becddc780a52"
+        }
+      ]
+    },
+    {
+      "flag": "module_visual_shader_enabled",
+      "value": false,
+      "rationale": "All project shaders are ordinary Shader/ShaderMaterial with .gdshader source. No VisualShader graph resources are loaded or accepted in uploaded packs.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/visual_shader/config.py",
+          "sha256": "ece70b08aa05087ece102f9783b58b747cab3fed008a2e2d9e463c02084e5bb6"
+        }
+      ]
+    },
+    {
+      "flag": "module_enet_enabled",
+      "value": false,
+      "rationale": "Browser network contract uses raw WebSocketPeer and project-owned frames/polling, not ENet UDP/high-level transport.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/enet/config.py",
+          "sha256": "634448cf7089d5b12ab600ed76ac5effc4365a6d8e6113d6136d5e0f77010174"
+        }
+      ]
+    },
+    {
+      "flag": "module_webrtc_enabled",
+      "value": false,
+      "rationale": "No WebRTC peer or data-channel transport. WebSocket/WSS is retained.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/webrtc/config.py",
+          "sha256": "c6bd9ca5f8b1e866c37ee16baeec4ad1b4720716137d4c4503f185fc5e2a1da7"
+        }
+      ]
+    },
+    {
+      "flag": "module_upnp_enabled",
+      "value": false,
+      "rationale": "No UPnP discovery/port mapping; browser clients use explicit WebSocket endpoints.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/upnp/config.py",
+          "sha256": "3981d4dd748199ee6cd931bc3f6edb768682beb2428374887ff99052e94af683"
+        }
+      ]
+    },
+    {
+      "flag": "module_jsonrpc_enabled",
+      "value": false,
+      "rationale": "No JSONRPC game/probe consumers. GDScript lists it as an optional dependency solely for LSP; exact gdscript/SCsub compiles language_server only for env.editor_build. Web also defines GDSCRIPT_NO_LSP. Core JSON parsing and custom WebSocket framing are unrelated and retained.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/jsonrpc/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        },
+        {
+          "path": "modules/gdscript/config.py",
+          "sha256": "d4b684b463b0f1faab79da71a8c4ce0aec0ecfdf4717ebe0d7347703e4ae1ec9",
+          "matching_lines": [
+            2
+          ]
+        },
+        {
+          "path": "modules/gdscript/SCsub",
+          "sha256": "f1298c11c276c05a988ea6da422778485e7095a087cc872fdf42efbc8bbfd8cf",
+          "matching_lines": [
+            11
+          ]
+        },
+        {
+          "path": "platform/web/detect.py",
+          "sha256": "9b3ead90fddaab15f2ce647db54421e647553887d023b1842365dbb7863d08e6",
+          "matching_lines": [
+            354
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "module_multiplayer_enabled",
+      "value": false,
+      "rationale": "No SceneMultiplayer/RPC/MultiplayerSpawner/MultiplayerSynchronizer or high-level multiplayer consumers. The project transports framed bytes through raw WebSocketPeer, with independent authoritative simulation. SceneTree still receives a valid core MultiplayerAPIExtension from create_default_interface when the module default is unset. Its empty poll returns OK, unique ID defaults to 1, and it has no peer list. WebSocket module has no dependency on module_multiplayer; core MultiplayerPeer/MultiplayerAPI remain.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/multiplayer/config.py",
+          "sha256": "98da0433c19b5931bcbf498dfbeefed2c0b65de0f43d5bbc386bfb41f27d0af6"
+        },
+        {
+          "path": "modules/multiplayer/register_types.cpp",
+          "sha256": "4ca67774b081aa6981298f810ecfda93e6be42152647da20b0d01a18feddbbcd",
+          "matching_lines": [
+            54
+          ]
+        },
+        {
+          "path": "scene/main/multiplayer_api.cpp",
+          "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+          "matching_lines": [
+            47,
+            306
+          ]
+        },
+        {
+          "path": "scene/main/multiplayer_api.cpp",
+          "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+          "matching_lines": [
+            51
+          ]
+        },
+        {
+          "path": "scene/main/multiplayer_api.cpp",
+          "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+          "matching_lines": [
+            321
+          ]
+        },
+        {
+          "path": "scene/main/scene_tree.cpp",
+          "sha256": "eed6dbff323344efff19f2de6763705aff062a76e00fd7cbe42a4ee849b7e5a4",
+          "matching_lines": [
+            2100
+          ]
+        },
+        {
+          "path": "modules/websocket/config.py",
+          "sha256": "c1f2419ac93a50ede07b3ff96c9e9c3aeaad6fb3b891e92c208ff3b88c37ee0b"
+        },
+        {
+          "path": "modules/websocket/register_types.cpp",
+          "sha256": "ada0a7fdee327dbcbdbb6e6640778c1ab1fe4f9c18d768b0cb696e34e0e8d9fa",
+          "matching_lines": [
+            70
+          ]
+        }
+      ]
+    },
+    {
+      "flag": "module_basis_universal_enabled",
+      "value": false,
+      "rationale": "All 295 active PNG texture import descriptors use compress/mode=0 (lossless). No Basis assets. Uploaded textures and embedded GLB images must be PNG.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/basis_universal/config.py",
+          "sha256": "522e2c314578c8466a0e10c299b25392fdfad78c4ad84799a8ea1c15ab5d33eb"
+        }
+      ]
+    },
+    {
+      "flag": "module_ktx_enabled",
+      "value": false,
+      "rationale": "No KTX/KTX2 assets/uploads. KTX requires BasisUniversal; both are removed together. PNG/GLB contracts remain supported.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/ktx/config.py",
+          "sha256": "db099d8574cc9aa5a1fb9aa5fbd89f5b82e5f115ba22bba10c53cb4ffc5ce9e2"
+        }
+      ]
+    },
+    {
+      "flag": "module_bmp_enabled",
+      "value": false,
+      "rationale": "No BMP assets/runtime decoding; uploaded textures require PNG.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/bmp/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_dds_enabled",
+      "value": false,
+      "rationale": "No DDS container assets/uploads. Keep bcdec/etcpak/astcenc for generic compressed-texture fallback; this removes only the DDS file loader.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/dds/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_hdr_enabled",
+      "value": false,
+      "rationale": "No Radiance HDR image-file assets/uploads. Floating-point shader/render-target presentation uses core Image formats independently.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/hdr/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_tga_enabled",
+      "value": false,
+      "rationale": "No TGA assets/uploads; uploaded textures require PNG.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/tga/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_tinyexr_enabled",
+      "value": false,
+      "rationale": "No OpenEXR assets/uploads. HDR render targets use core Image formats. Removed Basis encoder had an editor-only dependency on TinyEXR.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/tinyexr/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_mp3_enabled",
+      "value": false,
+      "rationale": "Sound catalog is Ogg Vorbis or curated WAV PCM. Uploaded sound resources require Ogg Vorbis; no MP3/MP1/MP2 path.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/mp3/config.py",
+          "sha256": "1fac0f2ad756dec322cd1583338a3500af9db30ca18417af50c99ad50f78ad2a"
+        }
+      ]
+    },
+    {
+      "flag": "module_theora_enabled",
+      "value": false,
+      "rationale": "No video playback/video pack resources. Ogg and Vorbis remain independently enabled.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/theora/config.py",
+          "sha256": "eb97f5cf46667ea3190522d632610cbb4ee06b1d8cb58273d4b328fb7b28b827"
+        }
+      ]
+    },
+    {
+      "flag": "module_interactive_music_enabled",
+      "value": false,
+      "rationale": "No AudioStreamInteractive/Playlist/Synchronized resources or music graphs. Core WAV/AudioStreamPlayer and Ogg Vorbis remain available.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/interactive_music/config.py",
+          "sha256": "d922521d72c058d090907611306760ccd456f97363f6ec93ca08283aaf2c32bb"
+        }
+      ]
+    },
+    {
+      "flag": "module_gdscript_enabled",
+      "value": true,
+      "rationale": "All game logic is typed GDScript, with runtime load() of trusted first/third-person skin scripts.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/gdscript/config.py",
+          "sha256": "d4b684b463b0f1faab79da71a8c4ce0aec0ecfdf4717ebe0d7347703e4ae1ec9"
+        }
+      ]
+    },
+    {
+      "flag": "module_godot_physics_3d_enabled",
+      "value": true,
+      "rationale": "Default server, CharacterBody3D, terrain concave collision, shapes and 3D ray/collision queries.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/godot_physics_3d/config.py",
+          "sha256": "f5307daa7374fe6cba2f1944308a53bc3c149c8c4cefb0c208b0becddc780a52"
+        }
+      ]
+    },
+    {
+      "flag": "module_gltf_enabled",
+      "value": true,
+      "rationale": "Resource-pack decoder constructs GLTFDocument/GLTFState, appends bytes and generates a scene; static scene-only pruning would miss it.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/gltf/config.py",
+          "sha256": "c9cd77f57b14bb8b76afecbd53818564f2023518b7da6bd7ce9e219f73f38060"
+        }
+      ]
+    },
+    {
+      "flag": "module_zip_enabled",
+      "value": true,
+      "rationale": "Runtime ZIPReader uploads plus exported-probe ZIPPacker. Requires minizip=True.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/zip/config.py",
+          "sha256": "050814db8a4b08ae5a95f35744ade17cbb0895ced371b2b50c88d06eeca133bd"
+        }
+      ]
+    },
+    {
+      "flag": "module_regex_enabled",
+      "value": true,
+      "rationale": "planar_reflection.gd constructs RegEx at runtime.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/regex/config.py",
+          "sha256": "d23342572c26a5ef82249980c498c5b9e8850aeea26871a126e18d9df8a0244e"
+        }
+      ]
+    },
+    {
+      "flag": "module_websocket_enabled",
+      "value": true,
+      "rationale": "WSTransport constructs/polls WebSocketPeer; browser WSS uses browser TLS.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/websocket/config.py",
+          "sha256": "c1f2419ac93a50ede07b3ff96c9e9c3aeaad6fb3b891e92c208ff3b88c37ee0b"
+        }
+      ]
+    },
+    {
+      "flag": "module_noise_enabled",
+      "value": true,
+      "rationale": "openspades_effects.gd constructs FastNoiseLite; disabling it would break this script.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/noise/config.py",
+          "sha256": "3609ff7971b1ca4d96a38b0aa0ef2d9fe341186c2d2813e13ce6ee90206105c2"
+        }
+      ]
+    },
+    {
+      "flag": "module_ogg_enabled",
+      "value": true,
+      "rationale": "Vorbis mandatory dependency and runtime packet-sequence resources.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/ogg/config.py",
+          "sha256": "1e9d230eb2ef938e27f03e0128b62c2024b408cb97b44fb92bcbfc1a94087f2c"
+        }
+      ]
+    },
+    {
+      "flag": "module_vorbis_enabled",
+      "value": true,
+      "rationale": "Original sound catalog and uploaded overrides use AudioStreamOggVorbis.load_from_buffer.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/vorbis/config.py",
+          "sha256": "44096c6a0b493d77f52e70a0e228f95ade3afd0fae6759dd42ad40250b4d0d86"
+        }
+      ]
+    },
+    {
+      "flag": "module_webp_enabled",
+      "value": true,
+      "rationale": "Retain lossless image/imported CTEX decode hooks and optional SVG image support.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/webp/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_jpg_enabled",
+      "value": true,
+      "rationale": "Conservatively retain SVG/GLTF optional image hooks and generic JPEG support; no savings claimed.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/jpg/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_svg_enabled",
+      "value": true,
+      "rationale": "Retain advanced text optional support and theme/vector graphics behavior.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/svg/config.py",
+          "sha256": "b5aef0161d51ee13679917aaf5f2d3f690fb627b3bdab2cfdcc6570ec91c58a4"
+        }
+      ]
+    },
+    {
+      "flag": "module_freetype_enabled",
+      "value": true,
+      "rationale": "Dynamic AlteDIN1451 TTF and engine default fonts, including allow_system_fallback=true.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/freetype/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_msdfgen_enabled",
+      "value": true,
+      "rationale": "Preserve default advanced text/font stack rather than simplifying font modes.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/msdfgen/config.py",
+          "sha256": "1afa0bfa4cd1ed566748c92df02abae764f5585c74b5979836a76235971e8f04"
+        }
+      ]
+    },
+    {
+      "flag": "module_text_server_adv_enabled",
+      "value": true,
+      "rationale": "Full multilingual shaping/layout, ICU/HarfBuzz/Graphite, CJK line breaks, original Japanese/Korean/Chinese and player text.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/text_server_adv/config.py",
+          "sha256": "33b12f1c1a9f60c07cd549c8d880e9a11603b01b8e764feda7664ab49408e518"
+        }
+      ]
+    },
+    {
+      "flag": "module_mbedtls_enabled",
+      "value": true,
+      "rationale": "Retain native/core TLS, cryptography and certificates; browser WSS uses browser TLS, but removing this is unnecessary for a conservative profile.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/mbedtls/config.py",
+          "sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117"
+        }
+      ]
+    },
+    {
+      "flag": "module_meshoptimizer_enabled",
+      "value": true,
+      "rationale": "Runtime GLTF produces ImporterMesh/ArrayMesh; preserve its procedural mesh optimization hooks.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/meshoptimizer/config.py",
+          "sha256": "e845ac7c3b1c89f7c4ab92b59d24e268a40d22ec3565041ee267701aabafdd1f"
+        }
+      ]
+    },
+    {
+      "flag": "module_godot_physics_2d_enabled",
+      "value": false,
+      "rationale": "No 2D collision/body physics. Core flag removes the server/nodes; Control/Canvas and 2D rendering stay enabled.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/godot_physics_2d/config.py",
+          "sha256": "fda4fa64ff6b567fb7ebb95e8f72778689b43c4475b055e4cf3675f4da789e87"
+        }
+      ]
+    },
+    {
+      "flag": "module_navigation_2d_enabled",
+      "value": false,
+      "rationale": "No Godot NavigationServer2D/agent consumers; core flag removes navigation nodes/server.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/navigation_2d/config.py",
+          "sha256": "8e3083f9aae197c01bd0287d80cc76a10239bf5d538b29fb629fbe4b5b498f21"
+        }
+      ]
+    },
+    {
+      "flag": "module_navigation_3d_enabled",
+      "value": false,
+      "rationale": "New TDM bots use TdmVoxelNavigation: bounded VoxelData queries, Dictionary stand-column graph and explicit clearance; no Godot NavigationServer3D.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/navigation_3d/config.py",
+          "sha256": "4b5197eb4e81c2769c47ebd29ae40c879d75c20c3f92c10d95694191c9b49f87"
+        }
+      ]
+    },
+    {
+      "flag": "module_mobile_vr_enabled",
+      "value": false,
+      "rationale": "Ordinary Camera3D game; no VR pose/tracking/interface. Core disable_xr also removes XR nodes/server.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/mobile_vr/config.py",
+          "sha256": "ae479a0d1b50249fb9df119638c11b6d3e64702b6f512db412d3c421ecc8a0a2"
+        }
+      ]
+    },
+    {
+      "flag": "module_openxr_enabled",
+      "value": false,
+      "rationale": "No XR contract; OpenXR already cannot_build on Web, so this explicit flag is documentary with no extra baseline Web saving.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/openxr/config.py",
+          "sha256": "6c9a9ac6b2d9396fe400167fb2642eaa97744a9c11f40388447d75d272c29f97"
+        }
+      ]
+    },
+    {
+      "flag": "module_webxr_enabled",
+      "value": false,
+      "rationale": "No WebXR interface/pose/camera contract; core disable_xr removes XR nodes/server.",
+      "source": [
+        {
+          "path": "SConstruct",
+          "sha256": "b67bd31bf2d3bc1d91d4a1c5b2e4117c3d2dbd9c066ba3bb040cdd61226845f7",
+          "matching_lines": [
+            485
+          ]
+        },
+        {
+          "path": "modules/webxr/config.py",
+          "sha256": "fec8bfc5d23243b654aa2394ff01a98b3af4e32392905afa8feb7b31eeba73db"
+        }
+      ]
+    }
+  ],
+  "module_inventory_method": "Executed exact config.can_build with Web release options and is_enabled defaults. Mandatory dependencies reviewed separately; this is expected static inventory, not compile/browser acceptance.",
+  "expected_module_inventory": [
+    {
+      "module": "astcenc",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "basis_universal",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "522e2c314578c8466a0e10c299b25392fdfad78c4ad84799a8ea1c15ab5d33eb",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "bcdec",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "betsy",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "12d3b2860cd8d6a1f2dfa08d01664b484f48ef1e2fb35cc381956d174d098cef",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "bmp",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "camera",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "d45bc93d0ff35c6b5ba5907df5e9b188f5c77f21c583c70a4dd5455d98c01a99",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "csg",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "17ab56196a3a6f2b3cf513eb9cd879755a48c4010b3586c483ddf0be39e27ab0",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "cvtt",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "8936830d05a510c7debb6e6b4f589d8588a880769b082ef19be9ea6e31b0c125",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "dds",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "enet",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "634448cf7089d5b12ab600ed76ac5effc4365a6d8e6113d6136d5e0f77010174",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "etcpak",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "fbx",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "95860b5807e2168ca9a7bbcb1322f57af09ea4d554a284c62f15854cecceca8e",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "freetype",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "gdscript",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "d4b684b463b0f1faab79da71a8c4ce0aec0ecfdf4717ebe0d7347703e4ae1ec9",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "glslang",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "7550de9530b4bec40ce5956e1c255ae247cf8a0e8521346b6816d3cef10eeeae",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "gltf",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "c9cd77f57b14bb8b76afecbd53818564f2023518b7da6bd7ce9e219f73f38060",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "godot_physics_2d",
+      "enabled_option": false,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "fda4fa64ff6b567fb7ebb95e8f72778689b43c4475b055e4cf3675f4da789e87",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "godot_physics_3d",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "f5307daa7374fe6cba2f1944308a53bc3c149c8c4cefb0c208b0becddc780a52",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "gridmap",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "ea4d056707640bb9428e3ab7e06100899d9db1e1691a6630aef25c2dd4229456",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "hdr",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "interactive_music",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "d922521d72c058d090907611306760ccd456f97363f6ec93ca08283aaf2c32bb",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "jolt_physics",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "f5307daa7374fe6cba2f1944308a53bc3c149c8c4cefb0c208b0becddc780a52",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "jpg",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "jsonrpc",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "ktx",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "db099d8574cc9aa5a1fb9aa5fbd89f5b82e5f115ba22bba10c53cb4ffc5ce9e2",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "lightmapper_rd",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "53202f2e83a926a34f429a37a2c49f94201a6fa66ce14575fb194c651a9fc67b",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "mbedtls",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "meshoptimizer",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "e845ac7c3b1c89f7c4ab92b59d24e268a40d22ec3565041ee267701aabafdd1f",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "mobile_vr",
+      "enabled_option": false,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "ae479a0d1b50249fb9df119638c11b6d3e64702b6f512db412d3c421ecc8a0a2",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "mono",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "31368c2e3e9da4eed6e1d643ad6eebd0aea077d17ab4ab743ad1bf87edddc4e6",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "mp3",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "1fac0f2ad756dec322cd1583338a3500af9db30ca18417af50c99ad50f78ad2a",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "msdfgen",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "1afa0bfa4cd1ed566748c92df02abae764f5585c74b5979836a76235971e8f04",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "multiplayer",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "98da0433c19b5931bcbf498dfbeefed2c0b65de0f43d5bbc386bfb41f27d0af6",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "navigation_2d",
+      "enabled_option": false,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "8e3083f9aae197c01bd0287d80cc76a10239bf5d538b29fb629fbe4b5b498f21",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "navigation_3d",
+      "enabled_option": false,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "4b5197eb4e81c2769c47ebd29ae40c879d75c20c3f92c10d95694191c9b49f87",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "noise",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "3609ff7971b1ca4d96a38b0aa0ef2d9fe341186c2d2813e13ce6ee90206105c2",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "objectdb_profiler",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "d8643279400149eca650782aa54bdc99c7a684d0c4b5ca558fff5ed33de814b9",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "ogg",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "1e9d230eb2ef938e27f03e0128b62c2024b408cb97b44fb92bcbfc1a94087f2c",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "openxr",
+      "enabled_option": false,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "6c9a9ac6b2d9396fe400167fb2642eaa97744a9c11f40388447d75d272c29f97",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "raycast",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "0872af94d0f593ee71031749877c436f5e686c9aec57d56d850a13760b73a1b2",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "regex",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "d23342572c26a5ef82249980c498c5b9e8850aeea26871a126e18d9df8a0244e",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "svg",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "b5aef0161d51ee13679917aaf5f2d3f690fb627b3bdab2cfdcc6570ec91c58a4",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "text_server_adv",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "33b12f1c1a9f60c07cd549c8d880e9a11603b01b8e764feda7664ab49408e518",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "text_server_fb",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "b43f9b00e3f13825ea183351d41502033ce3853b95bc36d1f7cf17b51cb1ca16",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "tga",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "theora",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "eb97f5cf46667ea3190522d632610cbb4ee06b1d8cb58273d4b328fb7b28b827",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "tinyexr",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "upnp",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "3981d4dd748199ee6cd931bc3f6edb768682beb2428374887ff99052e94af683",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "vhacd",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "f5307daa7374fe6cba2f1944308a53bc3c149c8c4cefb0c208b0becddc780a52",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "visual_shader",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "ece70b08aa05087ece102f9783b58b747cab3fed008a2e2d9e463c02084e5bb6",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "vorbis",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "44096c6a0b493d77f52e70a0e228f95ade3afd0fae6759dd42ad40250b4d0d86",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "webp",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "cb63fcfb37b9f3cc775d166a98806d96d3215372c70c1a1610f6030e708d3117",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "webrtc",
+      "enabled_option": false,
+      "can_build_web_release": true,
+      "expected_enabled": false,
+      "config_sha256": "c6bd9ca5f8b1e866c37ee16baeec4ad1b4720716137d4c4503f185fc5e2a1da7",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "websocket",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "c1f2419ac93a50ede07b3ff96c9e9c3aeaad6fb3b891e92c208ff3b88c37ee0b",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    },
+    {
+      "module": "webxr",
+      "enabled_option": false,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "fec8bfc5d23243b654aa2394ff01a98b3af4e32392905afa8feb7b31eeba73db",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": true,
+      "decision": "explicit_remove"
+    },
+    {
+      "module": "xatlas_unwrap",
+      "enabled_option": true,
+      "can_build_web_release": false,
+      "expected_enabled": false,
+      "config_sha256": "53202f2e83a926a34f429a37a2c49f94201a6fa66ce14575fb194c651a9fc67b",
+      "baseline_expected_enabled": false,
+      "removed_from_baseline": false,
+      "decision": "standard_default"
+    },
+    {
+      "module": "zip",
+      "enabled_option": true,
+      "can_build_web_release": true,
+      "expected_enabled": true,
+      "config_sha256": "050814db8a4b08ae5a95f35744ade17cbb0895ced371b2b50c88d06eeca133bd",
+      "baseline_expected_enabled": true,
+      "removed_from_baseline": false,
+      "decision": "explicit_keep"
+    }
+  ],
+  "expected_counts": {
+    "baseline": 46,
+    "reduced": 20,
+    "removed_from_baseline": 26
+  },
+  "unchanged_web_defaults": [
+    {
+      "name": "vulkan=False",
+      "source": {
+        "path": "platform/web/detect.py",
+        "sha256": "9b3ead90fddaab15f2ce647db54421e647553887d023b1842365dbb7863d08e6",
+        "matching_lines": [
+          83
+        ]
+      }
+    },
+    {
+      "name": "module_raycast_enabled=False",
+      "source": {
+        "path": "platform/web/detect.py",
+        "sha256": "9b3ead90fddaab15f2ce647db54421e647553887d023b1842365dbb7863d08e6",
+        "matching_lines": [
+          85
+        ]
+      }
+    },
+    {
+      "name": "optimize=size",
+      "source": {
+        "path": "platform/web/detect.py",
+        "sha256": "9b3ead90fddaab15f2ce647db54421e647553887d023b1842365dbb7863d08e6",
+        "matching_lines": [
+          93
+        ]
+      }
+    }
+  ],
+  "default_physics_evidence": {
+    "path": "modules/godot_physics_3d/register_types.cpp",
+    "sha256": "669abbb907027d09b52cf04bca67813265b2adf3e90a7476962e4d991a800b27",
+    "matching_lines": [
+      57
+    ]
+  },
+  "core_nodes_server_gates": [
+    {
+      "path": "scene/2d/SCsub",
+      "sha256": "c5c47d97a331cb9e9bf3af33bf43bdc9b1ae2b96090b446625adf8b27bbd84d7"
+    },
+    {
+      "path": "scene/3d/SCsub",
+      "sha256": "cb5c52d4c5e2ab90cd7e51d366bf20cebc4848066bc687bffb3fd3bfa6c7d760"
+    },
+    {
+      "path": "servers/SCsub",
+      "sha256": "0220362bcd60af25db6db1599b3bfa8d13c6572d6f1d397fd1b85125dc7dad33"
+    }
+  ],
+  "project_evidence": [
+    {
+      "path": "game/presentation/openspades_extensions.gd",
+      "sha256": "fbef6e7132df35d1faf049338f1afbba011cee8a06c1d57d8913d58eed5b5fc5",
+      "matching_lines": {
+        "ZIPReader.new()": [
+          198
+        ],
+        "AudioStreamOggVorbis.load_from_buffer": [
+          332
+        ],
+        "GLTFDocument.new()": [
+          339
+        ],
+        "GLB images must be embedded PNGs": [
+          435
+        ],
+        "register_skin": [
+          448
+        ]
+      }
+    },
+    {
+      "path": "game/presentation/openspades_effects.gd",
+      "sha256": "c727df743b8c9c0504fb72124b8cc1d1a85a709a91018bba9a3f56ccc4ba2193",
+      "matching_lines": {
+        "FastNoiseLite.new()": [
+          59
+        ]
+      }
+    },
+    {
+      "path": "game/world/planar_reflection.gd",
+      "sha256": "538c1082a80d6f904ed00c9def9be1b871ddaf725470276931e4ebd19e0b1361",
+      "matching_lines": {
+        "RegEx.new()": [
+          351
+        ]
+      }
+    },
+    {
+      "path": "game/network/ws_transport.gd",
+      "sha256": "ab2b6d78dcfc22fca4352f0118d1eda37faa1a66bb3bec6044d017e0938dcbcc",
+      "matching_lines": {
+        "WebSocketPeer.new()": [
+          92
+        ]
+      }
+    },
+    {
+      "path": "game/main.gd",
+      "sha256": "c27927e3ee81d39f671e6aa4cdab59086b0ab214a7e7ef4aef675ee5aee1ede4",
+      "matching_lines": {
+        "JavaScriptBridge.create_callback": [
+          160,
+          497,
+          705,
+          748
+        ],
+        "JavaScriptBridge.js_buffer_to_packed_byte_array": [
+          539
+        ]
+      }
+    },
+    {
+      "path": "game/ui/lab_hud.gd",
+      "sha256": "32b550cce0e660c372b84afe6b0ab423aa76495583218fd6dfbddd3ce71c4c0d",
+      "matching_lines": {
+        "RichTextLabel.new()": [
+          282
+        ],
+        "ColorPickerButton.new()": [
+          488,
+          1655
+        ]
+      }
+    },
+    {
+      "path": "game/ui/network_menu.gd",
+      "sha256": "db6f824971545c690c561dfce70806d233e2d64d18177f8482bdd6912ce72a32",
+      "matching_lines": {
+        "ItemList.new()": [
+          116
+        ]
+      }
+    },
+    {
+      "path": "game/ai/tdm_voxel_navigation.gd",
+      "sha256": "f28c2d6f668a317ecf5d91d26edac3eb8bad2681c7e1a1933494faebb55d2b23",
+      "matching_lines": {
+        "extends RefCounted": [
+          2
+        ],
+        "MAX_EXPANSIONS": [
+          6,
+          134,
+          166,
+          212
+        ],
+        "Dictionary[Vector2i, float]": [
+          12,
+          129
+        ]
+      }
+    },
+    {
+      "path": "game/assets/openspades/fonts/Gfx/Fonts/AlteDIN1451.ttf.import",
+      "sha256": "084d704feb6597a6e8d73df8ebb8d61cec6dbef27b241fdb3d5171aecac3b8bc",
+      "matching_lines": {
+        "allow_system_fallback=true": [
+          22
+        ]
+      }
+    },
+    {
+      "path": "game/project.godot",
+      "sha256": "88d0d9681cd53a36dc786d18966d7ea625bef72ec4338916e406290509d3b516",
+      "matching_lines": {
+        "gl_compatibility": [
+          17,
+          18
+        ]
+      }
+    }
+  ],
+  "import_evidence": {
+    "png_descriptors_total": 296,
+    "active_png_texture_import_descriptors": 295,
+    "all_active_compress_mode": 0,
+    "skipped": [
+      "game/assets/openspades/images/Gfx/Fonts/100-unifont.png.import"
+    ],
+    "runtime_texture_format": "PNG",
+    "runtime_glb_embedded_image_format": "PNG",
+    "runtime_sound_format": "Ogg Vorbis"
+  },
+  "protected_contracts": [
+    "3D Compatibility rendering and physics",
+    "full advanced GUI and bitmap/TrueType/CJK text",
+    "all original weapon/tool/player resources",
+    "dynamic attributed ZIP packs and trusted skin factories",
+    "static embedded-PNG GLB imports",
+    "WAV PCM and Ogg Vorbis playback",
+    "JavaScript upload/download/input/fullscreen bridge",
+    "raw WebSocket/WSS",
+    "FastNoiseLite effects",
+    "project voxel bot navigation"
+  ],
+  "limits": [
+    "No extra savings claimed for features already disabled by standard Web release configuration.",
+    "Additional accepted image/audio/model formats or physics/extensions/script resource-pack contracts require re-audit.",
+    "Static audit does not establish runtime rendering/input/audio/performance/physical-device/full-port acceptance.",
+    "Actual compiled module header, export and browser-probe results belong to coordinator build evidence.",
+    "The removed high-level multiplayer module changes SceneTree default interface to the core MultiplayerAPIExtension fallback. Actual-scene initialization and raw WebSocket roundtrip must be checked on the compiled template; static source proof alone is not browser acceptance."
+  ],
+  "core_multiplayer_fallback_evidence": [
+    {
+      "path": "scene/main/multiplayer_api.cpp",
+      "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+      "matching_lines": [
+        47,
+        306
+      ]
+    },
+    {
+      "path": "scene/main/multiplayer_api.cpp",
+      "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+      "matching_lines": [
+        51
+      ]
+    },
+    {
+      "path": "scene/main/multiplayer_api.cpp",
+      "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+      "matching_lines": [
+        321
+      ]
+    },
+    {
+      "path": "scene/main/multiplayer_api.cpp",
+      "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+      "matching_lines": [
+        337
+      ]
+    },
+    {
+      "path": "scene/main/multiplayer_api.cpp",
+      "sha256": "932e090520d0aae05f1a48337687a9672c048c21b454d1e907499f1eee344270",
+      "matching_lines": [
+        343
+      ]
+    },
+    {
+      "path": "scene/main/scene_tree.cpp",
+      "sha256": "eed6dbff323344efff19f2de6763705aff062a76e00fd7cbe42a4ee849b7e5a4",
+      "matching_lines": [
+        2100
+      ]
+    }
+  ]
+}

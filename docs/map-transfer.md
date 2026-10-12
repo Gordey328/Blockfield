@@ -1,5 +1,9 @@
 # Ordered map transfer and transaction assembly
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/network/map_transfer.gd` supplies pure `BlockfieldMapTransfer`, `TransactionAssembler`, `BulkWindow`, `BaselineSender`, `DeltaSender` and incremental preparation helpers using [BlockfieldProtocol](network-protocol.md) and `VoxelData`. It has no socket, scene, timer, renderer, preference or active-world reference. It prepares a joining map independently and emits it only at a verified barrier. The separate Runtime and ClientReplica integrate authentication, actor snapshots and installation; deployment/browser acceptance remain separate from this helper.
 
 ## Receiver API

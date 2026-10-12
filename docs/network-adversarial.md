@@ -1,5 +1,9 @@
 # Native adversarial network acceptance
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `tests/network/test_network_adversarial.gd` drives the current production ServerRuntime, ClientReplica, Protocol16 families, EventsCodec, MapTransfer, HitHistory and Match through real native loopback WebSocket connections. Each scenario starts ephemeral game/bulk TCP listeners and releases every listener/peer afterward. It never instantiates Main, renderer, audio, settings or an external service.
 
 There are two client types: the actual `BlockfieldClientReplica`, and a bounded two-socket probe that decodes the same typed packets and applies complete transactions. The probe can delay bulk polling, incremental private map validation or READY, inspect received wire events/snapshots, send explicit old admitted input ticks, and stop polling entirely. It has bounded captured effects/packets/errors and never supplies authoritative actor positions, damage or map results. Trusted fixture setup changes authority state directly when a deterministic pose or committed terrain receipt is needed; those operations are explicitly separate from client packets.

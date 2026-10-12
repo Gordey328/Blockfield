@@ -297,7 +297,6 @@ func _build_home() -> void:
 	utilities.columns = 2
 	utilities.add_theme_constant_override("h_separation", 8)
 	copy.add_child(utilities)
-	utilities.add_child(_button("Multiplayer", _ui("Мультиплеер", "Multiplayer"), func() -> void: _request_utility("network")))
 	utilities.add_child(_button("Settings", _ui("Настройки", "Settings"), func() -> void: _request_utility("settings")))
 	if not _mobile:
 		copy.add_child(_label(_ui("Локальная игра · 1 игрок и 5 ботов", "Offline play · 1 player and 5 bots"), 13, CombatTheme.MUTED))

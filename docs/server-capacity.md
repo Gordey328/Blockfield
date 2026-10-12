@@ -1,5 +1,9 @@
 # Native server capacity investigation
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 Date: 2026-10-10. This is a measured development baseline, **not a supported
 player-count or sustained 60 Hz guarantee**. The original c4/contended baseline
 and later same-checkpoint comparisons are separate sections. Production files were read-only;

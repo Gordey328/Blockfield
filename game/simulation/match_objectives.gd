@@ -65,7 +65,7 @@ func step_fixed(tick: int, actors: Array[SharedPlayerState]) -> Array[Dictionary
 	if winning_team>=0: return RULES.frozen(events)
 	var ordered: Array[SharedPlayerState] = actors.duplicate()
 	ordered.sort_custom(func(a: SharedPlayerState,b: SharedPlayerState):return a.player_id<b.player_id)
-	# Death, disconnect and spectator/team transitions must drop a carrier once.
+	# Death, removal and spectator/team transitions must drop a carrier once.
 	for flag: Dictionary in flags:
 		if int(flag.carrier)<0: continue
 		var carrier: SharedPlayerState
@@ -84,7 +84,7 @@ func step_fixed(tick: int, actors: Array[SharedPlayerState]) -> Array[Dictionary
 	return RULES.frozen(events)
 
 func _eligible(actor: SharedPlayerState) -> bool:
-	return actor.match_epoch==epoch and actor.connected and actor.is_alive()
+	return actor.match_epoch==epoch and actor.is_alive()
 
 func _step_ctf(actor: SharedPlayerState,tick: int) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []

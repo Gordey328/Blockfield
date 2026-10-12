@@ -29,7 +29,12 @@ static func entries() -> Array[Dictionary]:
 			"description_ru": "Воксельная версия Mirage: улицы, дворы и разрушаемые укрытия. Режим тренировки.",
 			"description_en": "Voxel Mirage: streets, courtyards and destructible cover. Training mode.",
 			"modes": training_modes.duplicate(), "resource": "res://assets/maps/csgo_mirage.bfmap",
-			"preview": PREVIEW_ROOT + "map_mirage.png"}
+			"preview": PREVIEW_ROOT + "map_mirage.png"},
+		{"id": "dust2", "name_ru": "Dust2", "name_en": "Dust2",
+			"description_ru": "Воксельная версия Dust2 с крупными разрушаемыми блоками. Режим тренировки.",
+			"description_en": "Voxel Dust2 with large destructible blocks. Training mode.",
+			"modes": training_modes.duplicate(), "resource": "res://assets/maps/dust2.bfmap",
+			"preview": PREVIEW_ROOT + "map_dust2.png"}
 	]
 
 static func available_for(mode: String) -> Array[Dictionary]:

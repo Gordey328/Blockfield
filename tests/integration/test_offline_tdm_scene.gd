@@ -1,5 +1,5 @@
 extends SceneTree
-## Actual Main/HUD/controller, fixed authority and five AI actors; no socket server.
+## Actual Main/HUD/controller, local fixed simulation and five AI actors.
 ## godot --headless --path game --fixed-fps 60 --script ../tests/integration/test_offline_tdm_scene.gd
 const TDM_SCENE = preload("res://scenes/offline_tdm.tscn")
 const LAB_SCENE = preload("res://scenes/main.tscn")
@@ -71,7 +71,7 @@ func owner() -> SharedPlayerState:
 
 func _run() -> void:
 	seed(9347)
-	for path: String in ["user://settings.cfg", "user://servers.cfg"]:
+	for path: String in ["user://settings.cfg"]:
 		var exists := FileAccess.file_exists(path)
 		before[path] = {"exists": exists, "bytes": FileAccess.get_file_as_bytes(path) if exists else PackedByteArray()}
 	app = TDM_SCENE.instantiate()
@@ -108,7 +108,7 @@ func _run() -> void:
 
 func startup_and_input() -> void:
 	var diagnostics: Dictionary = app.session.get_diagnostics()
-	check(app.offline_tdm_mode and not app.network_mode and app.network_client == null, "TDM scene starts serverless without a network client")
+	check(app.offline_tdm_mode and app.session is OfflineTDMSession, "TDM scene starts with its local shared simulation")
 	check(app.session.mode == "tdm" and app.session.simulation.actors.size() == 6, "actual scene admits one human and five bots to the shared authority")
 	check(diagnostics.bot_count == 5 and diagnostics.team_counts == [3, 3], "roster is exactly three versus three")
 	check(app.session.targets.size() == 5 and app._target_nodes.size() == 5, "presentation has five bot soldiers and no lab display actors")
@@ -284,7 +284,7 @@ func normal_lab_regression() -> void:
 	app = LAB_SCENE.instantiate()
 	root.add_child(app)
 	await frames(3)
-	check(not app.offline_tdm_mode and not app.network_mode and app.network_client == null, "ordinary offline lab still opens without TDM or network transport")
+	check(not app.offline_tdm_mode and app.session is LocalSession, "ordinary offline lab still opens with its local adapter")
 	check(app.session.mode == "sandbox" and app.session.targets.size() == 6 and app._target_nodes.size() == 6, "normal lab preserves its six demonstration soldiers")
 	check(app.hud.is_menu_open() and not app.player.controls_enabled, "normal lab preserves its entry menu")
 	await cleanup_scene()

@@ -30,7 +30,7 @@ func _run() -> void:
 	view.set_selection(3,2)
 	check(view._requested_tool==0 and view._requested_weapon==1 and view._tool==2 and raises.is_empty(),"compatibility selection calls cannot overwrite mirrored authority or emit raise audio")
 	view.set_animations_enabled(false);view.update_pose(.5,false,false,true,0)
-	check(is_equal_approx(view.get_aim_down_state(),.4) and is_equal_approx(view.get_sprint_state(),.25) and is_equal_approx(view._raise_raw,.5),"animations preference cannot overwrite network raw state or native gates")
+	check(is_equal_approx(view.get_aim_down_state(),.4) and is_equal_approx(view.get_sprint_state(),.25) and is_equal_approx(view._raise_raw,.5),"animations preference cannot overwrite shared simulation state or native gates")
 	var before:=view._simulation_state.duplicate(true)
 	var invalid: Array[Dictionary]=[]
 	var missing:=_state();missing.erase("tool_raise");invalid.append(missing)

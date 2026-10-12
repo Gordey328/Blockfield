@@ -1,5 +1,9 @@
 # Pure client prediction and remote poses
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `game/network/client_prediction.gd` implements `ClientPrediction`, a `RefCounted` using [shared player rules](player-rules.md) and [VoxelData](voxel-data.md). It has no socket, Input singleton, scene, renderer, physics-server or audio dependency. Runtime/wire decoding, fixed-clock scheduling, authoritative match simulation and presentation adapters are separate. These unit checks do not establish a connected multiplayer game or cross-runtime/browser replay acceptance.
 
 ## Owner state and commands

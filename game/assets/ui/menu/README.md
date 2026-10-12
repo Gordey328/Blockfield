@@ -27,6 +27,8 @@ seconds on a desktop; voxel decoding and chunk meshing dominate that time.
 - Mirage uses the already approved bundled `game/assets/maps/csgo_mirage.bfmap`.
   Its supplied-source provenance and licensing limitations remain in
   `game/assets/maps/README.md`. A screenshot does not relicense the source map.
+- Dust2 uses the user-approved bundled `game/assets/maps/dust2.bfmap`; its
+  Teardown provenance and source restrictions remain in the same map notice.
 
 The bake temporarily disables chunk distance culling for inspection cameras;
 the distributed gameplay rendering and simulation are unchanged.

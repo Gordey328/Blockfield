@@ -1,5 +1,9 @@
 # Blockfield binary protocol v1
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 Implementation: `game/network/protocol.gd`, `class_name BlockfieldProtocol`. This transport-independent codec is used by the native authoritative Runtime and rendered ClientReplica. Connection ownership, joining and authority belong to their separate modules. The offline lab remains independent. This document describes actual bytes; architectural decisions are in ADR0005/0006.
 
 ## API and ownership

@@ -1,5 +1,9 @@
 # Stable actor identities across match reset
 
+> Historical pre-removal design/evidence. Multiplayer was withdrawn on2026-10-12
+> under [ADR0031](decisions/0031-offline-only-game.md). Deleted networking paths
+> and server instructions below do not apply to the current offline game.
+
 `MatchSimulation.add_actor(name, team=2, seed_value=1, initial_feet=Vector3.INF, actor_id=0)` has an optional trusted identity path for the server coordinator. It is not a client request or a new wire field. Zero chooses the automatic allocator; an explicit ID must be a positive u32 never previously issued in the current epoch. Existing calls preserve their spectator/default source behavior.
 
 The automatic allocator advances to `max(previous_next, assigned_id + 1)` after successful admission. Restoring IDs in any order preserves gaps and avoids automatic collisions. Assigning `4294967295` leaves the signed64 sentinel `4294967296`: automatic admission then fails instead of wrapping to actor0. A trusted unused lower ID can still be admitted. Removed actor IDs remain reserved until `configure` installs a new epoch. Active registry capacity remains 32; IDs do not bypass that limit. The issued-ID set grows with successful admissions over the epoch, independently of the active registry, to prevent stale identities being reassigned.
