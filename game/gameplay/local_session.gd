@@ -109,6 +109,8 @@ var _next_grenade_id: int = 1
 var _resupply_cooldown: float = 0.0
 var _grenade_release_pending: bool = false
 var _trigger_held := false
+var arsenal: ArsenalRuntime
+var arsenal_loadout: Dictionary = {}
 
 
 func _ready() -> void:
@@ -563,6 +565,7 @@ func apply_target_damage(target_id: int, amount: float, hit_part: String = "tors
 
 
 func apply_grenade_damage(position: Vector3) -> void:
+	if arsenal != null: arsenal.damage_deployables_at(position, LOCAL_GRENADE_DAMAGE_RADIUS, 120.0)
 	# Authored offline policy: quadratic radial falloff; occlusion belongs to world.
 	for target in targets:
 		var target_position: Vector3 = target["position"]
@@ -592,6 +595,7 @@ func _update_targets(delta: float) -> void:
 				changed.emit()
 		elif bool(target["moving"]):
 			var speed := 2.0 if str(target["state"]) == "sprinting" else 1.0
+			if arsenal != null: speed *= arsenal.movement_scale(int(target.id))
 			target["phase"] = float(target["phase"]) + delta * speed
 			var spawn_position: Vector3 = target["spawn_position"]
 			target["position"] = spawn_position + Vector3(sin(float(target["phase"])) * 3.0, 0.0, 0.0)

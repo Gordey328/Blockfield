@@ -1,5 +1,13 @@
 # Accepted iterations
 
+## Accepted arsenal addition — 2026-10-12
+
+The user requests about twenty diverse fun weapons, bombs and stratagems after
+the preceding chat completes. The twenty original mechanisms, loadout and actual
+Web acceptance are in [arsenal plan](arsenal-plan.md) and [ADR0036](decisions/0036-authored-arsenal.md).
+Finished Rush is preserved as the base. This addition has separate evidence and
+does not replace original weapon/tool requirements or full-port acceptance.
+
 ## Market-oriented iteration — 2026-10-12
 
 The user requests research of mobile and Web game trends and authorizes changing

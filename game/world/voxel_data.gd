@@ -3,6 +3,9 @@ extends RefCounted
 ## Shared authority/query map. No scene, renderer, physics server or audio dependency.
 ## Canonical solid0x01RRGGBB; air0. Index is Y-fast in Godot axes.
 
+## Observers may invalidate temporary ownership; they must not apply these edits again.
+signal cells_committed(changes: Array)
+
 const VXL = preload("res://world/vxl_reader.gd")
 const DIRECTIONS: Array[Vector3i] = [Vector3i.DOWN,Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK,Vector3i.UP]
 const MAX_UINT32: int = 0xffffffff
@@ -19,6 +22,8 @@ var map_sequence: int = 0
 var last_tick: int = 0
 var read_only: bool = false
 var last_error: String = ""
+## Local adoption identity, including a same-epoch/same-dimension replacement.
+var generation: int = 0
 var _journal: Array[Dictionary] = []
 var _journal_bytes: int = 0
 var _journal_changes: int = 0
@@ -44,6 +49,7 @@ func clear(size: Vector3i, match_epoch: int = 1) -> Error:
 	empty.resize(size.x*size.y*size.z)
 	dimensions = size
 	blocks = empty
+	generation += 1
 	epoch = match_epoch
 	map_sequence = 0
 	last_tick = 0
@@ -497,7 +503,33 @@ func _commit(changes: Array, groups: Array, metadata: Dictionary) -> Dictionary:
 	var transaction: Dictionary = {"ok":true,"error":"","changed":changed,"epoch":epoch,"map_sequence":map_sequence,"transaction_id":int(metadata.get("transaction_id",map_sequence)),"tick":last_tick,"actor_id":int(metadata.get("actor_id",0)),"action_id":int(metadata.get("action_id",0)),"dimensions":dimensions,"changes":changes,"collapse_groups":groups}
 	if changed:
 		_retain(transaction)
+		cells_committed.emit(changes)
 	return transaction
+
+func commit_without_collapse(changes: Array[Dictionary], metadata: Dictionary = {}) -> Dictionary:
+	# Only the cooperative ArsenalTerrain authority uses this seam. Source weapons
+	# retain remove_blocks/set_block and their original synchronous collapse order.
+	var error: String = _metadata_error(metadata)
+	if not error.is_empty():
+		return _failure(error)
+	if changes.size() > 256:
+		return _failure("cooperative transaction exceeds 256 changes")
+	var seen: Dictionary[Vector3i, bool] = {}
+	for change: Dictionary in changes:
+		if typeof(change.get("cell")) != TYPE_VECTOR3I or typeof(change.get("before")) != TYPE_INT or typeof(change.get("after")) != TYPE_INT or typeof(change.get("flags")) != TYPE_INT:
+			return _failure("invalid cooperative change fields")
+		var cell: Vector3i = change.cell
+		if not is_in_bounds(cell) or cell.y == 0 or seen.has(cell) or get_block(cell) != change.before:
+			return _failure("cooperative before-color or cell conflict")
+		if not valid_color(change.before) or not valid_color(change.after) or change.before == change.after or change.flags not in [0, 1]:
+			return _failure("invalid cooperative colors or flags")
+		if change.flags == 1 and (change.before == 0 or change.after != 0 or cell.y <= 1):
+			return _failure("invalid cooperative collapse")
+		seen[cell] = true
+	var accepted: Array = []
+	for change: Dictionary in changes:
+		_record(change.cell, change.after, accepted, change.flags == 1)
+	return _commit(accepted, _groups_from_flags(accepted), metadata)
 
 func apply_transaction(transaction: Dictionary) -> Dictionary:
 	if read_only or blocks.size() != dimensions.x*dimensions.y*dimensions.z:
@@ -537,6 +569,7 @@ func apply_transaction(transaction: Dictionary) -> Dictionary:
 	last_tick = transaction.tick
 	var accepted: Dictionary = {"ok":true,"error":"","changed":true,"epoch":epoch,"map_sequence":map_sequence,"transaction_id":transaction.transaction_id,"tick":last_tick,"actor_id":transaction.actor_id,"action_id":transaction.action_id,"dimensions":dimensions,"changes":changes,"collapse_groups":_groups_from_flags(changes)}
 	_retain(accepted)
+	cells_committed.emit(changes)
 	return accepted
 
 func _groups_from_flags(changes: Array) -> Array:
@@ -623,6 +656,7 @@ func frozen_copy() -> RefCounted:
 	frozen.epoch = epoch
 	frozen.map_sequence = map_sequence
 	frozen.last_tick = last_tick
+	frozen.generation = generation
 	frozen.read_only = true
 	return frozen
 
@@ -686,6 +720,7 @@ func load_snapshot_bytes(bytes: PackedByteArray, size: Vector3i, match_epoch: in
 		decoded[i] = value
 	dimensions = size
 	blocks = decoded
+	generation += 1
 	epoch = match_epoch
 	map_sequence = sequence
 	last_tick = tick
@@ -703,6 +738,7 @@ func load_vxl_bytes(bytes: PackedByteArray, match_epoch: int = 1) -> Error:
 		return decoded.error
 	dimensions = decoded.size
 	blocks = decoded.blocks
+	generation += 1
 	epoch = match_epoch
 	map_sequence = 0
 	last_tick = 0

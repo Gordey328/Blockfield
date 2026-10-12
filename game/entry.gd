@@ -10,6 +10,7 @@ var _warm_resources: Array[Resource] = []
 var _warm_paths: Array[String] = []
 var _warm_cursor: int = 0
 var _warm_turns: int = 0
+var _arsenal_panel: ArsenalPanel
 func _ready() -> void:
 	var scene: PackedScene = load("res://scenes/game_shell.tscn") as PackedScene
 	if scene == null:
@@ -74,6 +75,9 @@ func _process(_delta: float) -> void:
 func _launch_game(configuration: Dictionary) -> void:
 	var checked: Dictionary = GameMapCatalog.validate(configuration)
 	if not checked.ok: return
+	var equipment: Dictionary = ArsenalLoadout.load_saved()
+	if bool(equipment.enabled) and str(checked.configuration.mode) in ["training", "survival"]:
+		checked.configuration.arsenal = equipment.loadout.duplicate(true)
 	# Let the shell's pending/loading state render before loading the game scene.
 	# Two process boundaries cover requests emitted during the current input turn.
 	await get_tree().process_frame
@@ -108,6 +112,18 @@ func _exit_tree() -> void:
 	_warm_resources.clear()
 
 func _open_utility(kind: String) -> void:
+	if kind == "arsenal":
+		if not is_instance_valid(_arsenal_panel):
+			_arsenal_panel = ArsenalPanel.new()
+			add_child(_arsenal_panel)
+			_arsenal_panel.set_home_mode(true)
+			_arsenal_panel.loadout_changed.connect(func(loadout: Dictionary) -> void: ArsenalLoadout.save(loadout))
+			_arsenal_panel.item_selected.connect(func(id: String) -> void:
+				if id == "source": ArsenalLoadout.save(ArsenalLoadout.load_saved().loadout, false))
+		_arsenal_panel.set_loadout(ArsenalLoadout.load_saved().loadout)
+		_arsenal_panel.set_enabled(true)
+		_arsenal_panel.show_catalog(true)
+		return
 	if kind not in ["settings", "lab"]: return
 	get_tree().set_meta("blockfield_utility", kind)
 	LabInputBindings.release_actions()

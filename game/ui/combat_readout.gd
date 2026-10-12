@@ -2,6 +2,7 @@ class_name CombatReadout
 extends Control
 ## Small, readable edge islands. All values come from the existing adapter.
 var session: LocalSession
+var arsenal_state: Dictionary = {}
 var compact: bool = false
 var score_text: String = ""
 var survival_text: String = ""
@@ -25,12 +26,20 @@ func get_display_state() -> Dictionary:
 	var weapon_label: String = OpenSpadesLocalization.text(str(session.get_weapon_info().name), "Client").to_upper()
 	var ru: bool = TranslationServer.get_locale().begins_with("ru")
 	if tool != 2: weapon_label = (["ЛОПАТА", "БЛОКИ", "", "ГРАНАТА"] if ru else ["SPADE", "BLOCKS", "", "GRENADE"])[tool]
-	return {"health": session.health, "blocks": session.blocks, "grenades": session.grenades,
+	var result: Dictionary = {"health": session.health, "blocks": session.blocks, "grenades": session.grenades,
 		"ammo": session.magazine, "reserve": session.reserve, "weapon_label": weapon_label,
 		"tool": tool, "reload_progress": session.get_reload_progress() if session.is_reloading else -1.0,
 		"ammo_warning": tool == 2 and session.magazine <= maxi(1, int(session.get_weapon_info().clip_size) / 4),
 		"live": session.health > 0 and session.team < 2,
 		"cook": maxf(0.0, 3.0-session.grenade_cook_time) if session.is_cooking_grenade else -1.0}
+	if tool == 2 and not arsenal_state.is_empty() and bool(arsenal_state.get("enabled", false)):
+		var item: Dictionary = ArsenalCatalog.get_item(str(arsenal_state.get("selected_item", "")))
+		if not item.is_empty():
+			result.weapon_label = str(item.get("name_ru" if ru else "name_en", "")).to_upper()
+			result.ammo = int(arsenal_state.get("magazine", 0)) if str(item.category) == "primary" else int((arsenal_state.get("stock", {}) as Dictionary).get(str(item.id), 0))
+			result.reserve = int(arsenal_state.get("reserve", 0)) if str(item.category) == "primary" else 0
+			result.ammo_warning = int(result.ammo) <= 1
+	return result
 
 func get_panel_rects() -> Array[Rect2]:
 	if compact: return [Rect2(12,size.y-52,180,48),Rect2(size.x-182,size.y-52,170,48)]

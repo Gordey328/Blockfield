@@ -18,6 +18,7 @@ var _launch_status: String = "idle"
 var _launch_in_progress: bool = false
 var _launch_error: String = ""
 var _launch_overlay: CanvasLayer
+var arsenal_coordinator: ArsenalCoordinator
 var _shell_utility: String = ""
 var _match_objective_signature := ""
 var _impact_colors: Dictionary[Vector3i,int] = {}
@@ -264,6 +265,9 @@ func _ready() -> void:
 	hud.set_process(true)
 	hud.set_process_input(true)
 	set_process(true)
+	arsenal_coordinator = ArsenalCoordinator.new()
+	arsenal_coordinator.configure(self)
+	add_child(arsenal_coordinator)
 
 func get_launch_state() -> Dictionary:
 	return {"status": _launch_status, "configuration": _launch_configuration.duplicate(true), "error": _launch_error}
@@ -388,6 +392,7 @@ func _process(delta: float) -> void:
 func _setup_input() -> void:
 	var actions:={"forward":KEY_W,"back":KEY_S,"left":KEY_A,"right":KEY_D,"jump":KEY_SPACE,"crouch":KEY_CTRL,"sprint":KEY_SHIFT,"sneak":KEY_V,"reload":KEY_R,"tool_spade":KEY_1,"tool_block":KEY_2,"tool_weapon":KEY_3,"tool_grenade":KEY_4,"eyedropper":KEY_E,"view_toggle":KEY_F,"map":KEY_N,"scoreboard":KEY_TAB,"pause":KEY_ESCAPE,"chat":KEY_T,"last_tool":KEY_Q,"map_scale":KEY_M,"chat_team":KEY_Y,"chat_log":KEY_H,"hide_hud":KEY_F6,"stats":KEY_F7,"screenshot":KEY_0,"sceneshot":KEY_9,"save_map":KEY_8,"flashlight":KEY_L}
 	actions.merge({"palette_left":KEY_LEFT,"palette_right":KEY_RIGHT,"palette_up":KEY_UP,"palette_down":KEY_DOWN})
+	actions.merge({"arsenal":KEY_B,"arsenal_bomb":KEY_G,"arsenal_strat_one":KEY_Z,"arsenal_strat_two":KEY_C})
 	for action in actions:
 		if not InputMap.has_action(action):InputMap.add_action(action)
 		InputMap.action_erase_events(action)

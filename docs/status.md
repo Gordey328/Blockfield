@@ -1,7 +1,70 @@
 # Project status
 
-Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
+Updated: 2026-10-13 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
+
+## Authored twenty-item arsenal — 2026-10-13 (implementation in progress)
+
+Heartbeat zombie-rush confirms predecessor01a1318f-80f5-7920-8351-2e5776aaf78f
+completed its implementation/browser/Pages turn and closed all specialist leases.
+Managed arsenal-expansion/Blockfield is created from its finished3a39e6445e942855ac202714bbdc8a42cddd3921,
+branch codex/arsenal-expansion. Root fast-forwards origin/dev76eae15→3a39e64,
+pushes and verifies the remote SHA. The dirty primary checkout is not switched
+or reset. Only this task's plan is copied from it; Rush docs/code are retained.
+Godot4.7.2.stable.official.ed1daf0bf and upstream OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned.
+
+Agreed non-overlapping ownership: arsenal_audit owns new catalog/runtime/bridge
+and authority fixture; arsenal_refs owns new view/panel/audio and presentation/UI
+fixtures; arsenal_terrain owns new cooperative terrain helper, additive VoxelData
+seam and world fixture, then new scene/records fixtures. Coordinator owns existing
+session/controller/AI/Main/Entry/HUD/shell/catalog/records/input integration,
+new coordinator/loadout, shared config/build/docs and serial release. Contracts
+are in [ADR0036](decisions/0036-authored-arsenal.md), [arsenal plan](arsenal-plan.md).
+
+All twenty mechanisms are implemented. Integration covers original-fire suppression,
+lab/shared damage, cold/lure commands, pause/card/cleanup, canonical receipts,
+loadout/record separation and pointer safe regions. A04/X01–X20 remain IMPLEMENTED
+until ordinary Web interaction and publication checks finish. Latest authority
+fixture: 158 checks/0 failures; terrain: 812/0; records: 43/0; real Rush scene: 101/0.
+All use the pinned engine. Terrain removes a 24,576-cell unsupported roof in
+145 fixed ticks; observed native max steps 9.119–13.012 ms vary with CPU and do
+not establish browser FPS. Original data 171/0 and ordered source collapse
+7961/0 were checked during the terrain handoff.
+
+Presentation/UI return view/audio 131/0 and panel 178/0, including actual
+ScreenTouch/Drag and CSS layouts, warning admission under saturation and
+first-person-only held geometry. The immediate headless shutdown warning is resolved: the fixture now waits
+1.25 s for AudioServer retirement of clips of at most .85 s, then asserts that
+all four WeakRef playback handles are released. Current import/view/panel logs
+contain no warning or error. All specialist engine leases are returned. Root adds trigger cancellation on lost focus and
+hides the combat bank while unfocused. A seventh fixture exercises actual lab
+fixed ticks independent of rendering, source controls, death/respawn preserving
+the map and foam ownership, and explicit map-generation reset. Its first actual run is 38/1: death stopped the lab host clock, so committed
+foam/removal could not drain. Bridge now advances that life-independent clock
+while input/weapon admission still rejects a dead owner; modal/loading gates
+remain with the coordinator. Authority 158/0 covers real dead-owner foam
+completion. Survival terminal finish now clears per-life ordnance explicitly,
+including deaths after the arsenal step. Current mutable reruns pass authority
+158/0, Rush scene 101/0 and actual lab 38/0. A final review finds the source
+backup class missing from record identity and a pending kit ignored by replay.
+Coordinator now preserves pending kit preferences when selecting the source
+backup and adopts them at the next map/epoch bind. Record fingerprints include
+source class 0–2; fixtures are being extended before the source freeze.
+
+Reviews fixed deferred-crater backpressure, stale same-color replacements,
+orbital/impact cover, source/deployable ray absorption, one zombie blast admission
+before edits, and a render-driven lab clock. Diagnostic failed runs are retained.
+Current logs: .cache/logs/arsenal-authority-clock-{import,runtime}.log,
+arsenal-terrain-guards.log, arsenal-records.log, arsenal-scene-retry5.log,
+test-arsenal-view-audio-final.log and test-arsenal-panel-final.log. Commands are
+pinned Godot --headless --path game --script ../tests/<suite>/<fixture>.gd,
+plus --editor --import --quit. .tools is an executable junction to the completed
+market worktree; game/.godot is a copied import cache. Seven new suites are
+registered in tools/build.py. No arsenal export or publication has run.
+Next: close the final record/replay fixtures, freeze source and run the full
+shared/source regression gate, inspect every item in ordinary desktop/touch Web, publish
+and verify public files/gameplay, then pause the heartbeat.
 
 ## Market-oriented Rush — 2026-10-12 (completed development iteration)
 

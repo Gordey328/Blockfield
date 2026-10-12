@@ -109,6 +109,16 @@ var _match_generation := -1
 var _match_yaw := 0.0
 var _match_pitch := 0.0
 var _queued_touch_motion: Vector2 = Vector2.ZERO
+var arsenal_runtime: ArsenalRuntime
+var arsenal_active: bool = false
+
+func uses_arsenal() -> bool:
+	return arsenal_runtime != null and arsenal_active and session != null and session.current_tool == LocalSession.Tool.WEAPON
+
+func apply_arsenal_impulse(velocity_mps: Vector3) -> void:
+	if not velocity_mps.is_finite(): return
+	_native_velocity += velocity_mps.limit_length(24.0) / 32.0
+	if _motion != null: _motion.native_velocity = _native_velocity
 
 func stop_audio() -> void:
 	# Stop playback explicitly before scene teardown; the audio server owns a
@@ -161,7 +171,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("reload") and session.current_tool==2:
 		_aim_toggled = false
-		session.reload_weapon()
+		if uses_arsenal(): arsenal_runtime.reload()
+		else: session.reload_weapon()
+	if uses_arsenal() and event.is_action_pressed("secondary"):
+		arsenal_runtime.alternate()
+		get_viewport().set_input_as_handled()
+		return
+	if uses_arsenal() and event.is_action_pressed("primary") and str(ArsenalCatalog.get_item(arsenal_runtime.selected_item).get("category", "")) != "primary":
+		arsenal_runtime.apply(arsenal_runtime.selected_item, get_aim_origin(), get_aim_direction())
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("tool_spade"): _select_tool_hotkey(0)
 	if event.is_action_pressed("tool_block"): _select_tool_hotkey(1)
 	if event.is_action_pressed("tool_weapon"): _select_tool_hotkey(2)
@@ -241,6 +260,8 @@ func _physics_process(delta: float) -> void:
 		clear_touch_motion()
 		return
 	_connect_simulation()
+	if lab != null and lab.get("arsenal_coordinator") != null:
+		lab.arsenal_coordinator.prepare_trigger(Input.is_action_pressed("primary"))
 	if session is OFFLINE_TDM:
 		_offline_match_physics(delta)
 		return
@@ -346,7 +367,7 @@ func _physics_process(delta: float) -> void:
 		if allowed:_build_line()
 		_line_start=Vector3i(-1,-1,-1)
 	_block_secondary_held=block_secondary
-	session.set_trigger_held(Input.is_action_pressed("primary") and session.current_tool==2 and allowed)
+	session.set_trigger_held(Input.is_action_pressed("primary") and session.current_tool==2 and allowed and not uses_arsenal())
 	_update_offline_grenade_input(Input.is_action_pressed("primary"))
 	if allowed and session.team < 2:
 		if Input.is_action_pressed("primary"):
@@ -355,7 +376,8 @@ func _physics_process(delta: float) -> void:
 					if not digging: _spade(false)
 				1:
 					if not block_secondary:_build_single()
-				2: _shoot()
+				2:
+					if not uses_arsenal(): _shoot()
 		if digging:
 			_spade(true)
 	if not Input.is_action_pressed("primary") or session.current_tool != 2: _dry_fire_held = false
@@ -396,11 +418,11 @@ func _offline_match_physics(delta: float) -> void:
 			if Input.is_action_pressed("crouch"): buttons |= SHARED_RULES.Buttons.CROUCH
 			if Input.is_action_pressed("sprint"): buttons |= SHARED_RULES.Buttons.SPRINT
 			if Input.is_action_pressed("sneak"): buttons |= SHARED_RULES.Buttons.SNEAK
-			if Input.is_action_pressed("primary"): buttons |= SHARED_RULES.Buttons.PRIMARY
+			if Input.is_action_pressed("primary") and not uses_arsenal(): buttons |= SHARED_RULES.Buttons.PRIMARY
 			var secondary: bool = Input.is_action_pressed("secondary")
 			if session.current_tool == SHARED_RULES.Tool.WEAPON and not hold_aim_down_sight: secondary = _aim_toggled
 			if secondary: buttons |= SHARED_RULES.Buttons.SECONDARY
-			if bool(pending.reload): buttons |= SHARED_RULES.Buttons.RELOAD
+			if bool(pending.reload) and not uses_arsenal(): buttons |= SHARED_RULES.Buttons.RELOAD
 		else:
 			_aim_toggled = false
 		var yaw: float = wrapf(rotation.y,-PI,PI) if owner.is_alive() else owner.yaw
@@ -808,6 +830,10 @@ func _shoot() -> void:
 		# Player::FireWeapon accumulates all pellets into the unnormalized vector.
 		accumulated_direction += Vector3(randf()-randf(), randf()-randf(), randf()-randf()) * spread
 		var direction := accumulated_direction.normalized()
+		if arsenal_runtime != null and session.arsenal != null and arsenal_runtime.damage_deployable(origin, direction, float(info.torso)):
+			var device_point: Vector3 = arsenal_runtime.last_deployable_hit
+			if effects != null: effects.tracer(origin, device_point, session.current_weapon, camera_mode == CameraMode.FIRST_PERSON)
+			continue
 		var map_hit := world.cast_source_ray(origin, direction, 500)
 		var result := raycast_targets(origin,direction,500.0,shot_poses)
 		var chosen := source_weapon_hit(origin,map_hit,result)

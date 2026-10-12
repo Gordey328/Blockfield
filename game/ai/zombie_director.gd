@@ -57,6 +57,8 @@ var _planning_cursor: int = 0
 var _spawn_cursor: int = 0
 var _spawn_checks: int = 0
 var _last_command_tick: int = -2
+var arsenal: ArsenalRuntime
+var arsenal_locked_actors: Array[int] = []
 
 func configure(data: VoxelData, arena: Dictionary, actor_ids: Array[int]) -> void:
 	_data = data
@@ -211,9 +213,29 @@ func commands(simulation: MatchSimulation) -> Dictionary:
 	for brain: Brain in _brains:
 		var actor: SharedPlayerState = simulation.get_actor(brain.actor_id)
 		if actor != null and actor.is_alive():
-			output[brain.actor_id] = _command(brain, actor, owner, simulation, tick)
+			var lure: Vector3 = arsenal.lure_target(actor.motion.physics_eye()) if arsenal != null and brain.actor_id not in arsenal_locked_actors else Vector3.INF
+			var goal: Vector3 = Vector3(lure.x, actor.feet().y, lure.z)
+			if lure.is_finite() and absf(lure.y - actor.feet().y) < 2.0 and not _navigation.has_direct_obstacle(actor.feet(), goal) and _navigation.can_stand(goal):
+				output[brain.actor_id] = _lure_command(brain, actor, goal)
+			else: output[brain.actor_id] = _command(brain, actor, owner, simulation, tick)
 	_last_command_tick = tick
 	return output
+
+func _lure_command(brain: Brain, actor: SharedPlayerState, goal: Vector3) -> PlayerRules.Command:
+	var command: PlayerRules.Command = RULES.Command.new()
+	brain.sequence = maxi(brain.sequence, actor.consumed_input_sequence) + 1
+	command.sequence = brain.sequence
+	command.spawn_generation = actor.spawn_generation
+	command.tool = RULES.Tool.SPADE
+	var direction: Vector3 = _forward_step(actor, _steer(actor, goal)) if actor.feet().distance_squared_to(goal) > 1.5 else Vector3.ZERO
+	var aim: Vector3 = goal - actor.feet()
+	command.yaw = wrapf(actor.yaw + clampf(angle_difference(actor.yaw, atan2(-aim.x, -aim.z)), -TURN_PER_TICK, TURN_PER_TICK), -PI, PI)
+	command.pitch = 0.0
+	var forward: Vector3 = Vector3(-sin(command.yaw), 0, -cos(command.yaw))
+	var right: Vector3 = Vector3(cos(command.yaw), 0, -sin(command.yaw))
+	command.move = Vector2(direction.dot(right), -direction.dot(forward)).limit_length(MOVE_GAIN)
+	brain.state = "decoy"
+	return command
 
 func _reset_life(brain: Brain, actor: SharedPlayerState, tick: int) -> void:
 	brain.generation = actor.spawn_generation

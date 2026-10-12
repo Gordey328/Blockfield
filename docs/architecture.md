@@ -1,6 +1,12 @@
 # Architecture and current contracts
 
 ## Boundaries
+- ArsenalCatalog/Runtime/Bridge provide twenty authored string-ID mechanisms,
+  real local damage/motion and finite fixed-step ordnance, independently of the
+  original weapon enums. ArsenalTerrain commits cooperative guarded edits and
+  collapse; Main presents their canonical receipts once. Coordinator connects
+  Home/loadout, existing fire/touch, pause/choice/restart and separate Rush records.
+  View/panel/audio consume snapshots/intents only. See [ADR0036](decisions/0036-authored-arsenal.md).
 - Rush is a canonical variant of OfflineSurvivalSession, with kill-based run choices
   and actor-scoped firearm/zombie-armor modifiers. Pending choice and unfinished
   launch preparation independently gate fixed simulation and HUD input. RushRecords

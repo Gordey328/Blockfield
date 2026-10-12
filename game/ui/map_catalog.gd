@@ -82,6 +82,10 @@ static func validate(configuration: Dictionary) -> Dictionary:
 		var checked: Dictionary = SURVIVAL_SETTINGS.validate(raw)
 		if not checked.ok: return _invalid(str(checked.error))
 		canonical.survival = checked.settings
+	if configuration.has("arsenal"):
+		if not configuration.arsenal is Dictionary or canonical.mode == "tdm":
+			return _invalid("Arsenal loadout requires training or survival.")
+		canonical.arsenal = ArsenalCatalog.canonical_loadout(configuration.arsenal)
 	return {"ok": true, "error": "", "configuration": canonical}
 
 static func load_survival_settings() -> Dictionary:

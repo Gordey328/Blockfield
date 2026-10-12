@@ -227,9 +227,22 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 	if phase == "active":
 		_advance_spawns()
 	_sync_zombie_loadouts()
+	if _zombie_director != null:
+		_zombie_director.arsenal = arsenal
+		_zombie_director.arsenal_locked_actors.assign(_attacks.keys())
 	var commands: Dictionary = _zombie_director.commands(simulation) if _zombie_director != null else {}
+	if arsenal != null:
+		for id: int in commands:
+			var actor: SharedPlayerState = simulation.get_actor(id)
+			var scale: float = arsenal.movement_scale(id)
+			var zombie_command: PlayerRules.Command = commands[id]
+			zombie_command.move *= scale
+			if actor != null and scale <= 0.0:
+				actor.motion.native_velocity.x = 0.0
+				actor.motion.native_velocity.z = 0.0
 	commands[OWNER_ID] = command
 	simulation.step_fixed(commands)
+	if arsenal != null: arsenal.step()
 	var proposals: Array[Dictionary] = _zombie_director.drain_attack_intents() if _zombie_director != null else []
 	_advance_attacks(proposals)
 	if phase == "preparation":
@@ -248,7 +261,7 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 	_ingest_events(simulation.drain_events())
 	if not owner.is_alive():
 		_finish("defeat", "death")
-	elif phase == "cleanup" and _live_count() == 0 and simulation.grenades.is_empty():
+	elif phase == "cleanup" and _live_count() == 0 and simulation.grenades.is_empty() and (arsenal == null or not arsenal.has_pending()):
 		if _spawned > 0 and not (_wave_spawned == 0 and _spawn_unavailable_since >= 0):
 			_finish("win", "survived")
 		else:
@@ -404,6 +417,11 @@ func _advance_attacks(proposals: Array[Dictionary]) -> void:
 			proposed[id] = proposal
 	for id: int in ZOMBIE_IDS:
 		var actor: SharedPlayerState = simulation.get_actor(id)
+		if actor != null and actor.is_alive() and arsenal != null and arsenal.movement_scale(id) <= 0.0:
+			if _attacks.has(id):
+				_attacks[id].deadline += 1
+				_attacks[id].started += 1
+			continue
 		if actor == null or not actor.is_alive() or not proposed.has(id):
 			_attacks.erase(id)
 			continue
@@ -602,6 +620,9 @@ func _live_count() -> int:
 func _finish(result: String, reason: String) -> void:
 	if finished:
 		return
+	# A bite can end the life after arsenal.step(), and a finished run never
+	# advances again. Cancel per-life ordnance at this terminal boundary itself.
+	if arsenal != null: arsenal.clear()
 	_close_window()
 	finished = true
 	paused = true
@@ -707,6 +728,7 @@ func choose_upgrade(id: String) -> Dictionary:
 		"power": applied = simulation.set_survival_firearm_level(OWNER_ID, _rush_levels.power + 1)
 		"armor": applied = simulation.set_survival_armor_level(OWNER_ID, _rush_levels.armor + 1)
 		"field_kit": applied = simulation.survival_field_kit(OWNER_ID)
+	if applied and id == "field_kit" and arsenal != null: arsenal.refill_primary()
 	if not applied:
 		return {"ok": false, "error": "Upgrade could not be applied"}
 	_rush_levels[id] += 1

@@ -520,7 +520,7 @@ func _update_rush_status() -> void:
 		var record_state: Dictionary = rush.duplicate(true)
 		record_state.finished = true
 		record_state.outcome = survival.outcome
-		var record: Dictionary = RUSH_RECORDS.record(survival.current_weapon, record_state)
+		var record: Dictionary = RUSH_RECORDS.arsenal_record(survival.arsenal_loadout, record_state, str(main._launch_configuration.get("map_id", "crossroads")), RUSH_RECORDS.PATH, survival.current_weapon) if not survival.arsenal_loadout.is_empty() else RUSH_RECORDS.record(survival.current_weapon, record_state)
 		_survival_panel.set_rush_record(record)
 		if not str(record.error).is_empty(): show_notice(_ui("Рекорд не удалось сохранить", "Record could not be saved"))
 
@@ -940,6 +940,11 @@ func _input(event: InputEvent) -> void:
 	if not _binding_action.is_empty():
 		if _capture_binding(event):get_viewport().set_input_as_handled()
 		return
+	if main != null and main.arsenal_coordinator != null and main.arsenal_coordinator.is_catalog_open():
+		if event.is_action_pressed("pause"):
+			main.arsenal_coordinator.panel.close()
+			get_viewport().set_input_as_handled()
+		return
 	if _chat.is_open:
 		if _chat.handle_input(event):get_viewport().set_input_as_handled()
 		return
@@ -978,11 +983,13 @@ func _sync_controls() -> void:
 		var launch: Dictionary = main.get_launch_state()
 		launch_blocked = not (launch.get("configuration", {}) as Dictionary).is_empty() and str(launch.get("status", "idle")) != "ready"
 	player.controls_enabled=_focused and visible and not launch_blocked and not is_menu_open() and not _chat.is_open and not _chat.expanded
+	var arsenal_open: bool = main != null and main.arsenal_coordinator != null and main.arsenal_coordinator.is_catalog_open()
+	if arsenal_open: player.controls_enabled = false
 	if _is_offline_survival() and bool((session as OFFLINE_SURVIVAL).get_rush_state().get("pending", false)):
 		player.controls_enabled = false
 	if _is_offline_tdm():
 		var match_session: OFFLINE_TDM=session as OFFLINE_TDM
-		match_session.paused=not _focused or is_menu_open() or launch_blocked
+		match_session.paused=not _focused or is_menu_open() or launch_blocked or arsenal_open
 		if match_session.finished: player.controls_enabled=false
 	var active:=uses_mobile_controls() and player.controls_enabled
 	if mobile_controls!=null:mobile_controls.set_enabled(active)
@@ -1593,6 +1600,8 @@ func _build_bindings(column: VBoxContainer) -> void:
 	column.add_child(_ui_label("Нажмите кнопку, затем клавишу или кнопку мыши.\nEsc — отмена; Delete / Backspace — убрать назначение. Дубликат снимается.","Click a binding, then press a key or mouse button.\nEsc cancels; Delete / Backspace unbinds. Duplicate bindings are cleared."))
 	var names:= {"forward":"Вперёд|Forward","back":"Назад|Back","left":"Влево|Left","right":"Вправо|Right","jump":"Прыжок / камера|Jump / camera","crouch":"Присесть|Crouch","sprint":"Бег|Sprint","sneak":"Тихий ход|Sneak","primary":"Атака|Attack","secondary":"Прицел / альтернативная атака|Aim / alternate attack","reload":"Перезарядить / перестать следить|Reload / unfollow","last_tool":"Последний инструмент|Last tool","tool_spade":"Лопата|Spade","tool_block":"Блоки|Blocks","tool_weapon":"Оружие|Weapon","tool_grenade":"Граната|Grenade","eyedropper":"Пипетка|Color picker","view_toggle":"Вид камеры|Camera view","map":"Карта|Map","map_scale":"Масштаб карты|Map zoom","scoreboard":"Таблица счёта|Scoreboard","pause":"Меню|Menu","chat":"Глобальный чат|Global chat","chat_team":"Командный чат|Team chat","chat_log":"Журнал чата|Chat history","hide_hud":"Скрыть HUD|Hide HUD","stats":"Статистика|Statistics","screenshot":"Скриншот|Screenshot","sceneshot":"Скриншот сцены|Scene screenshot","save_map":"Сохранить карту|Save map","flashlight":"Фонарик|Flashlight"}
 	for action in LabInputBindings.ACTIONS:
+		if action.begins_with("arsenal"):
+			names[action] = {"arsenal":"Арсенал|Arsenal", "arsenal_bomb":"Бомба арсенала|Arsenal bomb", "arsenal_strat_one":"Поддержка 1|Support 1", "arsenal_strat_two":"Поддержка 2|Support 2"}.get(action, "Арсенал|Arsenal")
 		if action=="autofocus":names[action]="Автофокус|Autofocus"
 		if action.begins_with("palette_"):
 			names[action]={"palette_left":"Палитра влево|Palette left","palette_right":"Палитра вправо|Palette right","palette_up":"Палитра вверх|Palette up","palette_down":"Палитра вниз|Palette down"}[action]

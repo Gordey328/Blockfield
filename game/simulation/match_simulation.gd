@@ -53,6 +53,7 @@ var _zombie_loadouts: Dictionary[int, Dictionary] = {}
 var _zombie_grenade_profiles: Dictionary[int, Dictionary] = {}
 var _survival_firearm_levels: Dictionary[int, int] = {}
 var _survival_armor_levels: Dictionary[int, int] = {}
+var arsenal: RefCounted
 func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: String = "sandbox") -> Dictionary:
 	if map_data == null or map_data.read_only or map_data.blocks.size() != map_data.dimensions.x*map_data.dimensions.y*map_data.dimensions.z \
 			or map_data.epoch <= 0 or map_data.epoch > RULES.MAX_UINT32 or map_data.last_tick > 0 \
@@ -537,6 +538,12 @@ func _resolve_shot(owner: SharedPlayerState, shot: Dictionary) -> Array[Dictiona
 	var pellet := 0
 	var shot_poses: SHOT_POSES = SHOT_POSES.new() if shot.directions.size() > 1 else null
 	for direction: Vector3 in shot.directions:
+		if arsenal != null and arsenal.damage_deployable(shot.origin, direction, float(PROFILES.get_info(profile, int(shot.weapon)).torso)):
+			var device_point: Variant = arsenal.get("last_deployable_hit")
+			var device_endpoint: Vector3 = device_point if device_point is Vector3 and device_point.is_finite() else shot.origin + direction * 8.0
+			events.append(RULES.event(owner,tick,"tracer",{"origin":shot.origin,"position":device_endpoint,"weapon":shot.weapon,"source_event_id":shot.event_id,"pellet":pellet}))
+			pellet += 1
+			continue
 		var map_hit: Dictionary = data.cast_source_ray(shot.origin,direction,500)
 		var hit := raycast_actors(owner.player_id,shot.origin,direction,shot_poses)
 		var chosen := source_weapon_hit(shot.origin,map_hit,hit)
@@ -735,6 +742,7 @@ func _explode(state: SharedGrenadeState, explosion: Dictionary) -> Array[Diction
 	var events: Array[Dictionary] = []
 	var team := int(_grenade_team.get(state.grenade_id,2))
 	# Cover is tested before removing explosion terrain, as offline authority.
+	if arsenal != null: arsenal.damage_deployables_at(state.position, 16.0, 120.0)
 	for victim: SharedPlayerState in _ordered():
 		if not RULES.can_act(victim): continue
 		var amount := GRENADES.damage_at(state.position,victim.feet()+Vector3.UP*.9,data)
@@ -746,6 +754,7 @@ func _explode_zombie_grenade(state: SharedGrenadeState, explosion: Dictionary) -
 	var events: Array[Dictionary] = []
 	var blast: Dictionary = _zombie_grenade_profiles[state.grenade_id]
 	var team: int = int(_grenade_team.get(state.grenade_id, 2))
+	if arsenal != null: arsenal.damage_deployables_at(state.position, ZOMBIE_GRENADE_RADIUS, float(blast.player_damage))
 	for victim: SharedPlayerState in _ordered():
 		if not RULES.can_act(victim) or victim.registry_kind == "zombie":
 			continue

@@ -107,6 +107,13 @@ def main():
                ('survival-setup','tests/ui/test_survival_setup.gd'),
                ('survival-scene','tests/integration/test_survival_scene.gd')]
     suites += [('startup-work','tests/integration/test_startup_work.gd')]
+    suites += [('arsenal-runtime','tests/gameplay/test_arsenal_runtime.gd'),
+               ('arsenal-terrain','tests/world/test_arsenal_terrain.gd'),
+               ('arsenal-view','tests/presentation/test_arsenal_view.gd'),
+               ('arsenal-panel','tests/ui/test_arsenal_panel.gd'),
+               ('arsenal-records','tests/gameplay/test_arsenal_records.gd'),
+               ('arsenal-scene','tests/integration/test_arsenal_scene.gd')]
+    suites += [('arsenal-lab','tests/integration/test_arsenal_lab.gd')]
     suites += [('survival-launch-latency','tests/integration/test_survival_launch_latency.gd')]
     suites += [('zombie-grenades','tests/simulation/test_zombie_grenades.gd'),
                ('survival-levels','tests/integration/test_survival_levels.gd'),

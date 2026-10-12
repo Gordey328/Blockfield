@@ -37,6 +37,13 @@ class PointerOwner:
 	var previous_position: Vector2 = Vector2.ZERO
 
 var movement_axis: Vector2 = Vector2.ZERO
+var _external_safe_zones: Array[Rect2] = []
+
+func set_external_safe_zones(zones: Array[Rect2]) -> void:
+	_external_safe_zones.clear()
+	var inverse: Transform2D = get_global_transform_with_canvas().affine_inverse()
+	for rect: Rect2 in zones:
+		_external_safe_zones.append(Rect2(inverse * rect.position, inverse.basis_xform(rect.size)))
 var _floating_stick: bool = true
 var _control_scale: float = 1.0
 var _fire_drag_look: bool = true
@@ -219,6 +226,8 @@ func _handle_pointer(index: int, position: Vector2, pressed: bool, canceled: boo
 		return true # Duplicate down cannot change a pointer's original claim.
 	if _owners.size() >= MAX_POINTERS:
 		return false
+	for rectangle: Rect2 in _external_safe_zones:
+		if rectangle.has_point(position): return false
 	var region: String = _hit_region(position, allow_look)
 	if region.is_empty():
 		return false

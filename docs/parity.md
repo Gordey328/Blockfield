@@ -112,6 +112,7 @@ promote full P01/P08–P16 or W03 acceptance.
 | ID | Feature and acceptance requirement | Evidence | Iteration | Status |
 | --- | --- | --- | --- | --- |
 | A03 | Blockfield Rush: canonical three-minute survival, one-click Home/replay, kill-based run upgrades and per-weapon local records | User2026-10-12; [ADR0035](decisions/0035-market-oriented-rush.md); frozen3dd42ab/parser/export; Rush850/0, UI274/0, records13/0, real scene66/0; ordinary local/public start/fire/pause/results and controlled Web card render/input/freeze; built Pages/public30 SHA-match; [evidence and limits](rush-iteration.md). Physical phone, full-duration manual win, retention/market fit and portal acceptance remain separate | Market iteration | VERIFIED |
+| A04 | Twenty original weapons/tools, bombs and stratagems, real effects and loadout | User2026-10-12; [plan](arsenal-plan.md), [ADR0036](decisions/0036-authored-arsenal.md); source exists and partial native fixtures pass; full-game/Web/publication acceptance in progress | Arsenal addition | IMPLEMENTED |
 
 ## Presentation, UI and content
 
@@ -166,6 +167,7 @@ pre-removal evidence are retained in the
 HUD and human-plus-five-bot combat remain within the offline scope.
 
 ## Evidence rules and release gates
+
 
 Each row is accepted only after recording: implementation file(s), verification command or playtest scenario, result/date and any behavior difference with a linked ADR. Generated resource counts are not proof that animation, appearance or sound behavior matches. Passing parser/import checks is not proof of browser playability.
 
