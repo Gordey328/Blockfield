@@ -26,6 +26,10 @@ class Brain extends RefCounted:
 	var choice_rolls: int = 0
 	var choice_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	var elevated_goal: bool = false
+	var loadout_generation: int = -1
+	var zombie_type: String = "walker"
+	var can_throw: bool = false
+	var throw_intents: int = 0
 	var state: String = "waiting"
 	var planned_tick: int = -10000
 	var map_sequence: int = -1
@@ -76,6 +80,15 @@ func _brain_for(id: int) -> Brain:
 		if brain.actor_id == id:
 			return brain
 	return null
+
+func set_zombie_loadout(id: int, generation: int, type: String, can_throw: bool) -> void:
+	# The authoritative session supplies per-life role/capacity, never the renderer.
+	var brain: Brain = _brain_for(id)
+	if brain == null or generation < 1:
+		return
+	brain.loadout_generation = generation
+	brain.zombie_type = "grenadier" if type == "grenadier" else "walker"
+	brain.can_throw = can_throw and brain.zombie_type == "grenadier"
 
 func choose_spawn(simulation: MatchSimulation, owner_id: int = OWNER_ID,
 		min_distance: float = 12.0) -> Dictionary:
@@ -235,9 +248,18 @@ func _command(brain: Brain, actor: SharedPlayerState, owner: SharedPlayerState,
 	var aim: Vector3 = owner.feet() + Vector3.UP * 1.25 - actor.motion.physics_eye()
 	var elevated: bool = owner.feet().y > actor.feet().y + 1.1
 	var frontal: Vector3i = _frontal_cell(actor, owner) if elevated else NO_CELL
+	var throw_ready: bool = brain.zombie_type == "grenadier" and brain.can_throw \
+		and brain.loadout_generation == actor.spawn_generation \
+		and actor.feet().distance_squared_to(owner.feet()) >= 6.0 * 6.0 \
+		and actor.feet().distance_squared_to(owner.feet()) <= 24.0 * 24.0 \
+		and _line_clear(actor.feet() + Vector3.UP * 1.1, owner.feet() + Vector3.UP * 1.1)
 	var bite_ready: bool = actor.feet().distance_squared_to(owner.feet()) <= 2.1 * 2.1 \
 		and _line_clear(actor.feet() + Vector3.UP * 1.1, owner.feet() + Vector3.UP * 1.1)
-	if frontal != NO_CELL:
+	if throw_ready:
+		brain.state = "throw"
+		brain.throw_intents += 1
+		_attack_intents.append({"actor_id":brain.actor_id, "kind":"throw", "target":owner.feet() + Vector3.UP * 1.1})
+	elif frontal != NO_CELL:
 		brain.state = "breach"
 		brain.breach_intents += 1
 		_attack_intents.append({"actor_id":brain.actor_id, "kind":"breach", "cell":frontal})
@@ -416,9 +438,12 @@ func get_diagnostics() -> Dictionary:
 	var stalled_ids: Array[int] = []
 	var result: Dictionary = {"bot_count":_brains.size(), "decisions":0,
 		"move_commands":0, "bite_intents":0, "breach_intents":0,
+		"throw_intents":0,
 		"spawn_checks":_spawn_checks, "navigation":_navigation.get_statistics()}
 	for brain: Brain in _brains:
 		rows.append({"actor_id":brain.actor_id, "state":brain.state, "mode":brain.mode,
+			"zombie_type":brain.zombie_type, "loadout_generation":brain.loadout_generation,
+			"can_throw":brain.can_throw, "throw_intents":brain.throw_intents,
 			"chosen_mode":brain.chosen_mode, "choice_rolls":brain.choice_rolls, "choice_locked":brain.choice_locked,
 			"elevated_goal":brain.elevated_goal,
 			"generation":brain.generation, "distance_moved":brain.distance_moved,
@@ -427,7 +452,7 @@ func get_diagnostics() -> Dictionary:
 			"breach_seconds":brain.breach_seconds})
 		if _last_command_tick - brain.progress_tick >= 1200 and brain.state not in ["inactive", "bite", "breach"]:
 			stalled_ids.append(brain.actor_id)
-		for key: String in ["decisions", "move_commands", "bite_intents", "breach_intents"]:
+		for key: String in ["decisions", "move_commands", "bite_intents", "breach_intents", "throw_intents"]:
 			result[key] += brain.get(key)
 	result.bots = rows
 	result.stalled_ids = stalled_ids

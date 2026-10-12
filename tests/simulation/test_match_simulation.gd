@@ -43,10 +43,32 @@ func count(events: Array[Dictionary],type: String) -> int:
 	return MATCH.events_of(events,type).size()
 
 func _run() -> void:
-	for scenario: String in ["lifecycle","gun_authority","map_occlusion","melee_and_goldens","block_building","pending_build","block_damage","grenade_death_and_owner","objectives_and_limits","state_and_overflow"]:
+	for scenario: String in ["lifecycle","gun_authority","map_occlusion","melee_and_goldens","block_building","pending_build","block_damage","grenade_death_and_owner","objectives_and_limits","state_and_overflow","zombie_loadout_registry"]:
 		check(call(scenario) == true,"scenario completes: " + scenario)
 	print("MATCH SIMULATION: %d assertions, %d failures" % [assertions,failures])
 	quit(0 if failures == 0 else 1)
+
+func zombie_loadout_registry() -> bool:
+	var sim: MatchSimulation = fixture()
+	var human: SharedPlayerState = spawn(sim, "Human", 0, Vector3(20.5, 4.01, 40.5))
+	check(sim.register_zombie_slot(2).ok and sim.spawn_zombie_slot(2, Vector3(8.5, 4.01, 40.5)).ok,
+		"zombie registry retains ordinary shared body admission")
+	check(sim.assign_zombie_type(2, "grenadier"), "trusted life receives one immutable role assignment")
+	var copied: Dictionary = sim.get_zombie_loadout(2)
+	copied.remaining = 999
+	check(sim.get_zombie_loadout(2).remaining == 3, "loadout readout cannot mutate authoritative finite stock")
+	sim.step_fixed()
+	check(not sim.throw_zombie_grenade(2, human.feet() + Vector3.UP * 1.1, 23, 47).is_empty(),
+		"explicit role launch creates isolated stored damage profile")
+	var capture: Dictionary = sim.capture_state(1)
+	capture.zombie_loadouts[2].remaining = 999
+	var projectile_id: int = sim.grenades.keys()[0]
+	capture.zombie_grenade_profiles[projectile_id].player_damage = 100
+	check(sim.get_zombie_loadout(2).remaining == 2 and sim.capture_state(1).zombie_grenade_profiles[projectile_id].player_damage == 23,
+		"debug snapshot separates stock/profile values from authoritative registry")
+	check(sim.remove_actor(2).ok and sim.get_zombie_loadout(2).is_empty() and sim.zombie_projectile_count() == 1,
+		"removing actor removes its role while already launched ordnance retains captured profile")
+	return true
 
 func lifecycle() -> bool:
 	var sim := fixture()

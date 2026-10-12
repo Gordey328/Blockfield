@@ -1,6 +1,6 @@
 class_name ZombieView
 extends Node3D
-## Authored, unarmed voxel walker. Simulation owns movement, hits and damage.
+## Authored voxel walker/grenadier. Simulation owns movement, hits and projectiles.
 ## One reusable six-part rig per actor slot; geometry/material are shared.
 
 const CORPSE_SECONDS: float = 2.0
@@ -12,6 +12,8 @@ const TROUSERS: Color = Color("424d4d")
 const DARK: Color = Color("242b2e")
 const WOUND: Color = Color("733c3c")
 const EYES: Color = Color("e8a64c")
+const GRENADIER_OLIVE: Color = Color("647249")
+const GRENADIER_ORANGE: Color = Color("d88c42")
 
 static var _part_meshes: Dictionary[String, ArrayMesh] = {}
 static var _material: StandardMaterial3D
@@ -32,6 +34,9 @@ var _moving: bool = false
 var _attack_phase: float = 0.0
 var _attack_kind: String = ""
 var _animation_paused: bool = false
+var _zombie_type: String = "walker"
+var _throw_remaining: int = 0
+var _held_grenade: bool = false
 
 
 func _ready() -> void:
@@ -66,6 +71,8 @@ func update_state(target: Dictionary) -> void:
 		return
 	var generation: int = int(target.get("spawn_generation", 0))
 	var alive: bool = bool(target.get("slot_alive", target.get("alive", false)))
+	_zombie_type = "grenadier" if str(target.get("zombie_type", "walker")) == "grenadier" else "walker"
+	_throw_remaining = clampi(int(target.get("throw_remaining", 0)), 0, 3)
 	target_id = int(target.get("id", target.get("target_id", target_id)))
 	if generation != _generation:
 		_generation = generation
@@ -127,6 +134,8 @@ func get_display_state() -> Dictionary:
 	return {"target_id": target_id, "generation": _generation, "alive": _alive,
 		"visible": visible, "corpse_age": _corpse_age, "walk_phase": _walk_phase,
 		"attack_phase": _attack_phase, "attack_kind": _attack_kind,
+		"zombie_type":_zombie_type, "throw_remaining":_throw_remaining,
+		"held_grenade":_alive and visible and _held_grenade,
 		"mesh_parts": 6 if _built else 0, "paused": _animation_paused}
 
 
@@ -160,6 +169,12 @@ func _part(part_name: String, key: String, point: Vector3) -> MeshInstance3D:
 func _apply_pose() -> void:
 	if not _built:
 		return
+	var grenadier: bool = _zombie_type == "grenadier"
+	_held_grenade = grenadier and _alive and _throw_remaining > 0 and _attack_kind == "throw"
+	# Role and hand props are shared mesh variants, keeping exactly six pooled parts.
+	_torso.mesh = _part_meshes["grenadier_torso" if grenadier else "torso"]
+	_arms[0].mesh = _part_meshes["grenadier_arm" if grenadier else "arm"]
+	_arms[1].mesh = _part_meshes["grenadier_arm_grenade" if _held_grenade else ("grenadier_arm" if grenadier else "arm")]
 	if not _alive:
 		visible = _corpse_age < CORPSE_SECONDS
 		_rig.position = Vector3(0, 0.34, 0)
@@ -183,6 +198,16 @@ func _apply_pose() -> void:
 		# Bent reaching arms, asymmetric shuffle and bare jaw read as a walker.
 		_arms[side].rotation = Vector3(0.88 + direction * 0.1 + gait * direction * 0.1 + (windup * 0.45 if attacking else 0.0), 0, direction * 0.07)
 		_legs[side].rotation = Vector3(gait * direction * 0.29, 0, direction * 0.035)
+	if grenadier and _attack_kind == "throw":
+		# Pull behind the shoulder, lift overhead, then follow through. Nothing is
+		# emitted here: the normal grenade view follows the authority's release.
+		var arm_angle: float = lerpf(.2, -2.6, _attack_phase / .8) if _attack_phase <= .8 else \
+			lerpf(-2.6, 1.2, (_attack_phase - .8) / .2)
+		_arms[1].rotation = Vector3(arm_angle, -.12, -.16)
+		_arms[0].rotation = Vector3(.72, .12, -.18)
+		_torso.rotation.y = -.18 * windup
+		_rig.rotation.x = -.04 + .08 * windup
+		_head.rotation.x = -.12 + .1 * windup
 
 
 static func _ensure_resources() -> void:
@@ -222,6 +247,25 @@ static func _ensure_resources() -> void:
 		[Vector3(0, -0.41, 0), Vector3(0.27, 0.81, 0.28), TROUSERS],
 		[Vector3(0, -0.48, -0.15), Vector3(0.19, 0.18, 0.035), SKIN],
 		[Vector3(0, -0.93, -0.05), Vector3(0.29, 0.21, 0.39), DARK]])
+	_part_meshes["grenadier_torso"] = _mesh([
+		[Vector3(0, .48, 0), Vector3(.74, .86, .34), GRENADIER_OLIVE],
+		[Vector3(0, .04, 0), Vector3(.67, .18, .31), DARK_CLOTH],
+		[Vector3(0, .49, -.19), Vector3(.62, .6, .08), GRENADIER_ORANGE],
+		[Vector3(0, .48, .31), Vector3(.55, .64, .28), GRENADIER_OLIVE],
+		[Vector3(0, .51, .46), Vector3(.45, .43, .025), DARK],
+		[Vector3(-.25, .61, -.24), Vector3(.07, .37, .025), DARK],
+		[Vector3(.25, .61, -.24), Vector3(.07, .37, .025), DARK],
+		[Vector3(0, .72, -.25), Vector3(.22, .09, .028), PALE_SKIN]])
+	var arm_boxes: Array = [
+		[Vector3(0, -.2, 0), Vector3(.2, .4, .24), GRENADIER_OLIVE],
+		[Vector3(0, -.49, -.06), Vector3(.18, .28, .23), SKIN],
+		[Vector3(0, -.7, -.13), Vector3(.16, .22, .2), PALE_SKIN],
+		[Vector3(0, -.84, -.17), Vector3(.19, .14, .25), SKIN]]
+	_part_meshes["grenadier_arm"] = _mesh(arm_boxes)
+	var held_boxes: Array = arm_boxes.duplicate()
+	held_boxes.append([Vector3(0, -.88, -.29), Vector3(.2, .25, .2), GRENADIER_OLIVE])
+	held_boxes.append([Vector3(0, -.73, -.29), Vector3(.08, .06, .09), GRENADIER_ORANGE])
+	_part_meshes["grenadier_arm_grenade"] = _mesh(held_boxes)
 
 
 static func _mesh(boxes: Array) -> ArrayMesh:

@@ -1165,6 +1165,8 @@ func _adapt_mobile_menu(node: Node,mobile: bool,portrait: bool) -> void:
 	for child in node.get_children():_adapt_mobile_menu(child,mobile,portrait)
 
 func _exit_tree() -> void:
+	# A cancellable staged launch can leave before setup owns Window preferences.
+	if main == null: return
 	_release_mobile_input()
 	_set_mobile_mouse_bindings(false)
 	Input.emulate_mouse_from_touch=_desktop_emulation

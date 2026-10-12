@@ -50,14 +50,16 @@ func check(condition: bool, message: String) -> void:
 		push_error("SURVIVAL SESSION: " + message)
 
 
-func fixture(duration: int = 30, interval: int = 30, quota: int = 1, limit: int = 12, preparation: int = 0) -> OfflineSurvivalSession:
+func fixture(duration: int = 30, interval: int = 30, quota: int = 1, limit: int = 12, preparation: int = 0,
+		damage: int = 20, block_damage: int = 40) -> OfflineSurvivalSession:
 	var session: OfflineSurvivalSession = SESSION.new()
 	root.add_child(session)
 	var arena: Dictionary = ARENA.metadata()
 	arena.owner_spawn = arena.team_spawns[0][0]
 	arena.supply_point = arena.owner_spawn
 	var settings: Dictionary = {"duration_seconds": duration, "wave_interval_seconds": interval,
-		"zombies_per_wave": quota, "growth_per_minute": 0.0, "live_limit": limit, "preparation_seconds": preparation}
+		"zombies_per_wave": quota, "growth_per_minute": 0.0, "live_limit": limit, "preparation_seconds": preparation,
+		"zombie_damage": damage, "zombie_block_damage": block_damage}
 	var configured: Dictionary = session.configure_survival(ARENA.build(), arena, settings, "Survivor", true)
 	check(configured.ok, "authored fixture configured: %s" % str(configured.get("error", "")))
 	var director: DeterministicDirector = DeterministicDirector.new()
@@ -92,6 +94,7 @@ func _run() -> void:
 	_real_high_player_tower(4)
 	_real_high_player_tower(2)
 	_confirmed_shared_queue_progress()
+	_configured_damage_and_roles()
 	_supply_once_per_wave()
 	_no_route_cleanup_timeout()
 	print("SURVIVAL SESSION: %d assertions, %d failures" % [assertions, failures])
@@ -138,6 +141,48 @@ func _pause_preparation_and_class() -> void:
 	check(not session.configure_survival(ARENA.build(), invalid_arena, session._settings, "Invalid", true).ok
 		and session.simulation == prior, "nonfinite authored spawn rejects without changing live authority")
 	session.free()
+
+
+func _configured_damage_and_roles() -> void:
+	var session: OfflineSurvivalSession = fixture(30, 30, 1, 12, 0, 31, 17)
+	session.paused = false
+	advance(session, 1)
+	var owner: SharedPlayerState = session.simulation.get_actor(1)
+	var zombie: SharedPlayerState = session.simulation.get_actor(2)
+	place(zombie, owner.feet() + Vector3(2, 0, 0))
+	(session._zombie_director as DeterministicDirector).attack_intents = [{"actor_id": 2, "kind": "bite"}]
+	advance(session, 28)
+	check(owner.health == 69 and session.damage_taken == 31, "configured player damage replaces fixed20 on confirmed bite")
+	place(owner, Vector3(20.5, 4.01, 28.5))
+	place(zombie, Vector3(7.5, 4.01, 28.5))
+	var cell: Vector3i = Vector3i(9, 5, 28)
+	session.simulation.data.seed_box(cell, cell + Vector3i.ONE, 0x018899aa)
+	(session._zombie_director as DeterministicDirector).attack_intents = [{"actor_id": 2, "kind": "breach", "cell": cell}]
+	advance(session, 120)
+	check(session.simulation.get_block_remaining_health(cell) == 83.0,
+		"separate configured block damage does not reuse player31damage")
+	var restarted: Dictionary = session.restart_match()
+	check(restarted.ok and session._settings.zombie_damage == 31 and session._settings.zombie_block_damage == 17,
+		"restart retains both independent damage settings")
+	var base_arena: Dictionary = session._arena.duplicate(true)
+	var chosen: Dictionary = session.configure_survival(ARENA.build(), base_arena, session._settings, "Selected", true, 2)
+	check(chosen.ok and session.current_weapon == 2 and session.magazine == 6 and session.simulation.tick == -1,
+		"optional initial class grants selected shotgun in one unstepped configuration")
+	var previous: MatchSimulation = session.simulation
+	check(not session.configure_survival(ARENA.build(), base_arena, session._settings, "Invalid", true, 3).ok
+		and session.simulation == previous and session._starting_weapon == 2, "invalid initial class preserves running session")
+	session.free()
+	var roles: OfflineSurvivalSession = fixture(6, 2, 4, 4)
+	roles.paused = false
+	advance(roles, 120)
+	check(roles._spawned == 4 and roles.get_target(5).zombie_type == "grenadier"
+		and roles.get_target(5).throw_remaining == 3 and roles.get_target(2).zombie_type == "walker",
+		"fourth actually admitted life is distinct finite-stock grenadier in first wave")
+	roles.simulation.damage_actor(2, 100, 1)
+	advance(roles, 1)
+	check(roles._spawned == 5 and roles.get_diagnostics().slot_count == 12
+		and roles.simulation.get_zombie_loadout(2).type == "walker", "recycled slot uses admission ordinal, not actor ID for role")
+	roles.free()
 
 
 func _timed_overlap_cap_and_recycling() -> void:

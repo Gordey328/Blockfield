@@ -123,4 +123,7 @@ func run() -> void:
 		file.close()
 	else: DirAccess.remove_absolute(ProjectSettings.globalize_path("user://settings.cfg"))
 	print("SURVIVAL SCENE: %d checks, %d failures" % [checks, failures])
+	# Fixed-FPS headless frames can run faster than the native audio mixer.
+	# Let stopped playback references leave its real-time callback before exit.
+	OS.delay_msec(80)
 	quit(1 if failures else 0)

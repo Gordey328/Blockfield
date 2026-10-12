@@ -3,6 +3,28 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Survival expansion — 2026-10-12 (in progress)
+
+Latest request: faster responsive Start survival, separate configurable zombie
+player/block damage, a visible grenade-throwing zombie and several small downloaded
+Teardown adaptations based on known games. Work continues in the attached clean
+zombie-survival worktree from460714f7aed30ea0936a9e0567e946314cf6fa41; shared dirty
+primary checkout is preserved. Earlier completed release below is historical.
+Authority owns settings/session/trusted grenade rules and their fixtures; AI owns
+director/navigation/pooled zombie view and fixtures; map specialist owns new
+download/import/adaptation outputs, Python checks and map provenance. Coordinator
+owns existing Main/Entry/HUD/catalog/level integration, startup/effects/HDR work,
+shared build/docs and release. Contracts agreed before parallel edits. No new
+user chats or messages to unrelated chats. No specialist engine lease yet.
+Map sources downloaded: Small Minecraft Chunk2652603687/The_Wolfian and
+MIRA HQ2905630454/CapnSoda202; conversion and real navigation acceptance pending.
+Settings keys zombie_damage1..100/default20 and zombie_block_damage1..100/default40.
+Every4thadmitted life becomes a grenadier: finite3throws,60tick warning,480tick
+cooldown, at most4hostile projectiles; ordinary shared physics, isolated damage
+profile and honest cleanup. Human grenades/TDM stay independent. Local desktop
+Web acceptance and selective native regressions planned, no deployed-browser or
+mobile-UI retest as requested. ui-2 remains PAUSED.
+
 ## Zombie pursuit and startup follow-up — 2026-10-12 (completed and published)
 
 Latest user request supersedes the earlier cheaper detour/breach policy: choose

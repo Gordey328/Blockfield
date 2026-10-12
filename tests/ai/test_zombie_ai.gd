@@ -24,6 +24,7 @@ func _run() -> void:
 	_shared_movement_and_bite_intents()
 	_breach_intents_and_separation()
 	_no_retreat_and_high_target()
+	_grenadier_intents()
 	print("Zombie AI: %d assertions, %d failures" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
 
@@ -389,3 +390,72 @@ func _no_retreat_and_high_target() -> void:
 	check(receipts >= 3 and exposed_only, "high-target fallback gives reachable exposed support/front blocks to common damage authority")
 	check(tower_data.get_block(Vector3i(18, 1, 16)) != 0 and tower_data.get_block(Vector3i(18, 3, 16)) != 0, "fallback preserves protected bedrock and does not dig remote floor")
 	check(elevated_owner.feet().y < 10 and elevated_owner.health > 0, "real local support destruction lowers the tower occupant without teleport or phantom damage")
+
+func _grenadier_intents() -> void:
+	var data: VoxelData = _flat()
+	var match_state: MatchSimulation = _match(data)
+	var player: SharedPlayerState = _owner(match_state, Vector3(30.5, 4.01, 24.5))
+	var zombie: SharedPlayerState = _zombie(match_state, 2, Vector3(14.5, 4.01, 24.5))
+	var director: ZombieDirector = DIRECTOR.new()
+	var ids: Array[int] = [2]
+	director.configure(data, {}, ids)
+	var windup_proposals: int = 0
+	for tick: int in range(60):
+		director.set_zombie_loadout(2, zombie.spawn_generation, "grenadier", true)
+		var commands: Dictionary = director.commands(match_state)
+		var proposals: Array[Dictionary] = director.drain_attack_intents()
+		check(commands[2].valid() and commands[2].buttons == 0 and commands[2].move == Vector2.ZERO,
+			"valid throw windup emits no source grenade/fire buttons or movement")
+		for intent: Dictionary in proposals:
+			if intent.kind == "throw":
+				windup_proposals += 1
+				check(intent.target.is_equal_approx(player.feet() + Vector3.UP * 1.1), "throw target tracks the actual owner torso")
+		match_state.step_fixed(commands)
+		match_state.drain_events()
+		match_state.drain_transactions()
+	check(windup_proposals == 60 and match_state.grenades.is_empty() and player.health == 100,
+		"AI sustains sixty allowed proposals without inventing projectiles or damage")
+	var before: float = zombie.feet().distance_to(player.feet())
+	for tick: int in range(60):
+		director.set_zombie_loadout(2, zombie.spawn_generation, "grenadier", false)
+		var commands: Dictionary = director.commands(match_state)
+		for intent: Dictionary in director.drain_attack_intents():
+			check(intent.kind != "throw", "authoritative cooldown suppresses throw proposals")
+		match_state.step_fixed(commands)
+		match_state.drain_events()
+		match_state.drain_transactions()
+	check(zombie.feet().distance_to(player.feet()) < before - 1.0,
+		"grenadier actually pursues during cooldown instead of waiting stationary")
+	var old_generation: int = zombie.spawn_generation
+	match_state.damage_actor(2, 100, 1)
+	check(match_state.spawn_zombie_slot(2, Vector3(14.5, 4.01, 24.5)).ok, "role fixture reuses a real actor life")
+	director.set_zombie_loadout(2, old_generation, "grenadier", true)
+	director.commands(match_state)
+	check(not _has_throw(director.drain_attack_intents()), "stale-life loadout cannot grant grenade eligibility")
+	director.set_zombie_loadout(2, zombie.spawn_generation, "walker", true)
+	director.commands(match_state)
+	check(not _has_throw(director.drain_attack_intents()), "walker cannot throw despite an erroneous capacity flag")
+	director.set_zombie_loadout(2, zombie.spawn_generation, "grenadier", true)
+	for distance: float in [5.9, 6.0, 24.0, 24.1]:
+		zombie.motion.feet_position = player.feet() - Vector3(distance, 0, 0)
+		zombie.motion.native_velocity = Vector3.ZERO
+		director.commands(match_state)
+		check(_has_throw(director.drain_attack_intents()) == (distance >= 6.0 and distance <= 24.0),
+			"fresh metric range gates both exact throw boundaries: %s" % distance)
+	zombie.motion.feet_position = player.feet() - Vector3(16, 0, 0)
+	check(data.set_block(Vector3i(22, 5, 24), 0x01aabbaa, {"tick":match_state.tick}).changed, "throw occluder is a real terrain edit")
+	director.commands(match_state)
+	check(not _has_throw(director.drain_attack_intents()), "live metric torso LOS rejects throwing through an edited wall")
+	director.set_zombie_loadout(2, zombie.spawn_generation, "grenadier", false)
+	zombie.motion.feet_position = player.feet() - Vector3(1.8, 0, 0)
+	director.commands(match_state)
+	var near: Array[Dictionary] = director.drain_attack_intents()
+	check(not near.is_empty() and near[0].kind == "bite", "grenadier keeps normal close melee while grenades unavailable")
+	match_state.drain_events()
+	match_state.drain_transactions()
+
+static func _has_throw(intents: Array[Dictionary]) -> bool:
+	for intent: Dictionary in intents:
+		if intent.kind == "throw":
+			return true
+	return false

@@ -266,7 +266,8 @@ func _settings_text(settings: Dictionary) -> String:
 	var growth_mode: String = str(settings.get("growth_mode", "linear"))
 	var growth: String = _ui("Постоянная квота", "Constant quota") if growth_mode == "constant" else (_ui("Рост ступенями", "Step growth") if growth_mode == "step" else _ui("Плавный рост", "Linear growth"))
 	var gain: float = 0.0 if growth_mode == "constant" else float(settings.get("growth_per_minute", 1.0))
-	return _ui("Длительность %s · Интервал %d с\nДо %d зомби · %s %.1f / мин", "Duration %s · Interval %d s\nUp to %d zombies · %s %.1f / min") % [duration_text, int(settings.get("wave_interval_seconds", 60)), int(settings.get("zombies_per_wave", 6)), growth, gain]
+	var text: String = _ui("Длительность %s · Интервал %d с\nДо %d зомби · %s %.1f / мин", "Duration %s · Interval %d s\nUp to %d zombies · %s %.1f / min") % [duration_text, int(settings.get("wave_interval_seconds", 60)), int(settings.get("zombies_per_wave", 6)), growth, gain]
+	return text + (_ui("\nУрон игроку %d · Урон блокам %d", "\nPlayer damage %d · Block damage %d") % [int(settings.get("zombie_damage", 20)), int(settings.get("zombie_block_damage", 40))])
 
 
 func _ui(ru: String, en: String) -> String:

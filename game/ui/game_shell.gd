@@ -366,7 +366,7 @@ func _build_setup() -> void:
 	else:
 		header.add_child(tabs)
 	_maps_button = _button("MapsTab", _ui("Карта", "Map"), func() -> void: _show_tab("maps"))
-	if str(_selection.mode) == "survival": _maps_button.text = _ui("Волны", "Waves")
+	if str(_selection.mode) == "survival": _maps_button.text = _ui("Волны и уровень", "Waves and level")
 	_equipment_button = _button("EquipmentTab", _ui("Снаряжение", "Equipment"), func() -> void: _show_tab("equipment"))
 	_maps_button.toggle_mode = true
 	_equipment_button.toggle_mode = true
@@ -392,7 +392,7 @@ func _build_setup() -> void:
 
 func _build_maps(column: VBoxContainer) -> void:
 	var survival: bool = str(_selection.mode) == "survival"
-	if survival: _build_wave_settings(column)
+	if survival: column.add_child(_label(_ui("Уровень", "Level"), 19, CombatTheme.ACCENT))
 	if not _mobile and not survival: column.add_child(_label(_ui("Карта", "Map"), 19))
 	if not _compact and not survival:
 		var featured: PanelContainer = _panel()
@@ -442,6 +442,7 @@ func _build_maps(column: VBoxContainer) -> void:
 		details.add_child(mark)
 		_map_marks[id] = mark
 		_ignore_mouse(margin)
+	if survival: _build_wave_settings(column)
 	if str(_selection.mode) == "training":
 		var advanced: Button = _button("AdvancedLab", _ui("Расширенный полигон  →", "Advanced lab  →"), func() -> void: _request_utility("lab"))
 		column.add_child(advanced)
@@ -454,6 +455,8 @@ func _build_wave_settings(column: VBoxContainer) -> void:
 	_wave_number(column, "WaveDurationMinutes", _ui("Выжить, минут", "Survive, minutes"), "duration_seconds", 1, 30, 1, 60.0)
 	_wave_number(column, "WaveZombieCount", _ui("Зомби на волну, до", "Zombies per wave, up to"), "zombies_per_wave", 1, 24, 1)
 	_wave_number(column, "WaveInterval", _ui("Интервал волн, секунд", "Wave interval, seconds"), "wave_interval_seconds", 30, 120, 5)
+	_wave_number(column, "ZombieDamage", _ui("Урон зомби игроку", "Zombie damage to player"), "zombie_damage", 1, 100, 1)
+	_wave_number(column, "ZombieBlockDamage", _ui("Урон зомби по блокам", "Zombie damage to blocks"), "zombie_block_damage", 1, 100, 1)
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	column.add_child(row)
@@ -476,6 +479,9 @@ func _build_wave_settings(column: VBoxContainer) -> void:
 	var hint: Label = _label(_ui("20 секунд на постройку. Волны пересекаются; одновременно до 12 зомби. По таймеру спавн прекращается — добей оставшихся. Зомби выбирают обход или пролом.", "20 seconds to build. Waves overlap; up to 12 zombies alive. Spawning stops at the time limit — clear the survivors. Zombies choose a detour or a breach."), 13, CombatTheme.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hint)
+	var grenadier_hint: Label = _label(_ui("Каждый четвёртый зомби — метатель. Замах предупреждает бросок; граната отскакивает и взрывается с задержкой.", "Every fourth zombie is a grenadier. Its windup warns of the throw; the grenade bounces and explodes after a delay."), 13, CombatTheme.MUTED)
+	grenadier_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(grenadier_hint)
 
 func _wave_number(column: VBoxContainer, node_name: String, caption: String, key: String,
 		minimum: float, maximum: float, step_value: float, divisor: float = 1.0) -> void:
@@ -488,6 +494,8 @@ func _wave_number(column: VBoxContainer, node_name: String, caption: String, key
 	row.add_child(label)
 	var number: SpinBox = SpinBox.new()
 	number.name = node_name
+	if key == "zombie_damage": number.tooltip_text = _ui("Урон укуса и максимальный урон гранаты; взрыв ослабевает с расстоянием.", "Bite damage and maximum grenade damage; blast damage falls with distance.")
+	if key == "zombie_block_damage": number.tooltip_text = _ui("Урон каждого удара и урон гранаты каждой затронутой клетке. Здоровье блока сохраняется между ударами.", "Damage per strike and per grenade-affected block. Block health persists between hits.")
 	number.custom_minimum_size = Vector2(104, TARGET_CSS)
 	number.min_value = minimum
 	number.max_value = maximum
@@ -587,7 +595,7 @@ func _refresh_selection() -> void:
 	if _map_preview != null: _map_preview.texture = _texture(str(entry.get("preview", "")))
 	if _map_title != null: _map_title.text = _localized(entry, "name")
 	if _map_description != null: _map_description.text = _localized(entry, "description")
-	if _map_description != null and str(_selection.mode) == "survival": _map_description.text = _ui("Три подхода, разрушаемые укрытия и пункт снабжения. Укрепляйся и сдерживай орду.", "Three approaches, destructible cover and a supply point. Build your defenses and hold back the horde.")
+	if _map_description != null and str(_selection.mode) == "survival": _map_description.text = _localized(entry, "description")
 	if _map_notice != null:
 		_map_notice.text = _ui("Вы и 2 союзника против 3 ботов · 25 убийств или 5 минут", "You and 2 allies against 3 bots · 25 kills or 5 minutes") if str(_selection.mode) == "tdm" else _ui("Свободная тренировка · Без сервера", "Free training · No server needed")
 		if str(_selection.mode) == "survival": _map_notice.text = _ui("Выживание · Волны по времени · Одна жизнь", "Survival · Timed waves · One life")
@@ -618,6 +626,13 @@ func _refresh_selection() -> void:
 		_start.disabled = _pending or not bool(checked.get("ok", false))
 		_start.text = _ui("Подготовка…", "Preparing…") if _pending else (_ui("Начать бой  →", "Start battle  →") if str(_selection.mode) == "tdm" else _ui("Начать тренировку  →", "Start training  →"))
 		if str(_selection.mode) == "survival" and not _pending: _start.text = _ui("Начать выживание  →", "Start survival  →")
+
+func show_launch_error(message: String) -> void:
+	_pending = false
+	_refresh_selection()
+	if _error != null:
+		_error.text = message
+		_error.show()
 
 func _launch() -> void:
 	if _pending: return

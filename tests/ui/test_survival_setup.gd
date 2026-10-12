@@ -27,7 +27,7 @@ func run() -> void:
 	prefs.set_value("profile", "locale", "ru")
 	prefs.set_value("graphics", "quality", 7)
 	prefs.save("user://settings.cfg")
-	check(CATALOG.available_for("survival").size() == 1, "only validated authored arena is available")
+	check(CATALOG.available_for("survival").size() == 3, "authored arena and two validated survival adaptations are available")
 	check(not CATALOG.validate({"mode":"survival", "map_id":"dust2", "weapon":0}).ok, "imported map cannot claim zombie route support")
 	var configuration: Dictionary = {"mode":"survival", "map_id":"crossroads", "weapon":1, "survival":SETTINGS.defaults()}
 	configuration.survival.duration_seconds = 120

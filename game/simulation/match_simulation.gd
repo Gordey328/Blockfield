@@ -17,6 +17,12 @@ const MAX_TRANSACTIONS := 256
 const MAX_TRANSACTION_CHANGES := 32768
 const NEIGHBORS: Array[Vector3i] = [Vector3i.DOWN,Vector3i.UP,Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 const NO_CELL := Vector3i(-1,-1,-1)
+const MAX_ZOMBIE_GRENADES: int = 4
+const ZOMBIE_GRENADES_PER_LIFE: int = 3
+const ZOMBIE_GRENADE_FUSE: float = 2.5
+const ZOMBIE_GRENADE_RADIUS: float = 8.0
+const ZOMBIE_BLOCK_RADIUS: float = 3.0
+const MAX_ZOMBIE_BLAST_CELLS: int = 96
 var data: VoxelData
 var actors: Dictionary[int,SharedPlayerState] = {}
 var tick: int = -1
@@ -43,6 +49,8 @@ var _secondary: Dictionary[int,bool] = {}
 var _block_health: Dictionary[Vector3i,Dictionary] = {} # Persists until terrain edit/destruction or match reset.
 var _grenade_team: Dictionary[int,int] = {}
 var _zombie_breach_deadlines: Dictionary[Vector3i,int] = {}
+var _zombie_loadouts: Dictionary[int, Dictionary] = {}
+var _zombie_grenade_profiles: Dictionary[int, Dictionary] = {}
 func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: String = "sandbox") -> Dictionary:
 	if map_data == null or map_data.read_only or map_data.blocks.size() != map_data.dimensions.x*map_data.dimensions.y*map_data.dimensions.z \
 			or map_data.epoch <= 0 or map_data.epoch > RULES.MAX_UINT32 or map_data.last_tick > 0 \
@@ -85,6 +93,8 @@ func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: S
 	_block_health.clear()
 	_grenade_team.clear()
 	_zombie_breach_deadlines.clear()
+	_zombie_loadouts.clear()
+	_zombie_grenade_profiles.clear()
 	objectives = new_objectives
 	return _result(true)
 
@@ -189,7 +199,65 @@ func spawn_zombie_slot(id: int, feet: Vector3) -> Dictionary:
 		actor.reserve = 0
 		actor.blocks = 0
 		actor.grenades = 0
+		_zombie_loadouts[id] = {"generation": actor.spawn_generation, "type": "walker", "remaining": 0, "assigned": false}
 	return result
+
+func assign_zombie_type(id: int, zombie_type: String) -> bool:
+	var actor: SharedPlayerState = get_actor(id)
+	if actor == null or actor.registry_kind != "zombie" or not actor.is_alive() \
+			or zombie_type not in ["walker", "grenadier"]:
+		return false
+	var loadout: Dictionary = _zombie_loadouts.get(id, {})
+	if loadout.is_empty() or int(loadout.generation) != actor.spawn_generation or bool(loadout.assigned):
+		return false
+	loadout.type = zombie_type
+	loadout.remaining = ZOMBIE_GRENADES_PER_LIFE if zombie_type == "grenadier" else 0
+	loadout.assigned = true
+	return true
+
+func get_zombie_loadout(id: int) -> Dictionary:
+	return _zombie_loadouts.get(id, {}).duplicate(true)
+
+func zombie_projectile_count() -> int:
+	return _zombie_grenade_profiles.size()
+
+func throw_zombie_grenade(id: int, target: Vector3, player_damage: int, block_damage: int) -> Array[Dictionary]:
+	var actor: SharedPlayerState = get_actor(id)
+	var loadout: Dictionary = _zombie_loadouts.get(id, {})
+	if actor == null or actor.registry_kind != "zombie" or not actor.is_alive() or loadout.is_empty() \
+			or int(loadout.generation) != actor.spawn_generation or str(loadout.type) != "grenadier" \
+			or int(loadout.remaining) <= 0 or zombie_projectile_count() >= MAX_ZOMBIE_GRENADES \
+			or grenades.size() >= MAX_GRENADES or _next_grenade_id > RULES.MAX_UINT32 \
+			or player_damage not in range(1, 101) or block_damage not in range(1, 101) \
+			or not target.is_finite() or tick < 0 or data == null or data.read_only:
+		return RULES.frozen([])
+	var origin: Vector3 = actor.feet() + Vector3.UP * 1.1
+	var distance: float = origin.distance_to(target)
+	if distance < 6.0 or distance > 24.0:
+		return RULES.frozen([])
+	var line: Vector3 = target - origin
+	var cover: Dictionary = data.cast_voxel(origin, line, distance - 0.05)
+	if bool(cover.hit):
+		return RULES.frozen([])
+	# Semi-implicit GrenadeRules gravity is fixed32m/s². Aim a finite arc at the
+	# confirmed current torso; bounce/rolling/fuse remain ordinary shared flight.
+	var flight_time: float = clampf(distance / 12.0, 0.5, 2.0)
+	var velocity: Vector3 = line / flight_time + Vector3.UP * (16.0 * flight_time + 16.0 / RULES.HZ)
+	var action: Dictionary = RULES.event(actor, tick, "grenade_thrown", {"position": origin,
+		"native_velocity": velocity / 32.0, "fuse": ZOMBIE_GRENADE_FUSE, "team": actor.team,
+		"cook_action_sequence": actor.consumed_input_sequence, "zombie": true, "zombie_type": "grenadier"})
+	var state: SharedGrenadeState = GRENADES.create(_next_grenade_id, id, actor.spawn_generation,
+		epoch, tick, origin, velocity, ZOMBIE_GRENADE_FUSE, actor.consumed_input_sequence)
+	if state == null:
+		return RULES.frozen([])
+	grenades[state.grenade_id] = state
+	_grenade_team[state.grenade_id] = actor.team
+	_zombie_grenade_profiles[state.grenade_id] = {"player_damage": player_damage, "block_damage": block_damage}
+	_next_grenade_id += 1
+	loadout.remaining = int(loadout.remaining) - 1
+	var events: Array[Dictionary] = [action]
+	_record_events(events)
+	return RULES.frozen(events)
 
 func resolve_zombie_bite(id: int, victim_id: int, damage: int = 20, reach: float = 2.2) -> Array[Dictionary]:
 	var actor: SharedPlayerState = get_actor(id)
@@ -267,6 +335,7 @@ func remove_actor(id: int) -> Dictionary:
 	_process_releases(events)
 	events.append(RULES.event(actor,_next_tick(),"actor_removed"))
 	actors.erase(id)
+	_zombie_loadouts.erase(id)
 	_colors.erase(id)
 	_clear_build(id)
 	_secondary.erase(id)
@@ -355,6 +424,7 @@ func step_fixed(commands: Dictionary = {}) -> Array[Dictionary]:
 		if projectile.finished:
 			grenades.erase(id)
 			_grenade_team.erase(id)
+			_zombie_grenade_profiles.erase(id)
 	# Death drops during explosions create projectiles for the next step.
 	_process_releases(current)
 	current.append_array(objectives.step_fixed(tick,ordered))
@@ -597,6 +667,7 @@ func _place_cells(actor: SharedPlayerState, cells: Array[Vector3i], line: bool) 
 func _process_releases(events: Array[Dictionary]) -> void:
 	for event: Dictionary in events:
 		if event.type != "grenade_thrown": continue
+		if bool(event.get("zombie", false)): continue # Explicit trusted creation already owns this projectile.
 		# A release is already immutable and may occur twice in processing phases.
 		var exists := false
 		for state: SharedGrenadeState in grenades.values():
@@ -619,6 +690,8 @@ func _cook_capacity() -> bool:
 	return reserved < MAX_GRENADES
 
 func _explode(state: SharedGrenadeState, explosion: Dictionary) -> Array[Dictionary]:
+	if _zombie_grenade_profiles.has(state.grenade_id):
+		return _explode_zombie_grenade(state, explosion)
 	var events: Array[Dictionary] = []
 	var team := int(_grenade_team.get(state.grenade_id,2))
 	# Cover is tested before removing explosion terrain, as offline authority.
@@ -627,6 +700,65 @@ func _explode(state: SharedGrenadeState, explosion: Dictionary) -> Array[Diction
 		var amount := GRENADES.damage_at(state.position,victim.feet()+Vector3.UP*.9,data)
 		if amount > 0: events.append_array(_damage(victim,amount,state.owner_id,"grenade",explosion.event_id,team))
 	_commit(data.explode(state.position,{"tick":tick,"actor_id":state.owner_id,"action_id":state.action_sequence}))
+	return events
+
+func _explode_zombie_grenade(state: SharedGrenadeState, explosion: Dictionary) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	var blast: Dictionary = _zombie_grenade_profiles[state.grenade_id]
+	var team: int = int(_grenade_team.get(state.grenade_id, 2))
+	for victim: SharedPlayerState in _ordered():
+		if not RULES.can_act(victim) or victim.registry_kind == "zombie":
+			continue
+		var point: Vector3 = victim.feet() + Vector3.UP * 0.9
+		var offset: Vector3 = point - state.position
+		var distance: float = offset.length()
+		if distance >= ZOMBIE_GRENADE_RADIUS:
+			continue
+		if distance > 0.01 and bool(data.cast_voxel(state.position, offset, distance - 0.01).hit):
+			continue
+		var factor: float = 1.0 - distance / ZOMBIE_GRENADE_RADIUS
+		events.append_array(_damage(victim, float(blast.player_damage) * factor * factor,
+			state.owner_id, "zombie_grenade", str(explosion.event_id), team))
+	# Snapshot exposed cells before any destruction. One bounded ordered removal
+	# performs collapse once; a new hole cannot expose a second layer this blast.
+	var candidates: Array[Dictionary] = []
+	var center: Vector3i = Vector3i(state.position.floor())
+	for y: int in range(center.y - 3, center.y + 4):
+		for z: int in range(center.z - 3, center.z + 4):
+			for x: int in range(center.x - 3, center.x + 4):
+				var cell: Vector3i = Vector3i(x, y, z)
+				if y <= 1 or not data.is_in_bounds(cell) or data.get_block(cell) == 0:
+					continue
+				var point: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
+				var offset: Vector3 = point - state.position
+				if offset.length() > ZOMBIE_BLOCK_RADIUS:
+					continue
+				var hit: Dictionary = data.cast_voxel(state.position, offset, offset.length() + 0.01)
+				if bool(hit.hit) and hit.cell == cell:
+					candidates.append({"cell": cell, "normal": hit.normal, "distance": offset.length_squared()})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.distance) < float(b.distance))
+	if candidates.size() > MAX_ZOMBIE_BLAST_CELLS:
+		candidates.resize(MAX_ZOMBIE_BLAST_CELLS)
+	var destroyed: Array[Vector3i] = []
+	var damaged: Dictionary[Vector3i, Dictionary] = {}
+	for candidate: Dictionary in candidates:
+		var cell: Vector3i = candidate.cell
+		var color: int = data.get_block(cell)
+		var remaining: float = get_block_remaining_health(cell) - float(blast.block_damage)
+		if remaining <= 0.0:
+			destroyed.append(cell)
+		else:
+			damaged[cell] = {"health": remaining, "color": color, "tick": tick}
+		events.append(GRENADES.event(state, tick, "block_hit", {"cell": cell,
+			"position": Vector3(cell) + Vector3.ONE * 0.5, "normal": candidate.normal,
+			"damage": int(blast.block_damage), "destroyed": remaining <= 0.0,
+			"source_event_id": explosion.event_id, "zombie": true}))
+	if not destroyed.is_empty():
+		_commit(data.remove_blocks(destroyed, true, {"tick": tick,
+			"actor_id": state.owner_id, "action_id": state.action_sequence}))
+	for cell: Vector3i in damaged:
+		if data.get_block(cell) == int(damaged[cell].color):
+			_block_health[cell] = damaged[cell]
 	return events
 
 func _metadata(actor: SharedPlayerState) -> Dictionary:
@@ -704,7 +836,7 @@ func capture_state(id: int) -> Dictionary:
 	for grenade_id: int in ids: projectiles.append(grenades[grenade_id].copy())
 	# Local diagnostics own copies; editing them cannot change the running match.
 	var block_health: Dictionary = _block_health.duplicate(true)
-	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":block_health,"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate()}
+	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":block_health,"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate(),"zombie_loadouts":_zombie_loadouts.duplicate(true),"zombie_grenade_profiles":_zombie_grenade_profiles.duplicate(true)}
 
 func _system_event(type: String, details: Dictionary = {}) -> Dictionary:
 	var event := details.duplicate(true)

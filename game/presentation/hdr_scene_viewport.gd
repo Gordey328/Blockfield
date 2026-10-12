@@ -44,7 +44,8 @@ func setup(source_camera: Camera3D, source_viewport: Viewport = null) -> void:
 		presentation.hide()
 	scene_viewport.world_3d = _source_viewport.world_3d
 	synchronize()
-	exposure.setup(scene_viewport.get_texture(),true)
+	# synchronize initializes exposure when allocating the first dimensions.
+	# Rebuilding the identical pyramid a second time wastes a cold launch frame.
 	presentation.texture = scene_viewport.get_texture()
 	presentation.material = exposure.get_present_material()
 

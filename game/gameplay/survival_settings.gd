@@ -8,7 +8,8 @@ const SPAWN_WINDOW_SECONDS: int = 12
 static func defaults() -> Dictionary:
 	return {"duration_seconds": 600, "wave_interval_seconds": 60,
 		"zombies_per_wave": 6, "growth_per_minute": 1.0, "growth_mode": "linear",
-		"live_limit": MAX_LIVE, "preparation_seconds": 20}
+		"live_limit": MAX_LIVE, "preparation_seconds": 20,
+		"zombie_damage": 20, "zombie_block_damage": 40}
 
 
 static func validate(raw: Dictionary, test_overrides: bool = false) -> Dictionary:
@@ -18,7 +19,7 @@ static func validate(raw: Dictionary, test_overrides: bool = false) -> Dictionar
 			settings[key] = raw[key]
 	var minimum_duration: int = 1 if test_overrides else 60
 	var minimum_interval: int = 1 if test_overrides else 30
-	for key: String in ["duration_seconds", "wave_interval_seconds", "zombies_per_wave", "live_limit", "preparation_seconds"]:
+	for key: String in ["duration_seconds", "wave_interval_seconds", "zombies_per_wave", "live_limit", "preparation_seconds", "zombie_damage", "zombie_block_damage"]:
 		var value: Variant = settings[key]
 		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or float(value) != floorf(float(value)):
 			return {"ok": false, "error": "Survival setting %s must be an integer" % key, "settings": {}}
@@ -31,6 +32,8 @@ static func validate(raw: Dictionary, test_overrides: bool = false) -> Dictionar
 		return {"ok": false, "error": "Survival population is outside supported bounds", "settings": {}}
 	if (not test_overrides and settings.preparation_seconds != 20) or settings.preparation_seconds < 0 or settings.preparation_seconds > 20:
 		return {"ok": false, "error": "Survival preparation must be 20 seconds", "settings": {}}
+	if settings.zombie_damage < 1 or settings.zombie_damage > 100 or settings.zombie_block_damage < 1 or settings.zombie_block_damage > 100:
+		return {"ok": false, "error": "Zombie damage must be between 1 and 100", "settings": {}}
 	if typeof(settings.growth_per_minute) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(settings.growth_per_minute)) \
 			or float(settings.growth_per_minute) < 0.0 or float(settings.growth_per_minute) > 6.0:
 		return {"ok": false, "error": "Survival growth is outside supported bounds", "settings": {}}

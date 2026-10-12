@@ -136,15 +136,45 @@ var _time := 0.0
 var _camera_rotation := Vector3.ZERO
 var _noise := FastNoiseLite.new()
 
-func setup(voxel_world: Node3D, view_camera: Camera3D) -> void:
+func setup(voxel_world: Node3D, view_camera: Camera3D, defer_warm: bool = false) -> void:
 	world = voxel_world
 	camera = view_camera
 	rng.randomize()
 	_noise.seed = 7341
 	_noise.frequency = 1.0
-	prewarm()
+	if not defer_warm: prewarm()
 
 func prewarm() -> void:
+	_prewarm_base()
+	for smoke in range(1, 3):
+		if not _smoke_frames.has(smoke):
+			var frames: Array[Texture2D] = []
+			for frame in range(180 if smoke == 1 else 48):
+				frames.append(_texture("Textures/Smoke%d/%03d.png" % [smoke, frame]))
+			_smoke_frames[smoke] = frames
+	_prewarm_pools()
+
+func prewarm_async() -> void:
+	# Keep the loading screen responsive: smoke textures are the large cold
+	# resource batch, not work to perform in the first live combat frame.
+	_prewarm_base()
+	var began: int = Time.get_ticks_usec()
+	var count: int = 0
+	for smoke: int in range(1, 3):
+		if _smoke_frames.has(smoke): continue
+		var frames: Array[Texture2D] = []
+		for frame: int in range(180 if smoke == 1 else 48):
+			frames.append(_texture("Textures/Smoke%d/%03d.png" % [smoke, frame]))
+			count += 1
+			if count >= 8 or Time.get_ticks_usec() - began >= 4000:
+				await get_tree().process_frame
+				if not is_inside_tree(): return
+				count = 0
+				began = Time.get_ticks_usec()
+		_smoke_frames[smoke] = frames
+	_prewarm_pools()
+
+func _prewarm_base() -> void:
 	# Loading-screen work: firing never instantiates sprites, GLB shells or lights
 	# within the configured budgets. Each shell variant retains its own GLB.
 	_ensure_particle_storage()
@@ -155,12 +185,8 @@ func prewarm() -> void:
 	_texture("Textures/WaterExpl.png")
 	_texture("Textures/Fluid.png")
 	_ensure_fragment_batch()
-	for smoke in range(1, 3):
-		if not _smoke_frames.has(smoke):
-			var frames: Array[Texture2D] = []
-			for frame in range(180 if smoke == 1 else 48):
-				frames.append(_texture("Textures/Smoke%d/%03d.png" % [smoke, frame]))
-			_smoke_frames[smoke] = frames
+
+func _prewarm_pools() -> void:
 	_ensure_tracer_resources()
 	while _tracer_pool.size() + _tracers.size() < max_tracers:
 		_release(_new_tracer(), _tracer_pool, max_tracers)

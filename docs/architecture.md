@@ -9,7 +9,10 @@
   targets to a lower approach. Reachable forward blocks can be breached when the
   owner stands above normal step height. Main pools twelve unarmed
   ZombieViews and presents committed terrain once; SurvivalPanel/HUD only display.
-  GameMapCatalog admits canonical settings and Crossroads only. See
+  GameMapCatalog admits canonical damage/wave settings and trusted Crossroads,
+  Minecraft Chunk and MIRA HQ survival identities. Trusted per-life grenadier
+  loadouts and isolated explosion profiles stay in MatchSimulation; the director
+  only proposes60tick throws. Human grenade rules remain independent. See
   [ADR0032](decisions/0032-timed-zombie-survival.md), its latest selection/startup
   amendment [ADR0033](decisions/0033-zombie-pursuit-and-startup.md), and [evidence](zombie-survival.md).
 - Entry creates GameShell without a world/simulation; all launch routes are local. GameMapCatalog whitelists mode/map/weapon, preserves a separate
@@ -23,6 +26,9 @@
   presentation turns before loading; standalone lab bootstrap stays enabled.
   Normal match launch awaits existing bounded chunk and progressive minimap/water
   preparation with a30second error/retry deadline before clock/input admission.
+  Survival Entry warms a packed scene/resource list without instantiating a world;
+  Main stages effects/equipment/setup and lazily creates enabled HDR. See
+  [ADR0034](decisions/0034-survival-grenadiers-and-levels.md).
 - Web startup uses `game/web/loading.html`, derived from the pinned engine shell. The existing `Engine.onProgress` byte callback supplies decimal MB for the engine/game pack; exported file sizes supply the complete denominator before downloads start. Its original startup/error/overlay lifecycle stays intact; see [ADR0017](decisions/0017-web-download-progress.md).
 - VoxelData: shared packed cells, source queries, VXL, edit/collapse rules, atomic ordered transactions and bounded journal. VoxelWorld adopts Data and owns chunk meshes/collision, water/GI/reflections, top-down textures and visual falling clusters. Never apply an adopted transaction to Data then World twice.
 - LocalSession owns the offline lab and source-shaped local rules. SharedPlayerState, PlayerRules, GrenadeRules, MatchObjectives and MatchSimulation own fixed60Hz local multi-actor combat. OfflineTDMSession supplies one human and five bots; transport, prediction, rewind and connection lifecycle are removed under [ADR0031](decisions/0031-offline-only-game.md).

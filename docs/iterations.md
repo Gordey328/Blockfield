@@ -78,3 +78,11 @@ this follow-up. See [ADR0033](decisions/0033-zombie-pursuit-and-startup.md).
 This addition uses separate survival round rules and does not
 accept the full port. See [ADR0032](decisions/0032-timed-zombie-survival.md) and
 [the design and confirmed answers](zombie-waves-plan.md).
+
+The next same-day request extends survival with faster responsive launch, separate
+player/block damage controls, a grenade-throwing zombie and several small actual
+downloaded Teardown map adaptations based on known games. [ADR0034](decisions/0034-survival-grenadiers-and-levels.md)
+defines bounded grenadier ordnance, an isolated explosion profile and trusted
+single-floor levels. New imports require their own real session/navigation and
+local desktop rendering evidence; prior Dust2/Mirage navigation remains unaccepted.
+Repeated deployed-browser and mobile UI inspection stay excluded as requested.

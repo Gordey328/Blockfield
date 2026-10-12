@@ -44,6 +44,52 @@ func _run() -> void:
 	view.update_state(target)
 	_check(view._head.rotation.x < idle_head.x and view._arms[0].rotation.x > 1.0, "Confirmed attack windup visibly leans and reaches")
 	_check(target.alive and target.slot_alive and target.attack_phase == 0.5, "Animating an attack does not modify authority data")
+	var walker_torso: ArrayMesh = view._torso.mesh as ArrayMesh
+	var walker_arm: ArrayMesh = view._arms[1].mesh as ArrayMesh
+	target.zombie_type = "grenadier"
+	target.throw_remaining = 3
+	target.attack_kind = ""
+	target.attack_phase = 0.0
+	view.update_state(target)
+	second.update_state(target)
+	_check(view.get_display_state().zombie_type == "grenadier" and not view.get_display_state().held_grenade,
+		"grenadier role is distinct while the projectile remains absent at idle")
+	_check(view._torso.mesh != walker_torso and view._torso.mesh == second._torso.mesh,
+		"grenadiers share a separate olive/orange torso with a baked backpack")
+	_check(_contains_color(view._torso.mesh as ArrayMesh, ZOMBIE.GRENADIER_ORANGE) and _contains_color(view._torso.mesh as ArrayMesh, ZOMBIE.GRENADIER_OLIVE),
+		"role mesh carries both readable vest and backpack colors")
+	target.attack_kind = "throw"
+	target.attack_phase = .8
+	view.update_state(target)
+	second.update_state(target)
+	var throw_arm: Vector3 = view._arms[1].rotation
+	_check(view.get_display_state().held_grenade and view._arms[1].mesh != walker_arm and view._arms[1].mesh == second._arms[1].mesh,
+		"windup displays a shared grenade-bearing hand without extra nodes")
+	_check(throw_arm.x < -2 and view._arms[0].rotation.x > 0,
+		"throw windup raises one arm overhead instead of a two-arm bite pose")
+	_check(_ids(view) == node_ids and _count(view, "MeshInstance3D") == 6,
+		"backpack and grenade use mesh variants inside the original six-part pool")
+	_check(target.attack_phase == .8 and target.throw_remaining == 3,
+		"throw animation cannot consume stock or advance authoritative windup")
+	target.attack_phase = 1.0
+	view.update_state(target)
+	_check(view._arms[1].rotation.x > 0 and view._arms[1].rotation != throw_arm,
+		"overhand animation has a distinct forward follow-through")
+	target.attack_kind = ""
+	target.attack_phase = 0.0
+	view.update_state(target)
+	_check(not view.get_display_state().held_grenade and view._arms[1].mesh != second._arms[1].mesh,
+		"confirmed release removes only the held mesh; ordinary Main owns the projectile")
+	target.attack_kind = "throw"
+	target.throw_remaining = 0
+	view.update_state(target)
+	_check(not view.get_display_state().held_grenade, "depleted grenadier cannot visually invent another grenade")
+	target.zombie_type = "walker"
+	target.attack_kind = "bite"
+	target.attack_phase = .5
+	view.update_state(target)
+	_check(view._torso.mesh == walker_torso and view._arms[1].mesh == walker_arm,
+		"role replacement restores walker geometry without pooled prop leakage")
 	target.alive = false
 	target.slot_alive = false
 	view.update_state(target)
@@ -66,10 +112,13 @@ func _run() -> void:
 		target.position = Vector3(generation, 4, 5)
 		target.attack_kind = ""
 		target.attack_phase = 0.0
+		target.zombie_type = "grenadier" if generation % 2 == 0 else "walker"
+		target.throw_remaining = 3 if generation % 2 == 0 else 0
 		view.update_state(target)
 		_check(view.visible and view.get_display_state().generation == generation and is_zero_approx(view.get_display_state().walk_phase), "New generation clears corpse/attack/gait: " + str(generation))
 		view.show_death()
 	_check(_ids(view) == node_ids, "Many deaths and reused slots allocate no additional rig nodes")
+	_check(not view.get_display_state().held_grenade, "death clears held explosive across alternating pooled roles")
 	target.spawn_generation = 66
 	target.slot_alive = true
 	target.position = Vector3.INF
@@ -125,7 +174,8 @@ func _capture_stage() -> void:
 		stage.add_child(zombie)
 		var target: Dictionary = {"id": index, "kind": "zombie", "slot_alive": true, "spawn_generation": 1,
 			"position": Vector3(-3.6 + index * 2.4, 0, 0), "yaw": -0.2,
-			"moving": index == 1, "attack_kind": "bite" if index == 2 else "", "attack_phase": 0.6 if index == 2 else 0.0}
+			"zombie_type":"grenadier" if index >= 2 else "walker", "throw_remaining":3,
+			"moving": index == 1, "attack_kind": "throw" if index == 2 else "", "attack_phase": 0.8 if index == 2 else 0.0}
 		zombie.setup(target)
 		if index == 1:
 			target.position += Vector3(0, 0, -0.4)
@@ -133,7 +183,7 @@ func _capture_stage() -> void:
 		if index == 3:
 			zombie.show_death()
 			zombie.set_paused(true)
-	var visible_zombies: Image = await _capture("idle-walk-windup-corpse")
+	var visible_zombies: Image = await _capture("walker-walk-grenadier-windup-corpse")
 	_check(empty.get_data() != visible_zombies.get_data(), "Compatibility renderer displays authored zombie meshes")
 	stage.free()
 
@@ -164,3 +214,12 @@ func _check(value: bool, message: String) -> void:
 	if not value:
 		failures += 1
 		push_error("ZOMBIE VIEW: " + message)
+
+
+static func _contains_color(mesh: ArrayMesh, color: Color) -> bool:
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	for candidate: Color in colors:
+		if absf(candidate.r - color.r) < .001 and absf(candidate.g - color.g) < .001 and absf(candidate.b - color.b) < .001:
+			return true
+	return false

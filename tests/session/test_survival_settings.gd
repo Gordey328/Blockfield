@@ -26,10 +26,15 @@ func _run() -> void:
 			{"wave_interval_seconds": 29}, {"wave_interval_seconds": 121}, {"zombies_per_wave": 0},
 			{"zombies_per_wave": 25}, {"growth_per_minute": -0.1}, {"growth_per_minute": INF},
 			{"growth_per_minute": 6.1}, {"growth_mode": "exponential"}, {"live_limit": 13},
-			{"live_limit": 0}, {"preparation_seconds": 0}]:
+			{"live_limit": 0}, {"preparation_seconds": 0}, {"zombie_damage": 0}, {"zombie_damage": 101},
+			{"zombie_damage": 1.5}, {"zombie_damage": "20"}, {"zombie_damage": NAN},
+			{"zombie_block_damage": 0}, {"zombie_block_damage": 101}, {"zombie_block_damage": INF}]:
 		check(not SETTINGS.validate(raw).ok, "invalid production settings reject atomically: %s" % str(raw))
 	check(SETTINGS.validate({"duration_seconds": 60, "wave_interval_seconds": 30,
 		"zombies_per_wave": 24, "growth_per_minute": 6.0, "live_limit": 1}).ok, "production boundary values accepted")
+	var configured_damage: Dictionary = SETTINGS.validate({"zombie_damage": 1, "zombie_block_damage": 100})
+	check(configured_damage.ok and configured_damage.settings.zombie_damage == 1 and configured_damage.settings.zombie_block_damage == 100,
+		"player and block damage have separate inclusive integer bounds")
 	check(not SETTINGS.validate({"duration_seconds": 1, "wave_interval_seconds": 1, "preparation_seconds": 0}).ok,
 		"short tests are never enabled by ordinary settings")
 	check(SETTINGS.validate({"duration_seconds": 1, "wave_interval_seconds": 1, "preparation_seconds": 0}, true).ok,

@@ -4,6 +4,9 @@ extends Node3D
 const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
 const OFFLINE_SURVIVAL = preload("res://gameplay/offline_survival_session.gd")
 const SURVIVAL_ARENA = preload("res://ai/survival_arena.gd")
+const SURVIVAL_LEVELS = preload("res://ai/survival_levels.gd")
+var _survival_arena_data: Dictionary = {}
+var _warm_resources: Array[Resource] = []
 const ZOMBIE_VIEW = preload("res://presentation/zombie_view.gd")
 const SURVIVAL_SETTINGS = preload("res://gameplay/survival_settings.gd")
 const TDM_ARENA = preload("res://ai/tdm_arena.gd")
@@ -92,19 +95,44 @@ func _enter_tree() -> void:
 		(get_node("VoxelWorld") as VoxelWorld).bootstrap_lab = false
 
 func _ready() -> void:
+	set_process(false)
+	player.set_process(false)
+	player.set_physics_process(false)
+	hud.set_process(false)
+	hud.set_process_input(false)
+	if get_tree().has_meta("blockfield_warm_resources"):
+		_warm_resources.assign(get_tree().get_meta("blockfield_warm_resources"))
+		get_tree().remove_meta("blockfield_warm_resources")
 	if get_tree().has_meta("blockfield_launch"):
 		var requested: Variant = get_tree().get_meta("blockfield_launch")
 		get_tree().remove_meta("blockfield_launch")
 		_launch_configuration = requested.duplicate(true) if requested is Dictionary else {}
 		_launch_status = "loading"
+	var staged: bool = _launch_status == "loading" and offline_survival_mode
+	if staged:
+		_launch_overlay = LAUNCH_OVERLAY.new()
+		add_child(_launch_overlay)
+		_launch_overlay.home_requested.connect(open_game_home)
+		_launch_overlay.retry_requested.connect(_apply_game_launch)
+		_launch_overlay.show_progress("Выживание", "Подготовка снаряжения…", true)
+		await get_tree().process_frame
 	if get_tree().has_meta("blockfield_utility"):
 		_shell_utility = str(get_tree().get_meta("blockfield_utility"))
 		get_tree().remove_meta("blockfield_utility")
 	if offline_tdm_mode:
-		var arena_data: VoxelData = SURVIVAL_ARENA.build() if offline_survival_mode else TDM_ARENA.build()
-		var arena: Dictionary = SURVIVAL_ARENA.metadata() if offline_survival_mode else TDM_ARENA.metadata()
+		var level: Dictionary = SURVIVAL_LEVELS.load_level(str(_launch_configuration.get("map_id", "crossroads"))) if offline_survival_mode else {}
+		if offline_survival_mode and not bool(level.get("ok", false)):
+			_launch_status = "error"
+			_launch_error = "Не удалось подготовить уровень: " + str(level.get("error", ""))
+			if _launch_overlay != null: _launch_overlay.show_error(_launch_error, false, true)
+			return
+		var arena_data: VoxelData = level.data if offline_survival_mode else TDM_ARENA.build()
+		var arena: Dictionary = level.arena if offline_survival_mode else TDM_ARENA.metadata()
+		if offline_survival_mode:
+			_survival_arena_data = arena
+			_map_metadata = level.metadata
 		var start_feet: Vector3 = arena.owner_spawn if offline_survival_mode else arena.team_spawns[0][0]
-		world.set_map_data(arena_data,"Crossroads · Выживание" if offline_survival_mode else "Crossroads · 3×3",true,start_feet)
+		world.set_map_data(arena_data,(str(level.title) + " · Выживание") if offline_survival_mode else "Crossroads · 3×3",true,start_feet)
 		# Effects and actor views sample the current rendered camera pose.
 		player.process_priority = process_priority-1
 	graphics_options.merge({"gi":false,"water_waves":true,"water_refraction":true,"water_reflections":false,"ragdolls":true})
@@ -145,9 +173,12 @@ func _ready() -> void:
 	player.camera.add_child(listener)
 	listener.make_current()
 	effects=OpenSpadesEffects.new()
-	effects.setup(world,player.camera)
+	effects.setup(world,player.camera,staged)
 	effects.audio_service=audio
 	add_child(effects)
+	if staged:
+		await effects.prewarm_async()
+		if not is_inside_tree(): return
 	world.blocks_changed.connect(_blocks_changed)
 	world.falling_cluster_created.connect(func(cluster: Node3D):_play_spatial("Misc/BlockFall",cluster.global_position))
 	world.falling_cluster_finished.connect(func(point: Vector3,count: int,reason: String):
@@ -161,7 +192,7 @@ func _ready() -> void:
 	if offline_tdm_mode:
 		var configured: Dictionary
 		if offline_survival_mode:
-			configured = (session as OFFLINE_SURVIVAL).configure_survival(world.data, SURVIVAL_ARENA.metadata(), _launch_configuration.get("survival", SURVIVAL_SETTINGS.defaults()), player_name)
+			configured = (session as OFFLINE_SURVIVAL).configure_survival(world.data, _survival_arena_data, _launch_configuration.get("survival", SURVIVAL_SETTINGS.defaults()), player_name, false, int(_launch_configuration.get("weapon", 0)))
 		else:
 			configured = (session as OFFLINE_TDM).configure_match(world.data,TDM_ARENA.metadata(),player_name)
 		if not configured.get("ok",false):
@@ -173,6 +204,7 @@ func _ready() -> void:
 	player.skin_id=skin_id
 	session.player_name=player_name
 	_setup_graphics()
+	if staged: await get_tree().process_frame
 	session.player_hurt.connect(func(amount: float,_origin: Vector3,_kind: String):
 		_hurt_age=0.0
 		if audio!=null:audio.flesh_hit(player.global_position,true)
@@ -180,6 +212,10 @@ func _ready() -> void:
 	OpenSpadesLocalization.set_locale(locale)
 	console_service.setup(self)
 	hud.setup(self,session,player,world)
+	if staged:
+		player._connect_simulation()
+		player._update_view(0.0)
+		await get_tree().process_frame
 	hud.alert_sound_requested.connect(func():player._play_sound("Feedback/Alert"))
 	hud.chat_sound_requested.connect(func():
 		if chat_beep:player._play_sound("Feedback/Chat"))
@@ -200,6 +236,7 @@ func _ready() -> void:
 	session.match_event.connect(_match_event_audio)
 	_player_view=OpenSpadesExtensions.create_third_person_skin(skin_id,{"player":player,"session":session})
 	player.add_child(_player_view)
+	if staged: await get_tree().process_frame
 	if not offline_tdm_mode:
 		_spawn_targets()
 		_setup_objectives()
@@ -208,13 +245,19 @@ func _ready() -> void:
 		if offline_survival_mode: _create_survival_supply_views()
 	hud.set_menu_visible(true)
 	if _launch_status == "loading":
-		_launch_overlay = LAUNCH_OVERLAY.new()
-		add_child(_launch_overlay)
-		_launch_overlay.home_requested.connect(open_game_home)
-		_launch_overlay.retry_requested.connect(_apply_game_launch)
+		if _launch_overlay == null:
+			_launch_overlay = LAUNCH_OVERLAY.new()
+			add_child(_launch_overlay)
+			_launch_overlay.home_requested.connect(open_game_home)
+			_launch_overlay.retry_requested.connect(_apply_game_launch)
 		_apply_game_launch.call_deferred()
 	elif _shell_utility == "settings":
 		hud.open_settings_menu()
+	player.set_process(true)
+	player.set_physics_process(true)
+	hud.set_process(true)
+	hud.set_process_input(true)
+	set_process(true)
 
 func get_launch_state() -> Dictionary:
 	return {"status": _launch_status, "configuration": _launch_configuration.duplicate(true), "error": _launch_error}
@@ -273,7 +316,7 @@ func _apply_game_launch() -> void:
 			if not is_inside_tree(): return
 		# Present completed terrain once before admitting live input.
 		await get_tree().process_frame
-	session.select_weapon(int(configuration.weapon))
+	if not offline_survival_mode: session.select_weapon(int(configuration.weapon))
 	LAUNCH_CATALOG.save_selection(configuration)
 	_launch_status = "ready"
 	_launch_in_progress = false
@@ -1030,14 +1073,15 @@ func _setup_graphics() -> void:
 	_flashlight_fill.light_color=_flashlight.light_color
 	_flashlight_fill.omni_range=10.0
 	_flashlight.add_child(_flashlight_fill)
-	var post_path:="res://presentation/openspades_post_effects.gd"
+	var post_path: String = "res://presentation/openspades_post_effects.gd"
 	if ResourceLoader.exists(post_path):
 		post_effects=(load(post_path) as Script).new()
 		add_child(post_effects)
 		post_effects.setup(player.camera,world_environment)
 	hdr_scene=preload("res://presentation/hdr_scene_viewport.gd").new()
 	add_child(hdr_scene)
-	hdr_scene.setup(player.camera,get_viewport())
+	hdr_scene.available = hdr_scene.supports_float_target()
+	if bool(graphics_options.hdr): hdr_scene.setup(player.camera,get_viewport())
 	_apply_graphics()
 
 func get_graphics_options() -> Dictionary:
@@ -1105,6 +1149,8 @@ func _apply_graphics() -> void:
 			var empty_flare_sources: Array[Dictionary] = []
 			post_effects.set_flare_sources(empty_flare_sources)
 	if hdr_scene!=null:
+		if hdr_scene.exposure == null and bool(graphics_options.hdr):
+			hdr_scene.setup(player.camera,get_viewport())
 		var hdr_result: Dictionary=hdr_scene.set_options({"min_ev":float(graphics_options.hdr_min_ev),"max_ev":float(graphics_options.hdr_max_ev),"speed":float(graphics_options.hdr_speed),"bloom":bool(graphics_options.bloom)})
 		if bool(hdr_result.ok):
 			graphics_options.hdr_min_ev=hdr_result.options.min_ev
@@ -1249,6 +1295,7 @@ func stop_audio() -> void:
 	if player!=null:player.stop_audio()
 
 func _exit_tree() -> void:
+	_warm_resources.clear()
 	_cancel_vxl_request()
 	stop_audio()
 	if OS.has_feature("web"):JavaScriptBridge.eval("delete window.BlockfieldFileReceiver; if(window.BlockfieldExports)window.BlockfieldExports.clear();")
@@ -1269,9 +1316,8 @@ func restart_offline_tdm() -> void:
 		hud.show_notice(str(result.get("error","Match restart failed")))
 		return
 	_clear_match_views()
-	world.set_map_data(result.data,"Crossroads · 3×3",true)
+	world.set_map_data(result.data,world.map_name,true,(session as OFFLINE_TDM).get_owner_state().feet())
 	if offline_survival_mode:
-		world.map_name = "Crossroads · Выживание"
 		_create_survival_supply_views()
 	_update_shared_actor_views()
 	hud.set_menu_visible(true)
@@ -1522,7 +1568,7 @@ func _match_cosmetic_audio(kind: String, event: Dictionary, own: bool) -> void:
 
 func _refresh_match_terrain() -> void:
 	var match_session: OFFLINE_TDM = session as OFFLINE_TDM
-	if world.set_map_data(match_session.simulation.data,"Crossroads · 3×3",true) != OK:
+	if world.set_map_data(match_session.simulation.data,world.map_name,true) != OK:
 		push_error("Offline terrain presentation refresh failed")
 		return
 	for cell: Vector3i in match_session.simulation.get_damaged_blocks():

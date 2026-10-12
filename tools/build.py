@@ -103,6 +103,10 @@ def main():
                ('survival-setup','tests/ui/test_survival_setup.gd'),
                ('survival-scene','tests/integration/test_survival_scene.gd')]
     suites += [('startup-work','tests/integration/test_startup_work.gd')]
+    suites += [('survival-launch-latency','tests/integration/test_survival_launch_latency.gd')]
+    suites += [('zombie-grenades','tests/simulation/test_zombie_grenades.gd'),
+               ('survival-levels','tests/integration/test_survival_levels.gd'),
+               ('survival-options-desktop','tests/ui/test_survival_options_desktop.gd')]
     suites += [('blockfield-map','tests/world/test_blockfield_map.gd'),('native-map-main','tests/integration/test_native_map_main.gd')]
     suites += [('collapse-optimization','tests/world/test_collapse_optimization.gd'),
                ('empty-chunk-optimization','tests/world/test_empty_chunk_optimization.gd'),
@@ -120,7 +124,7 @@ def main():
     for name,path in suites:
         if selected and name not in selected: continue
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-setup','survival-panel','survival-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     if args.export: export_web()
 
