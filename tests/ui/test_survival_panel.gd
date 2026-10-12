@@ -65,7 +65,7 @@ func _run() -> void:
 	panel.refresh()
 	display = panel.get_display_state()
 	_check(display.title == "Вы выжили" and not display.resume_visible and display.resume_disabled, "Winning result cannot resume finished gameplay")
-	_check(display.detail.contains("Убийства: 17") and display.detail.contains("В голову: 8") and display.detail.contains("40"), "Result exposes actual combat statistics")
+	_check(display.detail.contains("Убийства: 17") and display.detail.contains("Попаданий в голову: 8") and display.detail.contains("40"), "Result exposes actual combat statistics")
 	session.state.outcome = "interrupted"
 	session.state.finish_reason = "spawn_unavailable"
 	panel.configure(session, "en")

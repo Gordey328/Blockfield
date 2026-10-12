@@ -300,6 +300,14 @@ unverified.
 
 ## Pending coordinator gates
 
+First frozen attempt at `4e93e1375df79a6fc589df5fb44d406e5f9adeb9` stopped
+at the panel fixture's old Russian headshot caption expectation after the display
+was clarified as head hits. Its preceding parser/import, original lab HDR119/0,
+TDM/shell/launch and new settings/session/AI/view checks pass. The updated fixture
+continues to assert the independent example's 17 kills, 8 head hits and 40 damage.
+This failed freeze is retained in `.cache/logs/survival-frozen-gate.log` and is not
+the publishable gate. The complete gate is repeated on the corrected revision.
+
 Ordinary mutable export was exercised at 1280×720, 375×812 and 812×375 using
 the in-app Chromium browser at localhost:8096. Home → Zombie waves restores
 settings; setup now puts the wave controls before the small map card. Keyboard
