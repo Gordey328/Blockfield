@@ -115,7 +115,7 @@ func _check_quick_launch() -> void:
 			var rules: Label = shell.find_child("HomeRushRules", true, false) as Label
 			if rules != null:
 				_check(rules.text.contains("180") and (rules.text.contains("зачистка") or rules.text.contains("cleanup")), "Home distinguishes the wave timer from final cleanup: " + locale)
-			for name_value: String in ["Rush", "Play", "Survival", "Training", "Settings"]:
+			for name_value: String in ["Rush", "Play", "Survival", "Training", "Arsenal", "Settings"]:
 				var target: Button = shell.find_child(name_value, true, false) as Button
 				var context: String = "%s %s %s" % [locale, str(dimensions), name_value]
 				_check(target != null and viewport.grow(0.5).encloses(target.get_global_rect()), "Home keeps Rush and existing actions immediately reachable: " + context)

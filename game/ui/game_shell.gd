@@ -334,7 +334,7 @@ func _build_home() -> void:
 	copy.add_child(_error)
 	var secondary: GridContainer = GridContainer.new()
 	secondary.name = "HomeSecondaryActions"
-	secondary.columns = 2
+	secondary.columns = 3 if _compact and _css_size.x >= 500.0 else 2
 	secondary.add_theme_constant_override("h_separation", 8)
 	secondary.add_theme_constant_override("v_separation", 8)
 	copy.add_child(secondary)
@@ -342,7 +342,7 @@ func _build_home() -> void:
 	secondary.add_child(play)
 	secondary.add_child(_button("Survival", _ui("Волны зомби", "Zombie waves"), func() -> void: show_setup("survival")))
 	secondary.add_child(_button("Training", _ui("Тренировка", "Training"), func() -> void: show_setup("training")))
-	secondary.add_child(_button("Arsenal", _ui("Арсенал · 20 предметов", "Arsenal · 20 items"), func() -> void: utility_requested.emit("arsenal")))
+	secondary.add_child(_button("Arsenal", _ui("Арсенал", "Arsenal") if _compact else _ui("Арсенал · 20 предметов", "Arsenal · 20 items"), func() -> void: utility_requested.emit("arsenal")))
 	secondary.add_child(_button("Settings", _ui("Настройки", "Settings"), func() -> void: _request_utility("settings")))
 	if not _mobile:
 		copy.add_child(_label(_ui("Без сервера · Классические режимы рядом", "No server needed · Classic modes available"), 13, CombatTheme.MUTED))

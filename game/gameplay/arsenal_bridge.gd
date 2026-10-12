@@ -4,6 +4,7 @@ extends RefCounted
 const TERRAIN = preload("res://world/arsenal_terrain.gd")
 const HITS = preload("res://gameplay/lab_hit_volumes.gd")
 const MOTION = preload("res://gameplay/source_player_motion.gd")
+const MAX_LAB_IMPULSES: int = 32
 var session: LocalSession
 var player: Node3D
 var world: VoxelWorld
@@ -11,6 +12,7 @@ var data: VoxelData
 var terrain: RefCounted
 var action_sequence: int = 0
 var _lab_motion: Dictionary[int, SourcePlayerMotion.State] = {}
+var _lab_motion_generation: Dictionary[int,int] = {}
 var _lab_health: Dictionary[Vector3i, float] = {}
 var _receipts: Array[Dictionary] = []
 var _watched_cells: Dictionary[Vector3i,int] = {}
@@ -36,6 +38,7 @@ func configure_data(local_session: LocalSession, map_data: VoxelData) -> void:
 	terrain = TERRAIN.new()
 	terrain.configure(data)
 	_lab_motion.clear()
+	_lab_motion_generation.clear()
 	_lab_health.clear()
 	_receipts.clear()
 	_watched_cells.clear()
@@ -57,6 +60,7 @@ func dispose() -> void:
 	player = null
 	session = null
 	_lab_motion.clear()
+	_lab_motion_generation.clear()
 	_lab_health.clear()
 	_watched_cells.clear()
 	_watch_refs.clear()
@@ -234,9 +238,26 @@ func impulse(id: int, velocity_mps: Vector3) -> void:
 	else:
 		var target: Dictionary = session.get_target(id)
 		if target.is_empty() or not bool(target.alive): return
-		var motion: SourcePlayerMotion.State = _lab_motion.get(id, MOTION.create_state(target.position))
+		var life: int = int(target.get("deaths",0))+1
+		if _lab_motion.has(id) and int(_lab_motion_generation.get(id,0))!=life: _erase_lab_motion(id)
+		if not _lab_motion.has(id):
+			if _lab_motion.size()>=MAX_LAB_IMPULSES: _prune_lab_motion()
+			if _lab_motion.size()>=MAX_LAB_IMPULSES: return
+		var motion: SourcePlayerMotion.State = _lab_motion[id] if _lab_motion.has(id) else MOTION.create_state(target.position)
 		motion.native_velocity = (motion.native_velocity + added).limit_length(.75)
 		_lab_motion[id] = motion
+		_lab_motion_generation[id] = life
+
+func _erase_lab_motion(id: int) -> void:
+	_lab_motion.erase(id)
+	_lab_motion_generation.erase(id)
+
+func _prune_lab_motion() -> void:
+	for id: int in _lab_motion.keys():
+		var target: Dictionary = session.get_target(id)
+		var motion: SourcePlayerMotion.State = _lab_motion[id]
+		if target.is_empty() or not bool(target.alive) or int(target.get("deaths",0))+1 != int(_lab_motion_generation.get(id,0)) \
+				or (motion.grounded and motion.native_velocity.length_squared()<.00001): _erase_lab_motion(id)
 
 func velocity_mps(id: int) -> Vector3:
 	var match_state: MatchSimulation = simulation()
@@ -246,7 +267,9 @@ func velocity_mps(id: int) -> Vector3:
 	if id == owner_id() and is_instance_valid(player):
 		var value: Variant = player.get("_native_velocity")
 		return value*32.0 if value is Vector3 else Vector3.ZERO
-	return _lab_motion[id].native_velocity*32.0 if _lab_motion.has(id) else Vector3.ZERO
+	var target: Dictionary = session.get_target(id)
+	return _lab_motion[id].native_velocity*32.0 if _lab_motion.has(id) and not target.is_empty() \
+		and bool(target.alive) and int(target.get("deaths",0))+1==int(_lab_motion_generation.get(id,0)) else Vector3.ZERO
 
 func push(id: int,direction: Vector3,speed: float) -> void:
 	if not direction.is_finite() or direction.length_squared()<.00001 or not is_finite(speed): return
@@ -369,8 +392,8 @@ func step() -> void:
 	if simulation() == null:
 		for id: int in _lab_motion.keys():
 			var target: Dictionary = session.get_target(id)
-			if target.is_empty() or not bool(target.alive):
-				_lab_motion.erase(id)
+			if target.is_empty() or not bool(target.alive) or int(target.get("deaths",0))+1 != int(_lab_motion_generation.get(id,0)):
+				_erase_lab_motion(id)
 				continue
 			var motion: SourcePlayerMotion.State = _lab_motion[id]
 			motion.feet_position = target.position
@@ -382,7 +405,7 @@ func step() -> void:
 			target.position = next.feet_position
 			target.spawn_position += shift
 			_lab_motion[id] = next
-			if next.grounded and next.native_velocity.length_squared() < .00001: _lab_motion.erase(id)
+			if next.grounded and next.native_velocity.length_squared() < .00001: _erase_lab_motion(id)
 
 func flush_events() -> void:
 	var match_state: MatchSimulation = simulation()

@@ -163,6 +163,8 @@ func _loadout_changed(loadout: Dictionary) -> void:
 
 func _select(id: String) -> void:
 	if id == "source":
+		_panel_trigger = false
+		if runtime != null: runtime.cancel_trigger()
 		source_selected = true
 		main.player.arsenal_active = false
 		if not main.offline_tdm_mode: ArsenalLoadout.save(_loadout, false)

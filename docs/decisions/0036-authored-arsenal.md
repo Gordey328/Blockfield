@@ -12,7 +12,10 @@ ArsenalCatalog defines stable authored string IDs x01–x20. ArsenalRuntime owns
 finite inventory, charging, cooldowns, swept ordnance, elemental states, impulses,
 deployables and delayed support on the host's fixed60Hz boundary. ArsenalBridge
 adapts the real local lab or shared offline match to existing damage/kill credit,
-native motion and canonical VoxelData. It does not simulate presentation nodes.
+native motion and canonical VoxelData. Active elemental status and lab impulse
+state each cap at 32 entries; expired/dead/recycled identities retire. Overflow
+refuses a new effect state while ordinary damage remains valid. Active freeze
+immunity is not evicted, and heavy shatter checks the target life identity. It does not simulate presentation nodes.
 Survival advances it immediately after shared motion/shooting and before the
 normal outcome/card checks. Pause, upgrade choice and world-loading readiness
 stop every new clock. The playable preparation countdown continues normally.

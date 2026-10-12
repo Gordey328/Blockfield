@@ -78,6 +78,7 @@ func _run() -> void:
 	_drill_span_cover()
 	_cold_fire_life_and_self_harm()
 	_lab_fixed_clock_and_cancel()
+	_bounded_status_and_motion()
 	_match_credit_and_power()
 	print("ARSENAL: %d assertions, %d failures" % [checks,failures])
 	quit(0 if failures==0 else 1)
@@ -524,4 +525,80 @@ func _lab_fixed_clock_and_cancel() -> void:
 	f.runtime.cancel_trigger()
 	advance(f)
 	check(f.bridge.velocity_mps(id).z>=0.0,"focus/GUI cancellation does not turn a vacuum hold into its attack release push")
+	finish(f)
+
+func _bounded_status_and_motion() -> void:
+	var f: Dictionary = fixture("x05")
+	var ids: Array[int] = []
+	# Public lab admission remains independent of decorative/status budgets.
+	# Trusted ray resolution fills one simultaneous status batch for this fixture.
+	for index: int in range(33):
+		var angle: float = float(index)*TAU/33.0
+		ids.append(target(f,Vector3(cos(angle)*6.0,0,sin(angle)*6.0)))
+	for index: int in range(32):
+		var point: Vector3 = Vector3(f.session.get_target(ids[index]).position)+Vector3.UP*1.25
+		f.runtime._freeze_ray(f.origin,(point-f.origin).normalized())
+	check(f.runtime.readout().statuses==32 and f.session.targets.size()==33,"32 active status records cap metadata without restricting the real lab roster")
+	var last: int = ids[32]
+	var point: Vector3 = Vector3(f.session.get_target(last).position)+Vector3.UP*1.25
+	f.runtime._freeze_ray(f.origin,(point-f.origin).normalized())
+	check(health(f,last)==96 and f.runtime.readout().statuses==32,"saturated cold status still deals real target damage and never dereferences an empty record")
+	check(f.runtime.movement_scale(last)==1.0 and f.runtime.movement_scale(ids[0])<1.0,"status saturation refuses the new modifier without evicting an existing live one")
+	f.runtime._slow(last,120,.25)
+	check(f.runtime.movement_scale(last)==1.0,"arc slow also safely refuses a saturated status slot")
+	advance(f,121)
+	check(f.runtime.readout().statuses==0 and f.runtime.movement_scale(ids[0])==1.0,"fully expired statuses retire while their original actors remain alive")
+	f.runtime._freeze_ray(f.origin,(point-f.origin).normalized())
+	check(f.runtime.readout().statuses==1 and health(f,last)==92,"retired capacity can admit new real cold damage and a modifier")
+	f.session.get_target(last).health=4
+	f.runtime._freeze_ray(f.origin,(point-f.origin).normalized())
+	check(not bool(f.session.get_target(last).alive),"lethal cold damage safely finishes before requesting a nonexistent target status")
+	finish(f)
+	f=fixture("x05")
+	var id: int = target(f,Vector3(0,0,-3))
+	f.session.get_target(id).health=1000
+	for index: int in range(4): f.runtime._freeze_ray(f.origin,f.direction)
+	check(f.runtime.movement_scale(id)==0.0,"actual cold damage begins a same-life freeze and immunity interval")
+	advance(f,100)
+	check(f.runtime.readout().statuses==1 and f.runtime.movement_scale(id)>0.0,"expired freeze retains immunity instead of reclaiming its live record early")
+	for index: int in range(4): f.runtime._freeze_ray(f.origin,f.direction)
+	check(f.runtime.movement_scale(id)>0.0,"new cold hits cannot bypass retained same-life immunity")
+	advance(f,171)
+	check(f.runtime.readout().statuses==0,"immunity deadline permits retiring a fully expired live-actor record")
+	for index: int in range(4): f.runtime._freeze_ray(f.origin,f.direction)
+	check(f.runtime.movement_scale(id)==0.0,"after immunity expires cold can freeze that same living actor again")
+	var new_life: Dictionary = f.session.get_target(id)
+	new_life.deaths+=1
+	new_life.health=1000
+	check(f.runtime.movement_scale(id)==1.0,"recycled target life cannot inherit the old frozen modifier")
+	f.runtime._hit(id,65.0,"x10",true)
+	check(health(f,id)==935,"a stale freeze cannot grant a heavy shatter bonus against a new life")
+	finish(f)
+	f=fixture("x08")
+	ids.clear()
+	for index: int in range(40):
+		var angle: float = float(index)*TAU/40.0
+		ids.append(target(f,Vector3(cos(angle)*6.0,0,sin(angle)*6.0)))
+	for actor_id: int in ids: f.bridge.impulse(actor_id,Vector3.RIGHT*6.0)
+	check(f.bridge._lab_motion.size()==32 and f.session.targets.size()==40,"32 motion slots cap impulses without restricting original actor admission")
+	var extra: int = ids[39]
+	var refused_position: Vector3 = f.session.get_target(extra).position
+	var old_position: Vector3 = f.session.get_target(ids[0]).position
+	advance(f)
+	check(Vector3(f.session.get_target(ids[0]).position).x>old_position.x,"admitted impulses still move actual source-clipped targets")
+	check(f.session.get_target(extra).position==refused_position and f.bridge.velocity_mps(extra)==Vector3.ZERO,"overflow actor remains unchanged instead of creating an unbounded impulse record")
+	var old_velocity: float = f.bridge.velocity_mps(ids[0]).x
+	f.bridge.impulse(ids[0],Vector3.RIGHT*6.0)
+	check(f.bridge.velocity_mps(ids[0]).x>old_velocity and f.bridge._lab_motion.size()==32,"saturated motion pool still updates an existing admitted actor")
+	f.bridge.damage(extra,10.0,"x08")
+	check(health(f,extra)==90,"refused impulse does not suppress ordinary authoritative target damage")
+	advance(f,150)
+	check(f.bridge._lab_motion.is_empty() and f.bridge._lab_motion_generation.is_empty(),"grounded impulses and their life guards retire after natural velocity decay")
+	f.bridge.impulse(extra,Vector3.RIGHT*6.0)
+	check(f.bridge._lab_motion.size()==1,"expired impulse capacity admits a new actual actor")
+	var recycled: Dictionary = f.session.get_target(extra)
+	recycled.deaths+=1
+	check(f.bridge.velocity_mps(extra)==Vector3.ZERO,"recycled lab life cannot expose stale impulse velocity")
+	advance(f)
+	check(f.bridge._lab_motion.is_empty(),"fixed processing retires a recycled motion life before moving it")
 	finish(f)

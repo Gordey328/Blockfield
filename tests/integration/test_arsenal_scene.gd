@@ -106,10 +106,13 @@ func brain_state(session: OfflineSurvivalSession, id: int) -> String:
 func apply_compact(slot: int) -> void:
 	var panel: ArsenalPanel = app.arsenal_coordinator.panel
 	for frame: int in 30:
-		if panel._enabled: break
+		if panel._enabled and panel._combat_visible and panel._bank.is_visible_in_tree(): break
 		await frames(1)
+	check(panel._enabled and panel._combat_visible and panel._bank.is_visible_in_tree(), "actual compact bank is available after modal resume before selection")
+	var item: String = panel._slot_item(slot)
 	panel._slots[slot].pressed.emit()
 	await frames(8)
+	check(app.arsenal_coordinator.runtime.selected_item == item, "actual equipped compact button selects its intended item: " + item)
 	for frame: int in 150:
 		if not panel._apply.disabled: break
 		await frames(1)

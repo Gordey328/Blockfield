@@ -5,6 +5,7 @@ const CATALOG = preload("res://gameplay/arsenal_catalog.gd")
 const MAX_PROJECTILES: int = 24
 const MAX_FIELDS: int = 8
 const MAX_EVENTS: int = 128
+const MAX_ACTIVE_STATUS: int = 32
 const DT: float = 1.0 / 60.0
 var bridge: ArsenalBridge
 var selected_item: String = "x01"
@@ -428,14 +429,17 @@ func _freeze_ray(origin: Vector3,direction: Vector3) -> void:
 		var id: int = int(hit.id)
 		_hit(id,4.0,"x05")
 		var status: Dictionary = _status_for(id)
-		status.cold = mini(4,int(status.get("cold",0))+1)
-		status.cold_until = _tick+120
-		_slow(id,120,.6)
-		if int(status.cold) >= 4 and _tick >= int(status.get("immune_until",0)):
-			status.frozen_until = _tick+90
-			status.immune_until = _tick+270
-			status.cold = 0
-			_event("status","x05",hit.position,{"seconds":1.5,"radius":.8})
+		# A lethal hit or a saturated status pool still deals ordinary damage;
+		# neither may create an invalid empty status or evict another live freeze.
+		if not status.is_empty():
+			status.cold = mini(4,int(status.get("cold",0))+1)
+			status.cold_until = _tick+120
+			_slow(id,120,.6)
+			if int(status.cold) >= 4 and _tick >= int(status.get("immune_until",0)):
+				status.frozen_until = _tick+90
+				status.immune_until = _tick+270
+				status.cold = 0
+				_event("status","x05",hit.position,{"seconds":1.5,"radius":.8})
 		end = hit.position
 	_event("beam","x05",origin,{"end_position":end,"radius":.15})
 
@@ -463,9 +467,11 @@ func _hammer(origin: Vector3,direction: Vector3) -> void:
 	_event("impact","x10",origin+direction*2.0,{"radius":3.0})
 
 func _hit(id: int,amount: float,item: String,heavy: bool = false,part: String = "torso") -> void:
-	var position: Vector3 = bridge.actor(id).get("position",Vector3.ZERO)
+	var actor: Dictionary = bridge.actor(id)
+	var position: Vector3 = actor.get("position",Vector3.ZERO)
 	var status: Dictionary = _status.get(id,{})
-	if heavy and int(status.get("frozen_until",0)) > _tick:
+	if heavy and not actor.is_empty() and int(status.get("generation",0))==int(actor.generation) \
+			and int(status.get("frozen_until",0)) > _tick:
 		amount += 40.0
 		status.frozen_until = 0
 		_event("shatter",item,position,{"radius":1.0})
@@ -477,7 +483,12 @@ func _status_for(id: int) -> Dictionary:
 	var actor: Dictionary = bridge.actor(id)
 	if actor.is_empty(): return {}
 	var status: Dictionary = _status.get(id,{})
-	if status.is_empty() or int(status.generation) != int(actor.generation):
+	if not status.is_empty() and int(status.generation) != int(actor.generation):
+		_status.erase(id)
+		status = {}
+	if status.is_empty():
+		if _status.size() >= MAX_ACTIVE_STATUS: _step_status()
+		if _status.size() >= MAX_ACTIVE_STATUS: return {}
 		status = {"generation":int(actor.generation),"slow_until":0,"scale":1.0,"cold":0,"cold_until":0,"frozen_until":0,"immune_until":0}
 		_status[id] = status
 	return status
@@ -508,7 +519,15 @@ func _step_status() -> void:
 		var actor: Dictionary = bridge.actor(id)
 		if actor.is_empty() or int(actor.generation) != int(_status[id].generation):
 			_status.erase(id)
-		elif int(_status[id].cold_until) <= _tick: _status[id].cold = 0
+		else:
+			var status: Dictionary = _status[id]
+			if int(status.cold_until) <= _tick: status.cold = 0
+			var active_until: int = maxi(int(status.slow_until),int(status.frozen_until))
+			if int(status.cold)>0: active_until=maxi(active_until,int(status.cold_until))
+			# Shattering/melting ends a freeze, but must retain same-life immunity
+			# until its deadline so recycling expired records cannot permit a stunlock.
+			active_until=maxi(active_until,int(status.immune_until))
+			if active_until <= _tick: _status.erase(id)
 
 func _update_lock() -> void:
 	var hit: Dictionary = bridge.ray_actor(_origin,_direction,40.0)

@@ -61,7 +61,26 @@ test-arsenal-view-audio-final.log and test-arsenal-panel-final.log. Commands are
 pinned Godot --headless --path game --script ../tests/<suite>/<fixture>.gd,
 plus --editor --import --quit. .tools is an executable junction to the completed
 market worktree; game/.godot is a copied import cache. Seven new suites are
-registered in tools/build.py. No arsenal export or publication has run.
+registered in tools/build.py. Frozen source 3e882480428c584b428556f7f95473619686a301 begins the full
+registered gate. Original source/world/presentation/input/TDM/Rush authority and
+record suites pass, then Rush Home UI fails 274/4: adding Arsenal pushes Settings
+outside 568×320 in both locales. No export follows that failed gate. Compact
+Home now uses three secondary columns and short Arsenal text. Mutable shell
+436/0, expanded Home/Rush UI 298/0 and source-backup records 47/0 pass. All failed
+logs remain in .cache/release-3e882480428c/.cache/logs and the top-level frozen log.
+Readback also identifies live lab status/impulse caches needing explicit caps;
+authority specialist is adding 32-entry caps and expiration without evicting
+active immunity or changing damage. These caps are written, along with immunity/life identity and lethal cold-ray
+guards. The expanded authority fixture awaits the next frozen run. A mutable
+scene 111/1 run diagnoses a test pressing a still-hidden compact bank immediately
+after Resume; the corrected helper waits for actual visibility and verifies its
+selected item. Strict final bomb stock remains checked. Latest scene 115/0 is
+clean; records 47/0, UI 298/0 and shell 436/0 pass. All specialist source/engine
+leases close. Next freeze resumes all 38 not-yet-passed suites plus nine changed
+or relevant integration/input/Home suites (47 total); the first freeze's 63
+successful suites remain evidence for the unchanged original paths. Exact plan:
+.cache/arsenal-gate-plan.json. No success is inferred for unrun suites.
+No arsenal export or publication has run.
 Next: close the final record/replay fixtures, freeze source and run the full
 shared/source regression gate, inspect every item in ordinary desktop/touch Web, publish
 and verify public files/gameplay, then pause the heartbeat.

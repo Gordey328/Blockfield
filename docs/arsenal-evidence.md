@@ -69,6 +69,12 @@ instances at shutdown. The same count is present in the finished Rush baseline's
 This inherited diagnostic is retained explicitly and is not described as a clean
 shutdown. The new arsenal fixtures have no corresponding warnings.
 
+First freeze 3e882480428c584b428556f7f95473619686a301 fails at Home UI after
+passing original source and TDM/Rush authority. Arsenal added a third row of
+secondary buttons at 568×320. The fix uses three compact columns and short text;
+expanded Home/Rush UI now checks the Arsenal action too (298/0 mutable run).
+The failed freeze is retained; no export from it is published.
+
 Final frozen source, reproducible commands/counts, browser captures, performance
 limits and public SHA256 comparison will be appended after their actual runs.
 Physical phone acceptance and full OpenSpades port completion are separate.
