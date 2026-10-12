@@ -3,22 +3,53 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Multiplayer removal — 2026-10-12 (implementation and serial verification)
+## Multiplayer removal — 2026-10-12 (completed and published)
 
-The UI predecessor thread01a12ee6-71f9-7001-865b-5bda7c4116df completed its
-implementation and release turn at2026-10-12; all leases returned. This chat now
-uses the attached isolated offline-only/Blockfield worktree and codex/offline-only.
-Base UI53f9670 plus unchanged Dust2 commit021122b (cherry-pick1356b2b) preserves
-Home/map/loadout/start, Mirage, Dust2, lab and five-bot TDM. Three agreed specialists
-return controller/simulation/tooling source; root owns Main/HUD/routes/config/docs
-and serial engine/browser/publication. Networking/server paths and support are
-removed, with offline rules retained. ADR0031 records cancellation of iteration2.
-Initial parser/import and normal Compatibility Dust2 preview8/0 pass; static and
-whitespace checks pass. Full frozen behavior/export/public checks are next, with
-exact results recorded in [release evidence](offline-only-release.md).
+User-requested multiplayer removal began only after the UI predecessor completed
+its implementation/release turn. Finished UI53f9670 and unchanged Dust2 source
+021122b are combined in the attached offline-only/Blockfield worktree, branch
+codex/offline-only. Checked runtime6605204017b56abd49780c21786714a84c00a431
+is pushed and fast-forwarded into dev; both remote SHAs are verified. No shared
+dirty checkout is switched or reset; zombie/Steam/optimization drafts are preserved.
+Game networking, dedicated server, protocol/replica/prediction/rewind, reconnect/
+discovery, server deployment/tools/export paths and UI routes are removed. Fixed60Hz
+local rules, lab/CTF/TC equivalents, human-plus-five-bot3×3 and mobile input remain.
+Dust2 joins Home's training catalog alongside Mirage/Title/lab; packages are unchanged.
+ADR0031 explicitly withdraws iteration2/N01–N09 and preserves historical evidence.
+
+Coordinator owns Main/HUD/Entry/shell/catalog/shared config/build/docs/release;
+offline_controller, offline_simulation and offline_tooling return all source and
+engine leases under the agreed non-overlapping ownership. Review fixes same-adapter
+mobile fixtures and end-of-events canonical terrain/damage refresh after overflow.
 Godot4.7.2.stable.official.ed1daf0bf and upstream OpenSpades
-dcf449c845d509bbde9d79239b32d201c1389961 remain pinned. Shared concurrent docs
-and original checkout are preserved. No port or physical-phone acceptance claim.
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned. Frozen parser/import,
+all78 registered Godot behavioral fixtures, runtime smoke and ordinary Web export
+pass with zero rejected diagnostics. Shell434/0, launch46/0 (Dust2 included),
+TDM scene68/0 (overflow replacement included), TDM81/0, AI4440/0, mobile10059/0,
+look223/0 and aim assist79/0. GPU preview8/0 is visually inspected. The accepted
+generic reduced template stays hash-pinned; future profile disables WebSocket,
+with no runtime game socket consumers. The old binary is not claimed rebuilt.
+
+Pages bundled0c06b5becd38f9ec58e56f9ada5075a989f9aca reports built/no error.
+All26 public files hash-match the frozen export. Only root metadata/HTML/PCK change;
+sibling builds are preserved. Public Home has no Multiplayer; selected-shotgun
+Crossroads/five bots, movement, death/respawn, actual mobile Fire6to5, pause/Home,
+Mirage launch/walk and selection after reload are checked. Public warning/error
+list is empty; original touch-On preference and shotgun are retained. Local Dust2
+loads/walks/fires and has no network tab;375×812 settled setup is readable.
+Local IAB pointer capture uses the documented pre-existing drag fallback. Physical
+phone comfort/FPS, imported-map bot navigation and full offline-port parity stay
+open; removal/publication do not accept the entire port. No performance claim.
+
+Exact commands, logs/hashes, review fixes and retained limitations are in
+docs/offline-only-release.md on dev, including the pre-existing clean-CI custom
+template limitation. Reproduction uses tools/release_checkpoint.py at6605204
+with --import-cache game/.godot, then tools/publish_pages.py on a clean private
+Pages checkout. Temporary HTTP helper/publication checkout are cleaned; viewport
+override is reset and only the public deliverable tab is retained. Heartbeat ui
+is PAUSED after completion (tool update and saved state verified), so it will not
+repeat deletion. This task is complete; subsequent work starts from updated dev.
+URL:https://gordey328.github.io/Blockfield/?v=6605204 .
 
 ## Game UI first delivery — 2026-10-12 (published development build)
 
