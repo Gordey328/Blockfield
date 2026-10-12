@@ -80,9 +80,29 @@ leases close. Next freeze resumes all 38 not-yet-passed suites plus nine changed
 or relevant integration/input/Home suites (47 total); the first freeze's 63
 successful suites remain evidence for the unchanged original paths. Exact plan:
 .cache/arsenal-gate-plan.json. No success is inferred for unrun suites.
-No arsenal export or publication has run.
-Next: close the final record/replay fixtures, freeze source and run the full
-shared/source regression gate, inspect every item in ordinary desktop/touch Web, publish
+Frozen 293071207279ea3bd10a0f3018ce75a76bcf2aa9 passes all 47 selected suites,
+parser/import, smoke and ordinary single-thread Compatibility Web export. Logs:
+.cache/logs/arsenal-frozen-2930712.log and the matching private release folder.
+Together with 63 passing first-freeze suites (nine repeated), all 101 registered
+fixtures have evidence. Only new arsenal bridge/runtime/coordinator and Home
+changed between those freezes; the remaining original paths match byte-for-byte.
+New counts: authority 181/0, terrain 812/0, view/audio 131/0, panel 178/0,
+records 47/0, actual Rush scene 115/0, lab 38/0, expanded Rush UI 298/0.
+The 24,576-cell roof completes in 145 ticks, measured max native step 11.147 ms.
+Known inherited warnings remain: 11 zero-reference Entry shutdown instances in
+smoke/launch-latency, and reused input-event warning in source-input. First freeze
+also exercises intentional truncated-VXL warning. New arsenal fixtures are clean.
+Web is 58,251,087 bytes, 30 files; reduced template hash remains pinned. Local
+server port 8127, owned PID 47244/session 66657, is running. Real ordinary Web
+Home, catalogue, training launch, unique gauss model and finite 3→2 fire are
+observed; IAB uses the existing mouse-drag fallback when pointer lock is unavailable.
+Lab unlimited resources were explicitly switched off through the original menu.
+All20 interactions, touch, saturation and public acceptance remain pending.
+A final Home-only Classic kit action is written to permit clean original-mode
+startup without visiting the lab; its additional UI fixture awaits the final
+UI freeze/export. No arsenal publication has run.
+Next: verify the final Home opt-out, inspect every item in ordinary desktop/touch
+Web, publish
 and verify public files/gameplay, then pause the heartbeat.
 
 ## Market-oriented Rush — 2026-10-12 (completed development iteration)

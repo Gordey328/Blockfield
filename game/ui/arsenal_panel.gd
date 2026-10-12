@@ -43,6 +43,7 @@ var _meter: Label
 var _apply: Button
 var _reload: Button
 var _source: Button
+var _home_source: Button
 var _catalog: Button
 var _close_button: Button
 var _title: Label
@@ -219,6 +220,10 @@ func _ensure_built() -> void:
 	layout.add_child(heading)
 	_title = _label("", 22, THEME.ACCENT)
 	heading.add_child(_title)
+	_home_source = _button("ArsenalHomeClassic", _return_source)
+	_home_source.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_home_source.custom_minimum_size.x = 128
+	heading.add_child(_home_source)
 	_close_button = _button("ArsenalClose", func() -> void: close())
 	_close_button.size_flags_horizontal = Control.SIZE_SHRINK_END
 	heading.add_child(_close_button)
@@ -282,6 +287,8 @@ func _render() -> void:
 	_close_button.text = _ui("Готово", "Done")
 	_catalog.text = _ui("Арсенал", "Arsenal")
 	_source.text = _ui("Обычное", "Classic")
+	_home_source.text = _ui("Обычный набор", "Classic kit")
+	_home_source.visible = _home_mode
 	_reload.text = _ui("Зарядить", "Reload")
 	_tabs.primary.text = _ui("Оружие · 10", "Weapons · 10")
 	_tabs.bomb.text = _ui("Бомбы · 6", "Bombs · 6")
@@ -453,6 +460,7 @@ func _refresh_layout() -> void:
 	_bank.position = Vector2((css.x - width) * .5, maxf(inset.y, 76.0 if compact else 82.0))
 	_bank.size = Vector2(width, 0)
 	for button: Button in _all_buttons: button.custom_minimum_size.x = TARGET_CSS
+	_home_source.custom_minimum_size.x = 128
 	for id: String in _cards:
 		var content: VBoxContainer = _card_titles[id].get_parent() as VBoxContainer
 		_cards[id].custom_minimum_size.y = maxf(142, content.get_combined_minimum_size().y + 24)

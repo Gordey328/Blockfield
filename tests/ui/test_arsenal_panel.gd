@@ -143,7 +143,27 @@ func _run() -> void:
 	_check(not panel._bank.visible, "Home mode contains no compact combat bank")
 	panel.show_catalog(true)
 	_check(panel._overlay.visible, "Home still provides the full catalogue when explicitly opened")
+	var retained_kit: Dictionary = panel.get_display_state().loadout.duplicate(true)
+	var source_before: int = selections.size()
+	var applications_before: int = applications.size()
+	await _frames(3)
+	_check(panel._home_source.is_visible_in_tree() and panel._home_source.text.contains("Обычный набор"), "Home catalogue exposes an explicit Classic kit action")
+	await _tap(panel._home_source)
+	_check(selections.size() == source_before + 1 and selections.back() == "source" and not panel.is_catalog_open(), "Actual Home Classic touch emits one source intent and closes the catalogue")
+	_check(panel.get_display_state().loadout == retained_kit and applications.size() == applications_before, "Home Classic preserves the custom kit without issuing an application request")
+	panel.show_catalog(true)
+	for dimensions: Vector2i in [Vector2i(375, 812), Vector2i(566, 320)]:
+		root.size = dimensions
+		panel.configure("en")
+		await _frames(5)
+		var viewport: Rect2 = root.get_visible_rect()
+		var css_per_logical: Vector2 = Vector2(dimensions) / viewport.size
+		for button: Button in [panel._home_source, panel._close_button]:
+			var rectangle: Rect2 = button.get_global_rect()
+			_check(viewport.grow(.5).encloses(rectangle) and rectangle.size.x * css_per_logical.x >= 55.5 and rectangle.size.y * css_per_logical.y >= 55.5, "Home header action fits narrow/short screens with a56CSS target: " + str(dimensions))
+		_check(not panel._home_source.get_global_rect().grow(-.5).intersects(panel._close_button.get_global_rect().grow(-.5)), "Home header actions never overlap: " + str(dimensions))
 	panel.set_home_mode(false)
+	_check(not panel._home_source.visible, "Home Classic header action is hidden in combat mode")
 	for dimensions: Vector2i in [Vector2i(375, 812), Vector2i(812, 375), Vector2i(568, 320), Vector2i(1280, 720)]:
 		for scaled: bool in [false, true]:
 			root.size = dimensions
