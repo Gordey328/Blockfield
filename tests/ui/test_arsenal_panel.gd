@@ -197,6 +197,7 @@ func _run() -> void:
 	await _check_home_card_resize()
 	await _check_compact_bank()
 	await _check_web_css_cache()
+	await _check_pending_catalog()
 	panel.set_enabled(false)
 	panel.show_catalog(true)
 	_check(not panel._overlay.visible and not panel._bank.visible, "Disabled lifecycle hides and gates both surfaces")
@@ -330,6 +331,23 @@ func _check_compact_bank() -> void:
 	root.size = Vector2i(844,390)
 	await _frames(4)
 	_check(not sample._actions_open and not sample._actions_row.visible and not sample._bank.get_global_rect().intersects(aim_area), "Returning from portrait restores a closed bank with a clear crosshair")
+	root.size = Vector2i(568, 320)
+	state.selected_item = "x17"
+	sample.set_readout(state)
+	await _frames(4)
+	var short_aim: Rect2 = Rect2(Vector2(284, 160) - Vector2.ONE * 12, Vector2.ONE * 24)
+	var short_closed: Rect2 = sample._bank.get_global_rect()
+	_check(not short_closed.intersects(short_aim) and short_closed.end.y <= short_aim.position.y, "Closed568×320 bank stays entirely above the24px crosshair area")
+	_check(sample._meter.is_visible_in_tree() and short_closed.encloses(sample._meter.get_global_rect()) and sample._meter.get_global_rect().size.y > 0, "Short bank keeps its stock line visible inside its actual bounds")
+	for button: Button in sample._slots + [sample._more]:
+		_check(button.get_global_rect().size.x >= 55.5 and button.get_global_rect().size.y >= 55.5, "320-height bank keeps four equipped slots and More at56CSS pixels")
+	await _tap(sample._more)
+	await _tap(sample._apply)
+	_check(sample._targeting and not sample._actions_row.visible and not sample._bank.get_global_rect().intersects(short_aim), "Actual short-screen Aim folds the drawer and keeps the crosshair clear during targeting")
+	_check(sample._more.is_visible_in_tree() and sample._more.text.contains("Подтвердить") and sample.get_safe_zones() == [sample._bank.get_global_rect()], "Short targeting exposes direct Confirm with exact touch safe bounds")
+	print("ARSENAL SHORT BANK: closed %s; targeting %s" % [short_closed, sample._bank.get_global_rect()])
+	await _tap(sample._more)
+	_check(applied == ["x17", "x12", "x17"] and state.stock.x17 == 0, "Actual short-screen Confirm spends support stock once")
 	for dimensions: Vector2i in [Vector2i(390,844), Vector2i(844,390), Vector2i(1280,720), Vector2i(844,390)]:
 		root.size = dimensions
 		await _frames(4)
@@ -383,6 +401,67 @@ func _check_web_css_cache() -> void:
 		_check(sample._css_extent == Vector2(dimensions) and sample._compact_bank == (dimensions.y < 500), "Web cache follows late CSS portrait/landscape/desktop changes: " + str(dimensions))
 		_check(root.get_visible_rect().grow(.5).encloses(sample._bank.get_global_rect()), "Late CSS combat bank fits the logical viewport: " + str(dimensions))
 	print("ARSENAL WEB CSS: %d reads in the first simulated second; final %s" % [first_second_reads, sample._css_extent])
+	sample.free()
+
+func _check_pending_catalog() -> void:
+	root.size = Vector2i(844, 390)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	root.content_scale_size = Vector2i.ZERO
+	var sample: ArsenalPanel = PANEL.new()
+	root.add_child(sample)
+	sample.set_process(false)
+	var frozen: Dictionary = CATALOG.defaults()
+	var state: Dictionary = {"selected_item":"x01", "loadout":frozen.duplicate(true), "catalog_loadout":frozen.duplicate(true), "catalog_next_attempt":true, "stock":{"x12":2, "x17":2, "x20":2}, "cooldowns":{}, "magazine":3, "reserve":12, "enabled":true}
+	var edited: Array[Dictionary] = []
+	var selected: Array[String] = []
+	var applied: Array[String] = []
+	sample.loadout_changed.connect(func(value: Dictionary) -> void:
+		edited.append(value.duplicate(true))
+		state.catalog_loadout = value.duplicate(true))
+	sample.item_selected.connect(func(id: String) -> void: selected.append(id))
+	sample.apply_requested.connect(func(id: String) -> void: applied.append(id))
+	_coordinator_update(sample, state)
+	sample.show_catalog(true)
+	await _frames(4)
+	_check(sample._title.text.contains("следующую попытку") and sample._instruction.text.contains("следующей попытки"), "Short Survival/Rush catalogue visibly explains that changes apply next attempt")
+	for id: String in ["x03", "x14", "x18", "x19"]:
+		var category: String = str(CATALOG.get_item(id).category)
+		await _tap(sample._tabs[category])
+		if category == "stratagem": await _tap(sample._strat_buttons[0 if id == "x18" else 1])
+		sample._scroll.ensure_control_visible(sample._cards[id])
+		await _frames(3)
+		await _tap(sample._cards[id], sample._scroll.get_global_rect())
+		for tick: int in 30:
+			sample._process(.01)
+			if tick % 10 == 0: _coordinator_update(sample, state)
+		await _frames(4)
+		_check(not edited.is_empty() and sample.get_display_state().catalog_loadout == state.catalog_loadout and sample._card_titles[id].text.contains("✓"), "Pending real-touch edit survives10Hz readouts and keeps its checkmark: " + id)
+		_check(sample.get_display_state().combat_loadout == frozen and sample.get_display_state().selected_item == "x01" and selected.is_empty() and applied.is_empty(), "Pending catalogue never changes the frozen combat kit or issues a selection/apply intent: " + id)
+	var expected: Dictionary = {"primary":"x03", "bomb":"x14", "stratagems":["x18", "x19"]}
+	_check(edited.size() == 4 and edited.back() == expected, "Four edits across categories compose one complete pending kit")
+	sample.configure("en")
+	_check(sample._title.text.contains("next attempt") and sample._instruction.text.contains("next attempt"), "Next-attempt instruction remains visible and clear in English")
+	sample.close()
+	await _frames(3)
+	for index: int in 4:
+		var live_id: String = "x01" if index == 0 else ("x12" if index == 1 else ("x17" if index == 2 else "x20"))
+		_check(sample._slot_item(index) == live_id and sample._slots[index].text.contains(str(CATALOG.get_item(live_id).name_en)), "Closed combat bank displays the live frozen slot instead of next-attempt edits: " + str(index))
+		await _tap(sample._slots[index])
+		_check(selected.back() == live_id and sample.get_display_state().selected_item == live_id, "Actual combat slot touch selects the frozen item: " + str(index))
+	_check(sample.get_display_state().catalog_loadout == expected and sample.get_display_state().combat_loadout == frozen, "Using the frozen bank preserves the pending composition")
+	# Home/lab omit the next-attempt marker; their immediate equip intent remains.
+	state.erase("catalog_next_attempt")
+	state.erase("catalog_loadout")
+	sample.set_home_mode(true)
+	sample.set_readout(state)
+	sample.show_catalog(true)
+	await _tap(sample._tabs.primary)
+	sample._scroll.ensure_control_visible(sample._cards.x02)
+	await _frames(3)
+	var intents_before: int = selected.size()
+	await _tap(sample._cards.x02, sample._scroll.get_global_rect())
+	_check(selected.size() == intents_before + 1 and selected.back() == "x02", "Home/lab retain their immediate equip intent without the pending marker")
+	_check(sample.get_display_state().loadout.primary == "x02" and sample.get_display_state().loadout.bomb == frozen.bomb and state.loadout == frozen, "Fallback live catalogue composition does not mutate the input loadout")
 	sample.free()
 
 func _coordinator_update(panel: ArsenalPanel, state: Dictionary) -> void:

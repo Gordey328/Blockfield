@@ -122,6 +122,14 @@ func apply_compact(slot: int) -> void:
 		panel._apply.pressed.emit()
 	await frames(2)
 
+func check_pending_kit(expected: Dictionary, live_readout: Dictionary, label: String) -> void:
+	var coordinator: ArsenalCoordinator = app.arsenal_coordinator
+	var saved: Dictionary = LOADOUT.load_saved()
+	check(coordinator._pending_loadout == expected and saved.loadout == expected and saved.enabled, label + " preserves every cumulative next-attempt field in saved preferences")
+	check(coordinator.panel.get_display_state().catalog_loadout == expected, label + " survives actual repeated HUD/readout refreshes in the visible catalogue")
+	check(coordinator.panel.get_display_state().combat_loadout == CATALOG.defaults(), label + " keeps the independent combat-bank composition frozen")
+	check(app.session.arsenal_loadout == CATALOG.defaults() and coordinator._loadout == CATALOG.defaults() and coordinator._frozen_loadout == CATALOG.defaults() and coordinator.runtime.readout() == live_readout, label + " cannot change the live kit, selection, resources, clocks or scoring rules")
+
 func main_flow() -> void:
 	if not await launch(CATALOG.defaults()): return
 	var session: OfflineSurvivalSession = app.session
@@ -225,19 +233,42 @@ func main_flow() -> void:
 	check(not session.paused, "actual Resume restores arsenal authority")
 	await apply_compact(1)
 	check(int(runtime.readout().stock.x12) == 0, "equipped bomb compact selection and actual Throw consume the final charge")
-	# A real mid-run card change is saved for the next attempt. The source kit
-	# remains a backup in this frozen run and must not overwrite that preference.
+	# Actual repeated coordinator/HUD updates separate every catalogue choice.
+	# The complete pending kit must accumulate across all four slot edits while
+	# the current bank, runtime and scoring rules remain the frozen live attempt.
 	var next_loadout: Dictionary = CATALOG.defaults()
-	next_loadout.primary = "x03"
 	panel._catalog.pressed.emit()
-	await frames(2)
+	await frames(18)
+	var live_readout: Dictionary = runtime.readout().duplicate(true)
+	var live_tick: int = session.simulation.tick
+	next_loadout.primary = "x03"
 	panel._tabs.primary.pressed.emit()
 	panel._cards.x03.pressed.emit()
-	await frames(2)
-	check(coordinator._pending_loadout == next_loadout and LOADOUT.load_saved().loadout == next_loadout and LOADOUT.load_saved().enabled, "real mid-run catalogue card saves the next canonical loadout")
-	check(session.arsenal_loadout == CATALOG.defaults() and coordinator._frozen_loadout == CATALOG.defaults() and runtime.equipped("x01") and not runtime.equipped("x03"), "mid-run choice cannot change current equipped rules or scoring identity")
+	await frames(18)
+	check_pending_kit(next_loadout, live_readout, "real primary choice")
+	next_loadout.bomb = "x14"
+	panel._tabs.bomb.pressed.emit()
+	panel._cards.x14.pressed.emit()
+	await frames(18)
+	check_pending_kit(next_loadout, live_readout, "real bomb choice after primary")
+	next_loadout.stratagems[0] = "x18"
+	panel._tabs.stratagem.pressed.emit()
+	panel._strat_buttons[0].pressed.emit()
+	panel._cards.x18.pressed.emit()
+	await frames(18)
+	check_pending_kit(next_loadout, live_readout, "real first-support choice after primary/bomb")
+	next_loadout.stratagems[1] = "x19"
+	panel._strat_buttons[1].pressed.emit()
+	panel._cards.x19.pressed.emit()
+	await frames(18)
+	check_pending_kit(next_loadout, live_readout, "real second-support choice after all earlier fields")
+	check(session.simulation.tick == live_tick and session.paused and coordinator.is_catalog_open(), "all four real catalogue edits keep the frozen attempt paused while render/HUD callbacks continue")
+	check(runtime.equipped("x01") and runtime.equipped("x12") and runtime.equipped("x17") and runtime.equipped("x20") and not runtime.equipped("x03") and not runtime.equipped("x14") and not runtime.equipped("x18") and not runtime.equipped("x19"), "pending four-slot kit never equips any new item in the active runtime")
 	panel._close_button.pressed.emit()
-	await frames(8)
+	await frames(18)
+	check(panel._bank.is_visible_in_tree() and panel._slot_item(0) == "x01" and panel._slot_item(1) == "x12" and panel._slot_item(2) == "x17" and panel._slot_item(3) == "x20", "closing pending catalogue restores the original frozen four-slot combat bank")
+	check(panel.get_display_state().selected_item == live_readout.selected_item and runtime.selected_item == live_readout.selected_item and panel._readout.stock == live_readout.stock and runtime.readout().stock == live_readout.stock, "closed combat bank keeps live selection and finite stock despite next-attempt edits")
+	check(panel.get_display_state().catalog_loadout == next_loadout and LOADOUT.load_saved().loadout == next_loadout, "closing catalogue preserves every pending field for the next open or attempt")
 	panel._source.pressed.emit()
 	await frames(2)
 	check(coordinator.source_selected and not app.player.uses_arsenal() and LOADOUT.load_saved().enabled and LOADOUT.load_saved().loadout == next_loadout, "actual source backup selection preserves the saved next-attempt equipment")
@@ -260,6 +291,9 @@ func main_flow() -> void:
 	await wait_ready("custom Rush repeat")
 	check(session.simulation.epoch > epoch and coordinator.runtime != old_runtime and coordinator.runtime.visuals().is_empty(), "epoch restart installs a fresh runtime and cancels all old ordnance/statuses")
 	check(coordinator._pending_loadout.is_empty() and session.arsenal_loadout == next_loadout and coordinator.runtime.selected_item == "x03" and not coordinator.source_selected, "actual Replay adopts and selects the saved next kit while clearing its pending change")
+	check(coordinator.runtime.equipped("x03") and coordinator.runtime.equipped("x14") and coordinator.runtime.equipped("x18") and coordinator.runtime.equipped("x19") and not coordinator.runtime.equipped("x01") and not coordinator.runtime.equipped("x12") and not coordinator.runtime.equipped("x17") and not coordinator.runtime.equipped("x20"), "actual Replay equips the complete saved primary/bomb/two-support kit")
+	await frames(18)
+	check(panel._slot_item(0) == "x03" and panel._slot_item(1) == "x14" and panel._slot_item(2) == "x18" and panel._slot_item(3) == "x19" and panel.get_display_state().catalog_loadout == next_loadout, "new attempt's real HUD refresh adopts the complete new bank and catalogue together")
 	check(LOADOUT.fingerprint(session.arsenal_loadout, "crossroads", session.current_weapon) != LOADOUT.fingerprint(CATALOG.defaults(), "crossroads", 1), "next attempt uses the new full-loadout/source-class record identity")
 	check(coordinator.runtime.readout().stock == {"x01":0,"x02":0,"x03":0,"x04":0,"x05":0,"x06":0,"x07":0,"x08":0,"x09":0,"x10":0,"x11":3,"x12":2,"x13":1,"x14":2,"x15":3,"x16":1,"x17":2,"x18":2,"x19":2,"x20":2}, "explicit new attempt replenishes exactly the authored starting stocks")
 	check(session.simulation.spawn_zombie_slot(12, point).ok, "new-kit attempt admits a counted scoring life")

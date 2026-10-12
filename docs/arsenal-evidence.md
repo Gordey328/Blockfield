@@ -193,3 +193,20 @@ after fix302/0, four reads/s, late landscape/portrait/desktop changes all pass.
 Logs: .cache/logs/test-arsenal-panel-web-cache-{before,final}.log and
 arsenal-panel-web-cache-import.log. Parser/import is clean on pinned4.7.2.
 Final ordinary export/browser validation follows; no publication is inferred.
+
+Frozen c4e5693f55bb999dfbfa412fec071dee227c88fa passes import,12 selected
+source/mobile/UI/scene fixtures, smoke and ordinary export. Actual844×390 Rush
+adopts the corrected single-row4+More bank; the center aim is clear and More
+opens the actions drawer. A further read-only audit finds that repeated HUD
+readouts erase earlier changes when composing a multi-category next-attempt kit.
+Separate pending catalogue/live bank data and actual four-choice/replay regression
+are being added. The catalogue copy now states the next-attempt boundary. The
+568×320 closed/targeting aim area is also added to the measured UI fixture.
+Final mutable Panel334/0 and real Main/Rush scene136/0 pass with clean import.
+Actual four catalogue choices separated by18fixed/render frames each preserve
+all pending fields, keep live stock/selection/equipment frozen, and Replay adopts
+the full x03/x14/[x18,x19] kit with separate record identity. At568×320 both
+closed and support-targeting banks measure y74–147, before the24px aim area
+y148–172; all five targets remain56CSS and stock stays visible. Logs:
+.cache/logs/test-arsenal-panel-pending-final.log,
+test-arsenal-scene-pending-final.log and arsenal-panel-pending-import.log.

@@ -115,7 +115,10 @@ func _process(delta: float) -> void:
 	readout.selected_item = str(readout.get("selected_item", _loadout.primary)) if is_custom_primary() else "source"
 	readout.enabled = enabled and bool(readout.get("enabled", false)) and bridge.alive() and not is_catalog_open()
 	readout.first_person = main.player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON
-	if main.offline_survival_mode: readout.loadout = _frozen_loadout.duplicate(true)
+	if main.offline_survival_mode:
+		readout.loadout = _frozen_loadout.duplicate(true)
+		readout.catalog_loadout = (_pending_loadout if not _pending_loadout.is_empty() else _frozen_loadout).duplicate(true)
+		readout.catalog_next_attempt = true
 	var aim: Dictionary = bridge.ray_world(main.player.get_aim_origin(), main.player.get_aim_direction(), 96.0)
 	readout.target_valid = str(readout.selected_item) == "x20" or bool(aim.get("hit", false))
 	readout.target_reason = ("Наведи прицел и подтверди вызов" if bool(readout.target_valid) else "Нужна видимая точка на карте")

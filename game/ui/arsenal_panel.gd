@@ -30,6 +30,7 @@ var _submitted: bool = false
 var _firing: bool = false
 var _canvas: Control
 var _bank: PanelContainer
+var _bank_layout: VBoxContainer
 var _overlay: PanelContainer
 var _catalog_margin: MarginContainer
 var _slots: Array[Button] = []
@@ -77,7 +78,8 @@ func set_readout(readout: Dictionary) -> void:
 	_ensure_built()
 	_readout = readout.duplicate(true)
 	_submitted = false
-	if readout.get("loadout", null) is Dictionary and readout.loadout != _loadout: _loadout = CATALOG.canonical_loadout(readout.loadout)
+	var catalog_loadout: Variant = readout.get("catalog_loadout", readout.get("loadout", null))
+	if catalog_loadout is Dictionary and catalog_loadout != _loadout: _loadout = CATALOG.canonical_loadout(catalog_loadout)
 	var selected: String = str(readout.get("selected_item", _selected))
 	if selected != _selected:
 		_cancel_touches()
@@ -177,7 +179,8 @@ func get_display_state() -> Dictionary:
 		if _cards[id].visible: visible_ids.append(id)
 	return {"enabled": _enabled, "catalog_open": _catalog_open,
 		"selected_item": _selected, "category": _category,
-		"loadout": _loadout.duplicate(true), "visible_ids": visible_ids,
+		"loadout": _loadout.duplicate(true), "catalog_loadout": _loadout.duplicate(true),
+		"combat_loadout": _combat_loadout().duplicate(true), "visible_ids": visible_ids,
 		"catalog_count": _cards.size(), "targeting": _targeting,
 		"apply_disabled": _apply.disabled, "apply_text": _apply.text,
 		"hint": _hint.text, "stock_text": _meter.text,
@@ -200,12 +203,12 @@ func _ensure_built() -> void:
 	_bank.mouse_filter = Control.MOUSE_FILTER_STOP
 	_bank.add_theme_stylebox_override("panel", _style(Color("101f2e")))
 	_canvas.add_child(_bank)
-	var bank_layout: VBoxContainer = VBoxContainer.new()
-	bank_layout.add_theme_constant_override("separation", 5)
-	_bank.add_child(bank_layout)
+	_bank_layout = VBoxContainer.new()
+	_bank_layout.add_theme_constant_override("separation", 5)
+	_bank.add_child(_bank_layout)
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 5)
-	bank_layout.add_child(row)
+	_bank_layout.add_child(row)
 	for index: int in 4:
 		var button: Button = _button("ArsenalSlot%d" % index, _select_slot.bind(index))
 		button.add_theme_font_size_override("font_size", 12)
@@ -217,7 +220,7 @@ func _ensure_built() -> void:
 	row.add_child(_more)
 	_actions_row = HBoxContainer.new()
 	_actions_row.add_theme_constant_override("separation", 5)
-	bank_layout.add_child(_actions_row)
+	_bank_layout.add_child(_actions_row)
 	_catalog = _button("ArsenalBrowse", func() -> void: show_catalog(true))
 	_source = _button("ArsenalSource", _return_source)
 	_reload = _button("ArsenalReload", _request_reload)
@@ -226,9 +229,9 @@ func _ensure_built() -> void:
 	_apply.button_up.connect(_release_fire)
 	for button: Button in [_catalog, _source, _reload, _apply]: _actions_row.add_child(button)
 	_meter = _label("", 12, THEME.MUTED)
-	bank_layout.add_child(_meter)
+	_bank_layout.add_child(_meter)
 	_hint = _label("", 12, THEME.WARNING)
-	bank_layout.add_child(_hint)
+	_bank_layout.add_child(_hint)
 	_overlay = PanelContainer.new()
 	_overlay.name = "ArsenalCatalog"
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -324,7 +327,7 @@ func _render() -> void:
 		_strat_buttons[index].visible = _category == "stratagem"
 		_strat_buttons[index].text = _ui("В слот поддержки %d", "Equip support slot %d") % (index + 1)
 		_strat_buttons[index].button_pressed = index == _strat_slot
-	_instruction.text = _ui("Выбери предмет: 1 оружие, 1 бомба, 2 поддержки. Применяй после закрытия.", "Choose one weapon, one bomb and two supports. Use them after closing.")
+	_instruction.text = _ui("Набор сохранён для следующей попытки.", "Kit saved for the next attempt.") if bool(_readout.get("catalog_next_attempt", false)) else _ui("Выбери предмет: 1 оружие, 1 бомба, 2 поддержки. Применяй после закрытия.", "Choose one weapon, one bomb and two supports. Use them after closing.")
 	for index: int in 4:
 		var id: String = _slot_item(index)
 		_slots[index].text = "%s\n%s" % [_slot_label(index), _name(id)]
@@ -381,10 +384,11 @@ func _equip(id: String) -> void:
 		_loadout.stratagems = supports
 	else: _loadout[category] = id
 	_loadout = CATALOG.canonical_loadout(_loadout)
-	_selected = id
+	var next_attempt: bool = bool(_readout.get("catalog_next_attempt", false))
+	if not next_attempt: _selected = id
 	_targeting = false
 	loadout_changed.emit(_loadout.duplicate(true))
-	item_selected.emit(id)
+	if not next_attempt: item_selected.emit(id)
 	_render()
 
 func _select_slot(index: int) -> void:
@@ -454,8 +458,15 @@ func _cancel_touches() -> void:
 	_touches.clear()
 
 func _slot_item(index: int) -> String:
-	if index < 2: return str(_loadout.get("primary" if index == 0 else "bomb", ""))
-	var supports: Array = _loadout.get("stratagems", [])
+	return _composition_slot(_combat_loadout(), index)
+
+func _combat_loadout() -> Dictionary:
+	var live: Variant = _readout.get("loadout", null)
+	return live if live is Dictionary else _loadout
+
+func _composition_slot(loadout: Dictionary, index: int) -> String:
+	if index < 2: return str(loadout.get("primary" if index == 0 else "bomb", ""))
+	var supports: Array = loadout.get("stratagems", [])
 	return str(supports[index - 2]) if supports.size() >= index - 1 else ""
 
 func _slot_label(index: int) -> String:
@@ -463,7 +474,7 @@ func _slot_label(index: int) -> String:
 
 func _is_equipped(id: String) -> bool:
 	for index: int in 4:
-		if _slot_item(index) == id: return true
+		if _composition_slot(_loadout, index) == id: return true
 	return false
 
 func _name(id: String) -> String:
@@ -511,6 +522,13 @@ func _refresh_layout() -> void:
 		_cancel_touches()
 		_actions_open = false
 	_compact_bank = next_compact
+	# At320CSS pixels, the tool row and a56px equipped row leave only74px
+	# above the crosshair. Keep the stock line while removing decorative spacing.
+	var short_bank: bool = css.y < 350.0
+	var bank_style: StyleBoxFlat = _bank.get_theme_stylebox("panel") as StyleBoxFlat
+	bank_style.content_margin_top = 0 if short_bank else 6
+	bank_style.content_margin_bottom = 0 if short_bank else 6
+	_bank_layout.add_theme_constant_override("separation", 0 if short_bank else 5)
 	_more.visible = _compact_bank
 	_more.text = _ui("Подтвердить", "Confirm") if _targeting else _ui("Ещё", "More")
 	_more.tooltip_text = _hint.text if _targeting else _ui("Арсенал, обычный набор, перезарядка и применение", "Arsenal, classic kit, reload and application")
@@ -520,9 +538,10 @@ func _refresh_layout() -> void:
 	_meter.text = _hint.text if _compact_bank and _targeting else _stock_text
 	_hint.visible = _targeting and not _compact_bank
 	_instruction.visible = not compact
+	_title.text = _ui("Арсенал · на следующую попытку", "Arsenal · next attempt") if compact and bool(_readout.get("catalog_next_attempt", false)) else _ui("Арсенал · 20 идей", "Arsenal · 20 inventions")
 	_title.add_theme_font_size_override("font_size", 18 if compact else 22)
 	var width: float = minf(css.x - inset.x * 2, 580.0)
-	_bank.position = Vector2((css.x - width) * .5, maxf(inset.y, 76.0 if compact else 82.0))
+	_bank.position = Vector2((css.x - width) * .5, maxf(inset.y, 74.0 if short_bank else (76.0 if compact else 82.0)))
 	_bank.size = Vector2(width, 0)
 	for button: Button in _all_buttons: button.custom_minimum_size.x = TARGET_CSS
 	_more.custom_minimum_size.x = maxf(TARGET_CSS, ceilf(_more.get_theme_font("font").get_string_size(_more.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 16.0))

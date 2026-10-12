@@ -32,7 +32,11 @@ terrain edits; world presentation adopts each receipt once.
 Home supplies one primary, one bomb and two support slots. Survival/Rush equipment
 is fixed for the attempt; changing the saved setup during a run affects the next
 attempt, including one-click replay. Selecting the source backup during a run
-does not overwrite the pending saved kit. Lab selection retains stock when switching. Death does not restore the
+does not overwrite the pending saved kit. The readout supplies separate live
+combat and pending catalogue compositions. Refreshing the live HUD cannot erase
+earlier catalogue changes; pending choices do not emit live selection intents.
+The catalogue explicitly names the next-attempt boundary, while combat slots
+continue to display the frozen current equipment. Lab selection retains stock when switching. Death does not restore the
 map; lab respawn reuses its terrain helper and resets per-life ordnance/inventory.
 Only restart/reset/new-map disposal releases its mutation observers and ownership.
 
@@ -54,6 +58,9 @@ existing actions drawer; support Aim folds it and turns More into Confirm.
 Folding cancels owned touch indices until their real release. Normal portrait
 and desktop retain directly visible actions. Card heights use font measurements
 at known CSS column width rather than a transient wrapped-container minimum.
+At320CSS height, the same56px targets and stock line remain visible with reduced
+decorative padding/gaps so the closed or targeting bank clears the central24px
+aim area. Opening the actions drawer is an explicit temporary overlay.
 The bounded CSS rectangle poll has a separate clock from HUD/layout refreshes.
 Only an actual browser rectangle read resets that clock; frequent combat
 readouts cannot retain a pre-ready canvas size. A read-only reader seam tests
