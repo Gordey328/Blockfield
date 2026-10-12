@@ -3,6 +3,18 @@ extends SceneTree
 const PANEL = preload("res://ui/arsenal_panel.gd")
 const CATALOG = preload("res://gameplay/arsenal_catalog.gd")
 const MOBILE = preload("res://ui/mobile_controls.gd")
+
+class WebCssPanel extends ArsenalPanel:
+	var raw_css: Variant = "[1280,720]"
+	var css_reads: int = 0
+
+	func _uses_css_layout() -> bool:
+		return true
+
+	func _read_css_rect() -> Variant:
+		css_reads += 1
+		return raw_css
+
 var checks: int = 0
 var failures: int = 0
 var selections: Array[String] = []
@@ -184,6 +196,7 @@ func _run() -> void:
 			_check(viewport.grow(.5).encloses(panel._bank.get_global_rect()), "Compact equipped bank fits viewport: " + str(dimensions))
 	await _check_home_card_resize()
 	await _check_compact_bank()
+	await _check_web_css_cache()
 	panel.set_enabled(false)
 	panel.show_catalog(true)
 	_check(not panel._overlay.visible and not panel._bank.visible, "Disabled lifecycle hides and gates both surfaces")
@@ -329,6 +342,53 @@ func _check_compact_bank() -> void:
 		else:
 			_check(sample._actions_row.visible and not sample._more.visible, "Portrait/desktop retain the existing directly visible actions: " + str(dimensions))
 	sample.free()
+
+func _check_web_css_cache() -> void:
+	# Keep the native window unchanged: only the browser's late canvas rectangle
+	# changes. This runs the production cache gate, not the native OS fallback.
+	root.size = Vector2i(1280, 720)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	root.content_scale_size = Vector2i.ZERO
+	var sample: WebCssPanel = WebCssPanel.new()
+	root.add_child(sample)
+	sample.set_process(false)
+	var state: Dictionary = {"selected_item":"x17", "loadout":CATALOG.defaults(), "stock":{"x17":2}, "cooldowns":{}, "enabled":true, "target_valid":true}
+	_coordinator_update(sample, state)
+	await _frames(4)
+	_check(sample._css_extent == Vector2(1280, 720) and not sample._compact_bank, "Web cache starts with the pre-ready desktop canvas rectangle")
+	var readers: int = sample.css_reads
+	sample.raw_css = "[844,390]"
+	for tick: int in 30:
+		sample._process(.01)
+		if tick % 10 == 0: _coordinator_update(sample, state)
+	await _frames(4)
+	_check(root.size == Vector2i(1280, 720) and sample._css_extent == Vector2(844, 390), "Late Web canvas adopts landscape dimensions without a native viewport resize")
+	_check(sample._compact_bank and sample._more.visible and not sample._actions_row.visible, "10Hz coordinator renders cannot starve the compact Web layout")
+	var aim_area: Rect2 = Rect2(root.get_visible_rect().get_center() - Vector2.ONE * 12, Vector2.ONE * 24)
+	_check(not sample._bank.get_global_rect().intersects(aim_area), "Late Web landscape adoption keeps the crosshair clear")
+	for button: Button in sample._slots + [sample._more]:
+		var css_target: Vector2 = button.get_global_rect().size / sample._logical_per_css
+		_check(css_target.x >= 55.5 and css_target.y >= 55.5, "Late Web layout keeps each compact target at56CSS pixels")
+	for tick: int in 70:
+		sample._process(.01)
+		if tick % 10 == 0: _coordinator_update(sample, state)
+	var first_second_reads: int = sample.css_reads - readers
+	_check(first_second_reads >= 3 and first_second_reads <= 5, "Web canvas reads stay bounded at3–5/s despite three10Hz render calls")
+	for dimensions: Vector2i in [Vector2i(390, 844), Vector2i(844, 390), Vector2i(1280, 720)]:
+		sample.raw_css = JSON.stringify([dimensions.x, dimensions.y])
+		for tick: int in 30:
+			sample._process(.01)
+			if tick % 10 == 0: _coordinator_update(sample, state)
+		await _frames(4)
+		_check(sample._css_extent == Vector2(dimensions) and sample._compact_bank == (dimensions.y < 500), "Web cache follows late CSS portrait/landscape/desktop changes: " + str(dimensions))
+		_check(root.get_visible_rect().grow(.5).encloses(sample._bank.get_global_rect()), "Late CSS combat bank fits the logical viewport: " + str(dimensions))
+	print("ARSENAL WEB CSS: %d reads in the first simulated second; final %s" % [first_second_reads, sample._css_extent])
+	sample.free()
+
+func _coordinator_update(panel: ArsenalPanel, state: Dictionary) -> void:
+	panel.set_enabled(true)
+	panel.set_combat_visible(true)
+	panel.set_readout(state)
 
 func _check_layout(panel: ArsenalPanel, dimensions: Vector2i, scaled: bool) -> void:
 	var viewport: Rect2 = root.get_visible_rect()

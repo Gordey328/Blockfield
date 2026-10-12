@@ -56,6 +56,7 @@ var _instruction: Label
 var _logical_per_css: Vector2 = Vector2.ONE
 var _css_extent: Vector2 = Vector2.ZERO
 var _layout_age: float = 1.0
+var _css_poll_age: float = 1.0
 var _touches: Dictionary = {}
 var _canceled_touches: Dictionary[int, bool] = {}
 var _stock_text: String = ""
@@ -551,18 +552,27 @@ func _wrapped_height(label: Label, width: float) -> float:
 
 func _process(delta: float) -> void:
 	_layout_age += maxf(delta, 0.0)
-	if _layout_age >= .25 and _enabled: _refresh_layout()
+	_css_poll_age += maxf(delta, 0.0)
+	if _enabled and (_layout_age >= .25 or (_uses_css_layout() and _css_poll_age >= .25)): _refresh_layout()
 
 func _css_size() -> Vector2:
 	var fallback: Vector2 = Vector2(get_window().size).max(Vector2.ONE)
-	if not OS.has_feature("web"): return fallback
-	if _layout_age >= .25 or _css_extent == Vector2.ZERO:
-		_layout_age = 0.0
-		var raw: Variant = JavaScriptBridge.eval("(() => {const c=document.getElementById('canvas')||document.querySelector('canvas');if(!c)return '';const r=c.getBoundingClientRect();return JSON.stringify([r.width,r.height]);})()")
+	if not _uses_css_layout(): return fallback
+	# HUD renders may run several times per update. Only a browser read resets
+	# this clock, so frequent renders cannot retain a pre-ready canvas forever.
+	if _css_poll_age >= .25:
+		_css_poll_age = 0.0
+		var raw: Variant = _read_css_rect()
 		if raw is String:
 			var dimensions: Variant = JSON.parse_string(raw)
 			if dimensions is Array and dimensions.size() == 2 and float(dimensions[0]) > 0 and float(dimensions[1]) > 0: _css_extent = Vector2(float(dimensions[0]), float(dimensions[1]))
 	return _css_extent if _css_extent != Vector2.ZERO else fallback
+
+func _uses_css_layout() -> bool:
+	return OS.has_feature("web")
+
+func _read_css_rect() -> Variant:
+	return JavaScriptBridge.eval("(() => {const c=document.getElementById('canvas')||document.querySelector('canvas');if(!c)return '';const r=c.getBoundingClientRect();return JSON.stringify([r.width,r.height]);})()")
 
 func _input(event: InputEvent) -> void:
 	if not _enabled or not _built: return

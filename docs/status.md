@@ -5,6 +5,15 @@ Earlier evidence and failed attempts are preserved in [2026-10-10 history](histo
 
 ## Authored twenty-item arsenal — 2026-10-13 (implementation in progress)
 
+Current handoff: all20 actual desktop/touch applications are recorded in
+arsenal-evidence.md, and the private Web collapse/saturation measurements are
+complete. Ordinary78c Rush exposed CSS cache starvation under frequent HUD
+refreshes. Specialist returns Panel/UI-only fix with302/0 (old path302/5),
+bounded four CSS reads/s and clean parser/import; source/engine leases closed.
+Coordinator freezes this repair for ordinary Web validation. Final Rush/AI,
+compact input and public integration/publication remain pending; A04 remains
+IMPLEMENTED. Do not restart from the stale dirty primary checkout.
+
 Heartbeat zombie-rush confirms predecessor01a1318f-80f5-7920-8351-2e5776aaf78f
 completed its implementation/browser/Pages turn and closed all specialist leases.
 Managed arsenal-expansion/Blockfield is created from its finished3a39e6445e942855ac202714bbdc8a42cddd3921,
@@ -164,6 +173,23 @@ are returned. Coordinator registers the diagnostic as the102nd fixture and adds
 tools/export_arsenal_benchmark.py; deliberate entry-scene overrides are private/
 dirty metadata, rejected by ordinary Pages publication. Final ordinary/private
 exports and actual browser checks are next.
+
+Frozen78c8b9193105a0b461a9b3442b31ab7627488dbc passes all17 selected fixtures,
+import/smoke/ordinary export. Source branch is pushed; draft PR5 created and
+attached (https://github.com/Gordey328/Blockfield/pull/5), dev still3a39e64. Private
+benchmark export/import also passes. Actual Web large roof completes145ticks/
+24,580removals and real mesh drain. Pause/Resume, saturated pause and midjobReset
+are inspected; bounded reports keep incomplete/truncated cases honest. Fresh
+plain/saturated results:3.0998/3.1817s,53.55/37.72rendercallbacks per second,
+helpermax18.3/17.3ms, maxframeinterval37.2/222.4ms, real50/64/12cap peaks under
+over-admission. No failures; zero remainingjobs/guards/foam. Browser engine is
+4.7.2-stable(custom_build), ed1daf0bf001b61586d9930840f2f1394092c079. Exact raw
+downloads/summary in .cache/previews/arsenal-web; full table in arsenal-evidence.
+HTTP8128 owns PID43928/session70386 and serves only the private benchmark folder.
+HTTP8127 owns PID47244/session66657 and serves ordinary build/web with ignored
+TouchEvent helperfiles. Tab1 is currently the completed benchmark; viewport1280×720.
+Final ordinary mobile-bank/Rush/AI/source/public verification is pending. Automation
+prompt is updated to reuse this worktree/current progress and remains ACTIVE.
 
 Next: verify the final Home opt-out, inspect every item in ordinary desktop/touch
 Web, publish

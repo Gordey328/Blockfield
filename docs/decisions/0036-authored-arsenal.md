@@ -54,6 +54,10 @@ existing actions drawer; support Aim folds it and turns More into Confirm.
 Folding cancels owned touch indices until their real release. Normal portrait
 and desktop retain directly visible actions. Card heights use font measurements
 at known CSS column width rather than a transient wrapped-container minimum.
+The bounded CSS rectangle poll has a separate clock from HUD/layout refreshes.
+Only an actual browser rectangle read resets that clock; frequent combat
+readouts cannot retain a pre-ready canvas size. A read-only reader seam tests
+the real production cache path under late CSS changes and three10Hz render calls.
 
 The private benchmark scene is a separate diagnostic export, never a substitute
 for ordinary-game interaction. It detaches a real24,576-cell roof through the

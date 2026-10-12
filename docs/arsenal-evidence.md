@@ -122,3 +122,74 @@ an immediate stale wrapped-height minimum before cards settle at390×844, and th
 two-row bank covering the center aim at844×390. Width-derived card sizing and a
 single-row bank with explicit actions drawer/confirmation are under repair;
 this pre-repair pass does not accept the final mobile layout or publication.
+
+## Frozen mobile repair and actual Web load results
+
+Frozen78c8b9193105a0b461a9b3442b31ab7627488dbc passes all17 selected fixtures,
+import, smoke and ordinary Compatibility export. Panel286/0 and new actual
+benchmark node171/0 pass; the other six arsenal counts remain197/812/131/47/
+115/50 as applicable. Composed evidence now covers102 registered fixtures.
+Log: .cache/logs/arsenal-frozen-78c8b91.log. The ordinary export has clean source
+metadata; only game/ui/arsenal_panel.gd differs from c125 in the production tree.
+The final serial native terrain run measures9.798ms maximum/145 ticks; native
+diagnostic driver helper total731.648ms/max10.332ms,179callbacks including8paused.
+Draft PR5 is attached: https://github.com/Gordey328/Blockfield/pull/5. Dev remains
+the finished Rush base until final ordinary/public acceptance.
+
+Private diagnostic reproduction:
+
+```text
+python tools/export_arsenal_benchmark.py --revision 78c8b9193105a0b461a9b3442b31ab7627488dbc --import-cache game/.godot
+python tools/serve.py --port 8128 --directory .cache/arsenal-benchmark-78c8b9193105/build/web
+```
+
+Use the bundled Python recorded in status.md. Import/export passes in
+.cache/logs/arsenal-private-web-78c8b91.log. The private archive changes its copied
+entry scene only and declares source_dirty=true/private diagnostic. Browser engine
+reports4.7.2-stable(custom_build), full source hash
+ed1daf0bf001b61586d9930840f2f1394092c079, templateSHA256a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922.
+
+At1280×720 in the IAB, actual rendered roof/floor are inspected before/after.
+Real Start/Pause/Resume freezes at tick10 across42seconds of wall time, then
+finishes145ticks with24,576roof/24,580total canonical removals and real mesh drain.
+That long pause truncates the bounded1200frame sample array; its average callback
+rate is not an active-performance result. Saturated Pause freezes at tick39 with
+50/64/12 caps across a further long pause; Reset disposes the incomplete job,
+clears effects and restores a supported new-epoch roof. Its retained report
+honestly remains incomplete. Fresh no-pause measurements below have no truncated
+samples or failures, and finish with zero jobs/guards/foam:
+
+| Actual private Web measurement | Plain collapse | Collapse + decorative saturation |
+|---|---:|---:|
+| Canonical removals / fixed ticks | 24,580 / 145 | 24,580 / 145 |
+| Wall time through actual mesh drain | 3.0998s | 3.1817s |
+| Render callbacks / observed callbacks per second | 166 / 53.55 | 120 / 37.72 |
+| Helper CPU total / mean / max | 907.6 / 6.259 / 18.3ms | 855.7 / 5.901 / 17.3ms |
+| Receipt/presentation CPU total / max | 514.3 / 9.0ms | 450.0 / 7.0ms |
+| Median / maximum callback interval | 17.8 / 37.2ms | 24.4 / 222.4ms |
+| Maximum draw calls | 63 | 189 |
+| Actual particle/state/event peaks | 0 / 0 / 0 | 50 / 64 / 12 |
+
+The saturation fixture requests96states and32events per burst to test admission;
+it does not pretend these are extra live weapon/AI authority. Native runtime197
+and actual scenes cover that authority separately. These measurements include
+startup/warm effects and real rendering; the222.4ms worst saturated frame and
+37.72callback/s mean explicitly do not establish stable60FPS or phone performance.
+Raw game-button downloads and summary are in .cache/previews/arsenal-web/
+78c-benchmark-{paused,pause-completed,plain,saturated-aborted,saturated,summary}.json.
+The actual ordinary repaired UI, Rush/AI and public URL still need their final
+checks. Neither diagnostic helper is part of the ordinary release folder.
+
+## Late Web canvas cache repair
+
+Ordinary78c Rush exposes a separate actual Web regression: Main initially reads
+the1280×720 canvas, then frequent coordinator HUD refreshes reset the layout clock
+before its .25s CSS polling deadline. The844×390 bank never adopts the correct
+compact size. Home/native OS-size tests did not exercise this cache starvation.
+A separate CSS polling clock fixes it without changing gameplay or touch claims.
+The production-cache fixture uses read-only CSS-reader seams and retains the
+unchanged1280×720 native window: before fix302 checks/5 failures/zero CSS reads;
+after fix302/0, four reads/s, late landscape/portrait/desktop changes all pass.
+Logs: .cache/logs/test-arsenal-panel-web-cache-{before,final}.log and
+arsenal-panel-web-cache-import.log. Parser/import is clean on pinned4.7.2.
+Final ordinary export/browser validation follows; no publication is inferred.
