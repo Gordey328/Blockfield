@@ -646,8 +646,8 @@ static func packed_byte_order() -> int:
 	return _snapshot_byte_order
 
 func snapshot_range(byte_offset: int, byte_count: int) -> PackedByteArray:
-	# Arbitrary byte ranges fit canonical16,346-byte network chunks. Call on
-	# a frozen copy across ticks so live edits cannot produce a mixed baseline.
+	# Read bounded byte ranges from a frozen local snapshot so edits across ticks
+	# cannot produce mixed map bytes during import/export or diagnostics.
 	var output: PackedByteArray = PackedByteArray()
 	if blocks.size() != dimensions.x*dimensions.y*dimensions.z or byte_offset < 0 or byte_count < 0 or byte_offset > blocks.size()*4 or byte_count > blocks.size()*4-byte_offset:
 		return output

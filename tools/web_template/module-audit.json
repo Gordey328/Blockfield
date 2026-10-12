@@ -1751,7 +1751,7 @@
     },
     {
       "path": "game/main.gd",
-      "sha256": "cf89d3c84b8197e4c28e7a0f2f54b93f5655aa606e15947dfa2e1bc46ff48576",
+      "sha256": "eafeaa07e20f0ba71d3e16e7bc70bbc374de2be10603e5a4c420366ad6b02f75",
       "matching_lines": {
         "JavaScriptBridge.create_callback": [
           167,

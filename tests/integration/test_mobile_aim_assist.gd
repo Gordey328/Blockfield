@@ -329,6 +329,7 @@ func match_command_boundary() -> void:
 	match_session.actor_state.tool_raise = 1.0
 	match_session.actor_state.motion = SourcePlayerMotion.create_state(FEET)
 	match_session.targets.assign([enemy({"health": -1, "health_known": false})])
+	app.session = match_session
 	player.session = match_session
 	player._connected_session = match_session
 	player._match_epoch = 0
@@ -350,6 +351,7 @@ func match_command_boundary() -> void:
 	player._process(0.001)
 	player._physics_process(1.0 / 60.0)
 	check(pose().is_equal_approx(before), "render and subsequent TDM sampling cannot replay assisted movement")
+	app.session = offline
 	player.session = offline
 	player._connected_session = previous_connected
 	player._match_owner = null

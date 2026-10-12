@@ -83,6 +83,7 @@ func _run() -> void:
 	app.session.player_died.connect(func(): death_events += 1)
 	app.session.player_respawned.connect(func(): respawn_events += 1)
 	await frames(4)
+	await overflow_terrain_refresh()
 	baseline_blocks = app.world.data.blocks.duplicate()
 	await startup_and_input()
 	await bot_combat()
@@ -104,6 +105,41 @@ func _run() -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	print("OFFLINE TDM SCENE: %d assertions, %d failures" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func overflow_terrain_refresh() -> void:
+	var simulation: MatchSimulation = app.session.simulation
+	var data: VoxelData = simulation.data
+	var replaced: Vector3i = Vector3i(3, 2, 3)
+	var damaged: Vector3i = Vector3i(4, 2, 3)
+	var filler: Vector3i = Vector3i(5, 2, 3)
+	var colors: Array[int] = [data.get_block(replaced), data.get_block(damaged), data.get_block(filler)]
+	check(colors.all(func(value: int) -> bool: return value != 0), "overflow fixture uses existing supported floor cells")
+	simulation._damage_block(owner(), replaced, 5, false)
+	simulation._damage_block(owner(), damaged, 5, false)
+	var metadata: Dictionary = {"tick": 0, "actor_id": owner().player_id, "action_id": 0}
+	for index: int in simulation.MAX_TRANSACTIONS:
+		simulation._commit(data.set_block(filler, 0x01aabbcc if index % 2 == 0 else colors[2], metadata))
+	simulation._commit(data.set_block(replaced, 0x0199aabb, metadata))
+	var transactions: Array[Dictionary] = simulation.drain_transactions()
+	check(transactions.size() == simulation.MAX_TRANSACTIONS + 1 and transactions.back().get("refresh_required", false),
+		"real bounded queue returns retained receipts followed by a local refresh marker")
+	app.session._queue_presentation({"type": "block_hit", "owner_id": owner().player_id,
+		"cell": replaced, "position": Vector3(replaced) + Vector3.ONE * .5, "normal": Vector3i.UP, "tick": 0})
+	var sequence: int = data.map_sequence
+	app.present_offline_tick(transactions)
+	check(app.world.data == data and simulation.data == data and data.map_sequence == sequence,
+		"overflow refresh keeps the same authority Data and never replays its edits")
+	check(not app.world.is_block_damaged(replaced) and app.world.is_block_damaged(damaged),
+		"canonical final mask keeps an omitted replacement clean and a surviving damaged block dark")
+	check(data.get_block(replaced) == 0x0199aabb and data.get_block(filler) == colors[2],
+		"overflow presentation retains the complete committed terrain including dropped-tail edits")
+	check(simulation.drain_transactions().is_empty(), "local refresh marker is consumed once without a remote acknowledgement")
+	for index: int in 3:
+		data.set_block([replaced, damaged, filler][index], colors[index], metadata)
+	simulation._block_health.clear()
+	app._refresh_match_terrain()
+	await frames(2)
 
 
 func startup_and_input() -> void:

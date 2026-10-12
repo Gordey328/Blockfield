@@ -1233,9 +1233,10 @@ func restart_offline_tdm() -> void:
 func present_offline_tick(transactions: Array) -> void:
 	# Both authority and renderer share Data. Present each committed edit once;
 	# applying it again would corrupt the transaction sequence and collapse.
+	var refresh_requested: bool = false
 	for transaction: Dictionary in transactions:
 		if transaction.get("refresh_required",false):
-			_refresh_match_terrain()
+			refresh_requested = true
 			continue
 		for change: Dictionary in transaction.changes:
 			if change.before != 0: _impact_colors[change.cell] = change.before
@@ -1244,10 +1245,16 @@ func present_offline_tick(transactions: Array) -> void:
 		world._present_transaction(transaction)
 	while _impact_colors.size() > 4096: _impact_colors.erase(_impact_colors.keys()[0])
 	for event: Dictionary in (session as OFFLINE_TDM).drain_presentation_events():
+		if str(event.get("type","")) == "events_overflow":
+			refresh_requested = true
+			continue
 		if str(event.get("type","")) == "tdm_finished":
 			hud.set_menu_visible(true)
 			continue
 		_match_present_event(event)
+	# Older effects cannot re-darken a replacement whose receipt was dropped.
+	# Restore the canonical terrain/damage mask after all queued effects.
+	if refresh_requested: _refresh_match_terrain()
 
 func _clear_match_views() -> void:
 	clear_corpses()

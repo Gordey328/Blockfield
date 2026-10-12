@@ -313,6 +313,7 @@ func match_command_boundary() -> void:
 	match_session.actor_state.motion = SourcePlayerMotion.create_state(app.player.global_position)
 	var offline: LocalSession = app.player.session
 	var previous_connected: LocalSession = app.player._connected_session
+	app.session = match_session
 	app.player.session = match_session
 	app.player._connected_session = match_session
 	app.player._match_epoch = 0
@@ -372,6 +373,7 @@ func match_command_boundary() -> void:
 	var rendered := pose()
 	app.player._physics_process(1.0 / 60.0)
 	check(pose().is_equal_approx(rendered),"next TDM command retains responsive render look exactly once")
+	app.session = offline
 	app.player.session = offline
 	app.player._connected_session = previous_connected
 	app.player._match_owner = null
