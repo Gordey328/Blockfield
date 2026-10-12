@@ -17,6 +17,11 @@ func _ready() -> void:
 func _launch_game(configuration: Dictionary) -> void:
 	var checked: Dictionary = GameMapCatalog.validate(configuration)
 	if not checked.ok: return
+	# Let the shell's pending/loading state render before loading the game scene.
+	# Two process boundaries cover requests emitted during the current input turn.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_inside_tree(): return
 	get_tree().set_meta("blockfield_launch", checked.configuration.duplicate(true))
 	LabInputBindings.release_actions()
 	var scene_path: String = "res://scenes/offline_tdm.tscn" if checked.configuration.mode == "tdm" else "res://scenes/main.tscn"

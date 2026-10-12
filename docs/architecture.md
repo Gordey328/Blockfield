@@ -4,17 +4,23 @@
 - OfflineSurvivalSession reuses OfflineTDMSession's local command/presentation bridge,
   with its own bounded roster, timed overlapping waves, supply and finite outcomes.
   ZombieDirector proposes commands and bite/breach intents; MatchSimulation and the
-  survival authority validate and commit them. Navigation compares full detour and
-  breach time, including damaged blocks and clearance. Main pools twelve unarmed
+  survival authority validate and commit them. Each life locks a random obstacle
+  choice; navigation validates bounded detour/breach paths and projects elevated
+  targets to a lower approach. Reachable forward blocks can be breached when the
+  owner stands above normal step height. Main pools twelve unarmed
   ZombieViews and presents committed terrain once; SurvivalPanel/HUD only display.
   GameMapCatalog admits canonical settings and Crossroads only. See
-  [ADR0032](decisions/0032-timed-zombie-survival.md) and [evidence](zombie-survival.md).
+  [ADR0032](decisions/0032-timed-zombie-survival.md), its latest selection/startup
+  amendment [ADR0033](decisions/0033-zombie-pursuit-and-startup.md), and [evidence](zombie-survival.md).
 - Entry creates GameShell without a world/simulation; all launch routes are local. GameMapCatalog whitelists mode/map/weapon, preserves a separate
   saved selection and supplies baked previews. Entry hands a one-shot launch to
   Main through SceneTree metadata. Main keeps input gated through map adoption and
   session-owned weapon selection, then opens gameplay. Loading/recovery/Home are
   presentation; local authority stays with the adapters. See
   [ADR0030](decisions/0030-game-shell-and-offline-launch.md).
+  Match Main disables the discarded lab bootstrap before child readiness and
+  seeds streaming/camera at the authority spawn. Entry gives the pending shell two
+  presentation turns before loading; standalone lab bootstrap stays enabled.
 - Web startup uses `game/web/loading.html`, derived from the pinned engine shell. The existing `Engine.onProgress` byte callback supplies decimal MB for the engine/game pack; exported file sizes supply the complete denominator before downloads start. Its original startup/error/overlay lifecycle stays intact; see [ADR0017](decisions/0017-web-download-progress.md).
 - VoxelData: shared packed cells, source queries, VXL, edit/collapse rules, atomic ordered transactions and bounded journal. VoxelWorld adopts Data and owns chunk meshes/collision, water/GI/reflections, top-down textures and visual falling clusters. Never apply an adopted transaction to Data then World twice.
 - LocalSession owns the offline lab and source-shaped local rules. SharedPlayerState, PlayerRules, GrenadeRules, MatchObjectives and MatchSimulation own fixed60Hz local multi-actor combat. OfflineTDMSession supplies one human and five bots; transport, prediction, rewind and connection lifecycle are removed under [ADR0031](decisions/0031-offline-only-game.md).

@@ -5,6 +5,7 @@ const ARENA = preload("res://ai/tdm_arena.gd")
 const ZOMBIES = preload("res://ai/zombie_director.gd")
 const RULES = preload("res://simulation/player_rules.gd")
 const MOTION = preload("res://gameplay/source_player_motion.gd")
+const DATA = preload("res://world/voxel_data.gd")
 var assertions: int = 0
 var failures: int = 0
 
@@ -88,6 +89,9 @@ func _run() -> void:
 	_bite_windup_wall_and_crowd()
 	_shared_breach_damage_and_transactions()
 	_three_height_breach_passage()
+	_real_high_player_tower(4)
+	_real_high_player_tower(2)
+	_confirmed_shared_queue_progress()
 	_supply_once_per_wave()
 	_no_route_cleanup_timeout()
 	print("SURVIVAL SESSION: %d assertions, %d failures" % [assertions, failures])
@@ -428,4 +432,112 @@ func _no_route_cleanup_timeout() -> void:
 	check(session.finished and session.outcome == "interrupted" and session.finish_reason == "route_unavailable"
 		and session.player_kills == 0 and session._live_count() == 1,
 		"stalled cleanup interrupts honestly without phantom kill or victory")
+	session.free()
+
+
+func tower_fixture(floor_height: int) -> OfflineSurvivalSession:
+	var data: VoxelData = DATA.new()
+	data.clear(Vector3i(32, 24, 32))
+	data.seed_box(Vector3i.ZERO, Vector3i(32, floor_height, 32), 0x0175664f)
+	data.seed_box(Vector3i(16, floor_height, 16), Vector3i(17, floor_height + 8, 17), 0x018899aa)
+	# The slab has one destructible support, so a real authoritative breach must
+	# eventually cause unsupported-component collapse and the owner's fall.
+	data.seed_box(Vector3i(15, floor_height + 7, 15), Vector3i(18, floor_height + 8, 18), 0x018899aa)
+	var top: Vector3 = Vector3(16.5, floor_height + 8.01, 16.5)
+	var sectors: Array[Vector3] = [Vector3(3.5, floor_height + 0.01, 16.5),
+		Vector3(28.5, floor_height + 0.01, 16.5), Vector3(16.5, floor_height + 0.01, 3.5),
+		Vector3(16.5, floor_height + 0.01, 28.5)]
+	var arena: Dictionary = {"owner_spawn": top, "supply_point": top, "spawn_sectors": sectors,
+		"floor_y": floor_height, "navigation_ceiling": 20, "walk_speed": 3.2, "authored": true}
+	var settings: Dictionary = {"duration_seconds": 40, "wave_interval_seconds": 30,
+		"zombies_per_wave": 3, "growth_per_minute": 0.0, "live_limit": 3, "preparation_seconds": 0}
+	var session: OfflineSurvivalSession = SESSION.new()
+	root.add_child(session)
+	var configured: Dictionary = session.configure_survival(data, arena, settings, "Tower player", true)
+	check(configured.ok, "real tower authority configures above floor%d: %s" % [floor_height, str(configured.get("error", ""))])
+	session.drain_presentation_events()
+	session.paused = false
+	return session
+
+
+func _real_high_player_tower(floor_height: int) -> void:
+	var session: OfflineSurvivalSession = tower_fixture(floor_height)
+	var initial_top: float = session.get_owner_state().feet().y
+	var spawned: int = 0
+	var breaches: int = 0
+	var collapsed: int = 0
+	var bites_at_height: int = 0
+	var invalid_bite: bool = false
+	var protected_hit: bool = false
+	var invalid_spawn: bool = false
+	var invalid_receipt: bool = false
+	var fell: bool = false
+	for tick_index: int in range(1800):
+		var before: SharedPlayerState = session.get_owner_state()
+		var result: Dictionary = session.step_local(0, Vector2.ZERO, before.yaw, before.pitch)
+		if not result.ok:
+			check(false, "actual tower fixed step accepted")
+			break
+		var owner: SharedPlayerState = session.get_owner_state()
+		fell = fell or owner.feet().y < initial_top - 2.0
+		for event: Dictionary in session.drain_presentation_events():
+			if str(event.get("type", "")) == "spawn" and int(event.owner_id) != 1:
+				spawned += 1
+				invalid_spawn = invalid_spawn or (event.feet as Vector3).distance_to(before.feet()) < 12.0 \
+					or not SESSION._supported_spawn(session.simulation.data, event.feet)
+			elif str(event.get("type", "")) == "zombie_breach":
+				breaches += 1
+				protected_hit = protected_hit or event.cell.y <= 1
+			elif str(event.get("type", "")) == "hurt" and str(event.get("cause", "")) == "bite":
+				if owner.feet().y > initial_top - 0.5:
+					bites_at_height += 1
+				var attacker: SharedPlayerState = session.simulation.get_actor(int(event.attacker_id))
+				var origin: Vector3 = attacker.feet() + Vector3.UP * 1.1
+				var delta: Vector3 = owner.feet() - attacker.feet()
+				var obstruction: Dictionary = session.simulation.data.cast_voxel(origin, delta, delta.length())
+				invalid_bite = invalid_bite or delta.length() > SESSION.BITE_RANGE + 0.001 \
+					or bool(obstruction.hit) and origin.distance_to(obstruction.position) < delta.length() - 0.05
+		for transaction: Dictionary in result.transactions:
+			invalid_receipt = invalid_receipt or not bool(transaction.get("ok", false))
+			for change: Dictionary in transaction.get("changes", []):
+				if (int(change.get("flags", 0)) & 1) != 0:
+					collapsed += 1
+		if session.finished or fell and collapsed > 0:
+			break
+	check(spawned > 0 and session._spawned == spawned and not invalid_spawn,
+		"high player admits actually supported distant lives using projected lower approach above floor%d" % floor_height)
+	check(breaches >= 3 and collapsed > 0 and fell and not invalid_receipt,
+		"real director→windup→shared breach→receipt/collapse→owner fall completes tower timeline above floor%d" % floor_height)
+	check(bites_at_height == 0 and not invalid_bite,
+		"elevated player receives no distant/vertical/occluded bite above floor%d" % floor_height)
+	check(not protected_hit and session.simulation.data.get_block(Vector3i(16, 1, 16)) != 0,
+		"tower demolition preserves protected foundation above floor%d" % floor_height)
+	check(not session.finished or session.outcome == "defeat",
+		"real tower progress causes neither spawn/route interruption nor phantom victory above floor%d" % floor_height)
+	session.free()
+
+
+func _confirmed_shared_queue_progress() -> void:
+	var session: OfflineSurvivalSession = fixture()
+	session.paused = false
+	advance(session, 1)
+	var actor: SharedPlayerState = session.simulation.get_actor(2)
+	place(actor, Vector3(7.5, 4.01, 28.5))
+	place(session.simulation.get_actor(1), Vector3(20.5, 12.01, 28.5))
+	check(session.simulation.spawn_zombie_slot(3, Vector3(7.5, 4.01, 29.5)).ok, "shared-cell queue admits second clear attacker")
+	var cell: Vector3i = Vector3i(9, 5, 28)
+	session.simulation.data.seed_box(cell, cell + Vector3i.ONE, 0x018899aa)
+	(session._zombie_director as DeterministicDirector).attack_intents = [
+		{"actor_id": 2, "kind": "breach", "cell": cell}, {"actor_id": 3, "kind": "breach", "cell": cell}]
+	advance(session, 46)
+	check(session.simulation.get_block_remaining_health(cell) == 60.0
+		and int(session._progress[2].tick) == session.simulation.tick and int(session._progress[3].tick) == session.simulation.tick,
+		"one real cell hit refreshes both valid queued attackers; windup alone grants no progress")
+	session._progress[3].tick = session.simulation.tick - SESSION.STALL_TICKS + 1
+	# A stale proposal cannot evade timeout solely by reopening its windup.
+	session._attacks[3] = {"kind": "breach", "started": session.simulation.tick,
+		"deadline": session.simulation.tick + 45, "windup": 45, "cell": cell}
+	advance(session, 1)
+	check(session.finished and session.finish_reason == "route_unavailable",
+		"unconfirmed repeated windup is not mistaken for real route/health progress")
 	session.free()

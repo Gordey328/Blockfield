@@ -367,7 +367,8 @@ func _advance_attacks(proposals: Array[Dictionary]) -> void:
 	var proposed: Dictionary[int, Dictionary] = {}
 	for proposal: Dictionary in proposals:
 		var id: int = int(proposal.get("actor_id", 0))
-		if id in ZOMBIE_IDS and not proposed.has(id):
+		var actor: SharedPlayerState = simulation.get_actor(id)
+		if id in ZOMBIE_IDS and not proposed.has(id) and actor != null and actor.is_alive() and _valid_attack(actor, proposal):
 			proposed[id] = proposal
 	for id: int in ZOMBIE_IDS:
 		var actor: SharedPlayerState = simulation.get_actor(id)
@@ -402,6 +403,28 @@ func _advance_attacks(proposals: Array[Dictionary]) -> void:
 		elif kind == "breach":
 			confirmed = simulation.resolve_zombie_breach(id, proposal.cell, BREACH_DAMAGE, BREACH_CYCLE)
 		if not confirmed.is_empty():
+			_record_attack_progress(id, proposal, proposed)
+
+
+func _record_attack_progress(actor_id: int, confirmed: Dictionary, proposals: Dictionary[int, Dictionary]) -> void:
+	# A shared-cell hit advances the whole valid attack queue. Only one member
+	# can damage that cell per cadence; waiting members must not time out while
+	# its real health is falling. A proposal/windup alone is never progress.
+	for id: int in ZOMBIE_IDS:
+		var actor: SharedPlayerState = simulation.get_actor(id)
+		if not actor.is_alive():
+			continue
+		var progressed: bool = id == actor_id
+		if not progressed and proposals.has(id):
+			var queued: Dictionary = proposals[id]
+			if str(confirmed.kind) == "breach" and str(queued.get("kind", "")) == "breach" \
+					and queued.get("cell") == confirmed.get("cell"):
+				# The final strike may already remove/collapse the cell. Reach is
+				# checked against its captured coordinates, not its former color.
+				progressed = SIMULATION.in_reach(actor, confirmed.cell)
+			elif str(confirmed.kind) == "bite" and str(queued.get("kind", "")) == "bite":
+				progressed = _valid_attack(actor, queued)
+		if progressed:
 			_progress[id] = {"position": actor.feet(), "tick": simulation.tick}
 
 
@@ -481,7 +504,7 @@ func _check_stalls() -> void:
 			_progress.erase(id)
 			continue
 		var progress: Dictionary = _progress.get(id, {"position": actor.feet(), "tick": simulation.tick})
-		if actor.feet().distance_to(progress.position) >= 0.6 or _attacks.has(id):
+		if actor.feet().distance_to(progress.position) >= 0.6:
 			_progress[id] = {"position": actor.feet(), "tick": simulation.tick}
 		elif simulation.tick - int(progress.tick) >= STALL_TICKS:
 			_finish("interrupted", "route_unavailable")

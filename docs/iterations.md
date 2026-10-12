@@ -70,7 +70,11 @@ This replacement does not accept unrelated parity or the complete port.
 The user requests offline zombie waves after completed multiplayer removal.
 Survive a configurable duration then clear remaining enemies; waves may overlap
 on a strict active-time schedule. Settings cover duration, quota and growth with
-elapsed time. Zombies choose the easier detour or breach using travel and remaining
-block-health costs. This addition uses separate survival round rules and does not
+elapsed time. The latest same-day request replaces the easier-path policy with
+a stable random detour/breach choice and requires reachable forward destruction
+when the player stands too high, removal of retreat oscillation and less launch
+stutter. Repeat deployed-browser and mobile-UI tests are explicitly declined for
+this follow-up. See [ADR0033](decisions/0033-zombie-pursuit-and-startup.md).
+This addition uses separate survival round rules and does not
 accept the full port. See [ADR0032](decisions/0032-timed-zombie-survival.md) and
 [the design and confirmed answers](zombie-waves-plan.md).

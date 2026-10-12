@@ -3,7 +3,27 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Zombie survival — 2026-10-12 (completed and published)
+## Zombie pursuit and startup follow-up — 2026-10-12 (in progress)
+
+Latest user request supersedes the earlier cheaper detour/breach policy: choose
+randomly, break reachable forward blocks when an elevated owner cannot be reached,
+remove approach/retreat oscillation, and reduce launch stutter. No deployed-browser
+or mobile-UI retest is requested; this follow-up uses relevant native fixtures and
+ordinary local desktop Web inspection. Shared dirty checkout remains untouched;
+work continues in the attached zombie-survival worktree from 151ce9be8b56f8e11144446cbfb89092158e5dca.
+Coordinator owns Entry/Main/world bootstrap, startup fixture, build/docs/release.
+zombie_code_audit owns director/navigation and AI fixture; survival_authority owns
+survival session and its fixture. Serial engine lease currently belongs to AI.
+AI has returned parser/import and523/0, including random33/64, no-retreat and
+1/2/6-block/5×5-platform fixtures. Authority has returned parser/import and147/0,
+including real spawn/strike/collapse/fall and shared queue progress. Root launch46/0,
+scene36/0, startup16/0, parser/import and runtime smoke pass; match launch now holds
+clock/input until budgeted initial chunk publication. Frozen export/publication
+remain next. Exact mutable commands/results and timing limits:
+[follow-up evidence](zombie-pursuit-startup.md). The original completed release
+below remains historical evidence, not proof of these new edits. ui-2 stays PAUSED.
+
+## Zombie survival — 2026-10-12 (original release completed and published)
 
 The multiplayer predecessor actually completed its removal, all78 tests, browser
 checks and publication before this work started. Managed zombie-survival/Blockfield

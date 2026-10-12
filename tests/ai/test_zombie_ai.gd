@@ -20,9 +20,10 @@ func check(condition: bool, message: String) -> void:
 
 func _run() -> void:
 	_authored_spawn_and_edit()
-	_cost_choice_and_damage()
+	_random_choice_and_damage()
 	_shared_movement_and_bite_intents()
 	_breach_intents_and_separation()
+	_no_retreat_and_high_target()
 	print("Zombie AI: %d assertions, %d failures" % [assertions, failures])
 	quit(0 if failures == 0 else 1)
 
@@ -80,7 +81,7 @@ func _authored_spawn_and_edit() -> void:
 	match_state.drain_events()
 	match_state.drain_transactions()
 
-func _cost_choice_and_damage() -> void:
+func _random_choice_and_damage() -> void:
 	var data: VoxelData = _flat()
 	# Long open detour exists around a three-cell-high, one-cell-thick wall.
 	data.seed_box(Vector3i(24, 4, 8), Vector3i(25, 7, 40), 0x01abbbaa)
@@ -90,59 +91,62 @@ func _cost_choice_and_damage() -> void:
 	var nav: ZombieNavigation = NAVIGATION.new()
 	nav.configure(data, {"floor_y":4, "navigation_ceiling":12})
 	nav.begin_tick(0)
-	var intact: Dictionary = nav.plan(zombie.feet(), player.feet(), match_state)
-	check(intact.ok and intact.mode == "detour", "full-health tall wall favors the real open detour")
+	var intact: Dictionary = nav.plan(zombie.feet(), player.feet(), match_state, "breach")
+	check(intact.ok and intact.mode == "breach" and intact.both_available, "validated requested breach is available alongside a real detour")
+	check(intact.breach_seconds > intact.detour_seconds, "expensive breach is retained independently of cheaper detour")
 	# Shared authoritative persistent damage changes the planner's actual health input.
 	for y: int in range(4, 7):
 		match_state._damage_block(player, Vector3i(24, y, 24), 80, false)
 	check(match_state.get_block_remaining_health(Vector3i(24, 5, 24)) == 20, "fixture uses genuine remaining block health")
 	nav.begin_tick(1)
-	var damaged: Dictionary = nav.plan(zombie.feet(), player.feet(), match_state)
-	check(damaged.ok and damaged.mode == "breach", "damaged thin wall beats an existing long detour")
+	var damaged: Dictionary = nav.plan(zombie.feet(), player.feet(), match_state, "detour")
+	check(damaged.ok and damaged.mode == "detour", "requested detour survives damage making breach cheaper")
 	if damaged.ok:
 		check(damaged.breach_seconds < intact.breach_seconds, "real damage reduces total approach/break/post-path seconds")
-		check(damaged.breach_seconds < damaged.detour_seconds, "breach chosen against a finite verified detour")
+		check(damaged.breach_seconds < damaged.detour_seconds, "damage changes estimate without changing requested mode")
 		var all_cells: Array[Vector3i] = []
-		for index: int in damaged.blockers:
-			for blocker: Vector3i in damaged.blockers[index]:
+		for index: int in intact.blockers:
+			for blocker: Vector3i in intact.blockers[index]:
 				all_cells.append(blocker)
 		check(all_cells.has(Vector3i(24, 4, 24)) and all_cells.has(Vector3i(24, 6, 24)), "planned passage accounts for lower and upper body blocks")
 		for blocker: Vector3i in all_cells:
 			check(blocker.y > 1, "bedrock never becomes a breach candidate")
 	nav.begin_tick(2)
 	var stable: Dictionary = nav.plan(zombie.feet(), player.feet(), match_state, "breach")
-	check(stable.ok and stable.mode == "breach", "nearby reevaluation retains the faster committed approach")
-	# A thick obstacle with a short detour is a different actual geometry fixture.
-	var short_data: VoxelData = _flat()
-	short_data.seed_box(Vector3i(22, 4, 22), Vector3i(27, 7, 27), 0x01bbbbaa)
-	var short_match: MatchSimulation = _match(short_data)
-	_owner(short_match, Vector3(30.5, 4.01, 24.5))
-	_zombie(short_match, 2, Vector3(18.5, 4.01, 24.5))
-	var short_nav: ZombieNavigation = NAVIGATION.new()
-	short_nav.configure(short_data, {})
-	short_nav.begin_tick(0)
-	var short_route: Dictionary = short_nav.plan(Vector3(18.5, 4.01, 24.5), Vector3(30.5, 4.01, 24.5), short_match)
-	check(short_route.ok and short_route.mode == "detour", "thick barrier favors short walk around it")
-	# Two verified routes with close arrival times demonstrate actual hysteresis.
-	var close_data: VoxelData = _flat()
-	close_data.seed_box(Vector3i(24, 4, 11), Vector3i(25, 7, 39), 0x01aabbaa)
-	var close_match: MatchSimulation = _match(close_data)
-	var close_owner: SharedPlayerState = _owner(close_match, Vector3(30.5, 4.01, 24.5))
-	_zombie(close_match, 2, Vector3(18.5, 4.01, 24.5))
-	for y: int in range(4, 7):
-		close_match._damage_block(close_owner, Vector3i(24, y, 24), 59, false)
-	var close_nav: ZombieNavigation = NAVIGATION.new()
-	close_nav.configure(close_data, {})
-	close_nav.begin_tick(0)
-	var prefer_open: Dictionary = close_nav.plan(Vector3(18.5, 4.01, 24.5), close_owner.feet(), close_match, "detour")
-	close_nav.begin_tick(1)
-	var prefer_committed: Dictionary = close_nav.plan(Vector3(18.5, 4.01, 24.5), close_owner.feet(), close_match, "breach")
-	check(prefer_open.ok and prefer_open.mode == "detour", "small arrival advantage does not flip an open route")
-	check(prefer_committed.ok and prefer_committed.mode == "breach", "same actual close-cost geometry preserves committed breach")
+	check(stable.ok and stable.mode == "breach", "requested mode remains fixed across reevaluation")
+	# Actual map plans for independently seeded encounters, not a copied coin formula.
+	var breach_count: int = 0
+	var ids: Array[int] = [2]
+	for seed_value: int in range(64):
+		var director: ZombieDirector = DIRECTOR.new()
+		director.configure(data, {"zombie_seed":seed_value}, ids)
+		director.commands(match_state)
+		var initial: Dictionary = director.get_diagnostics().bots[0]
+		check(initial.mode == initial.chosen_mode, "both real routes honor the seeded choice instead of cheapest selection")
+		if initial.chosen_mode == "breach":
+			breach_count += 1
+		var replay: ZombieDirector = DIRECTOR.new()
+		replay.configure(data, {"zombie_seed":seed_value}, ids)
+		replay.commands(match_state)
+		check(replay.get_diagnostics().bots[0].chosen_mode == initial.chosen_mode, "same seed/life replays encounter choice")
+		# Repeated render sampling cannot reroll a choice at this same obstacle.
+		for sample: int in range(4):
+			director.commands(match_state)
+		var after: Dictionary = director.get_diagnostics().bots[0]
+		check(after.choice_rolls == 1 and after.chosen_mode == initial.chosen_mode, "obstacle choice is locked, never drawn each frame")
+		if seed_value == 0:
+			for tick: int in range(70):
+				match_state.step_fixed()
+				director.commands(match_state)
+				director.drain_attack_intents()
+				match_state.drain_events()
+			var replanned: Dictionary = director.get_diagnostics().bots[0]
+			check(replanned.choice_rolls == 1 and replanned.chosen_mode == initial.chosen_mode, "real fixed-tick plan refreshes preserve the same obstacle choice")
+	check(breach_count >= 20 and breach_count <= 44, "actual seeded encounters select both options approximately equally: breaches=%d/64" % breach_count)
+	print("ZOMBIE_AI_RANDOM breaches=%d/64" % breach_count)
 	var stats: Dictionary = nav.get_statistics()
 	check(stats.max_jobs_per_tick == 1 and stats.max_expansions_per_job <= 2 * NAVIGATION.MAX_EXPANSIONS, "aggregate work has fixed bounds")
 	match_state.drain_events()
-	short_match.drain_events()
 
 func _shared_movement_and_bite_intents() -> void:
 	var data: VoxelData = ARENA.build()
@@ -158,6 +162,7 @@ func _shared_movement_and_bite_intents() -> void:
 	var forbidden_events: int = 0
 	var decision_microseconds: Array[int] = []
 	var total_microseconds: int = 0
+	var last_breach: Dictionary[int, int] = {}
 	for tick: int in range(900):
 		var started: int = Time.get_ticks_usec()
 		var inputs: Dictionary = director.commands(match_state)
@@ -174,10 +179,15 @@ func _shared_movement_and_bite_intents() -> void:
 			for id: int in inputs:
 				if id != 1:
 					check(inputs[id].valid() and inputs[id].buttons == 0, "zombie emits valid movement without source tool/fire buttons")
-		for intent: Dictionary in director.drain_attack_intents():
+		var proposals: Array[Dictionary] = director.drain_attack_intents()
+		for intent: Dictionary in proposals:
 			if intent.kind == "bite":
 				bites += 1
 		var events: Array[Dictionary] = match_state.step_fixed(inputs)
+		for intent: Dictionary in proposals:
+			if intent.kind == "breach" and tick >= int(last_breach.get(intent.actor_id, -90)) + 90:
+				if not match_state.resolve_zombie_breach(intent.actor_id, intent.cell).is_empty():
+					last_breach[intent.actor_id] = tick
 		forbidden_events += MatchSimulation.events_of(events, "shot").size()
 		forbidden_events += MatchSimulation.events_of(events, "spade_bash").size()
 		match_state.drain_events()
@@ -251,3 +261,131 @@ func _breach_intents_and_separation() -> void:
 		open_match.drain_transactions()
 	check(left.feet().distance_to(right.feet()) > .5, "close pursuit steering expands separation through shared movement")
 	check(left.feet().x > 5.5 and right.feet().x > 5.5, "separation allows forward progress")
+
+func _no_retreat_and_high_target() -> void:
+	var data: VoxelData = _flat(Vector3i(32, 16, 32))
+	var match_state: MatchSimulation = _match(data)
+	var player: SharedPlayerState = _owner(match_state, Vector3(27.5, 4.01, 16.5))
+	var zombie: SharedPlayerState = _zombie(match_state, 2, Vector3(5.9, 4.01, 16.5))
+	var director: ZombieDirector = DIRECTOR.new()
+	var ids: Array[int] = [2]
+	director.configure(data, {}, ids)
+	var retreats: int = 0
+	var backward_commands: int = 0
+	var bite_ticks: int = 0
+	for tick: int in range(720):
+		var before: Vector3 = zombie.feet()
+		var inputs: Dictionary = director.commands(match_state)
+		var command: PlayerRules.Command = inputs[2]
+		var front: Vector3 = Vector3(-sin(command.yaw), 0, -cos(command.yaw))
+		var right: Vector3 = Vector3(cos(command.yaw), 0, -sin(command.yaw))
+		var issued: Vector3 = right * command.move.x - front * command.move.y
+		if issued.x < -.0001:
+			backward_commands += 1
+		for intent: Dictionary in director.drain_attack_intents():
+			if intent.kind == "bite":
+				bite_ticks += 1
+		var human: PlayerRules.Command = RULES.Command.new()
+		human.sequence = tick + 1
+		human.spawn_generation = player.spawn_generation
+		human.move = Vector2(.1, 0) if tick >= 540 else Vector2.ZERO
+		inputs[1] = human
+		match_state.step_fixed(inputs)
+		if zombie.feet().x < before.x - .002:
+			retreats += 1
+		match_state.drain_events()
+		match_state.drain_transactions()
+	check(backward_commands == 0 and retreats == 0, "open replans and moving bite boundary never issue backward chase or retreat: commands=%d retreats=%d" % [backward_commands, retreats])
+	check(bite_ticks > 0 and zombie.feet().x > 24, "forward chase actually reaches and follows the bite boundary")
+	check(director.get_diagnostics().bots[0].choice_rolls == 0, "open pursuit does not randomly seek unrelated walls")
+	var step_data: VoxelData = _flat(Vector3i(32, 16, 32))
+	step_data.seed_box(Vector3i(16, 4, 1), Vector3i(17, 5, 31), 0x01aabbaa)
+	var step_match: MatchSimulation = _match(step_data)
+	_owner(step_match, Vector3(21.5, 4.01, 16.5))
+	var step_zombie: SharedPlayerState = _zombie(step_match, 2, Vector3(10.5, 4.01, 16.5))
+	var step_director: ZombieDirector = DIRECTOR.new()
+	step_director.configure(step_data, {}, ids)
+	for tick: int in range(400):
+		step_match.step_fixed(step_director.commands(step_match))
+		step_director.drain_attack_intents()
+		step_match.drain_events()
+		step_match.drain_transactions()
+	check(step_zombie.feet().x > 17.5, "forward recovery preserves ordinary source one-block auto-climb: feet=%s diag=%s" % [step_zombie.feet(), step_director.get_diagnostics()])
+	# A two-block pedestal already exceeds one-step motion; it is not a tall tower.
+	var low_data: VoxelData = _flat(Vector3i(24, 16, 24))
+	low_data.seed_box(Vector3i(12, 4, 12), Vector3i(13, 6, 13), 0x01aabbaa)
+	var low_match: MatchSimulation = _match(low_data)
+	var low_owner: SharedPlayerState = _owner(low_match, Vector3(12.5, 6.01, 12.5))
+	_zombie(low_match, 2, Vector3(8.5, 4.01, 12.5))
+	var low_director: ZombieDirector = DIRECTOR.new()
+	low_director.configure(low_data, {}, ids)
+	var low_hits: int = 0
+	var low_last: int = -90
+	for tick: int in range(360):
+		var inputs: Dictionary = low_director.commands(low_match)
+		var proposals: Array[Dictionary] = low_director.drain_attack_intents()
+		low_match.step_fixed(inputs)
+		for intent: Dictionary in proposals:
+			if intent.kind == "breach" and tick >= low_last + 90:
+				if not low_match.resolve_zombie_breach(intent.actor_id, intent.cell).is_empty():
+					low_hits += 1
+					low_last = tick
+		low_match.drain_events()
+		low_match.drain_transactions()
+	check(low_hits >= 3 and low_owner.feet().y < 6, "two-block inaccessible pedestal triggers actual nearby support attacks")
+	var platform_data: VoxelData = _flat(Vector3i(32, 16, 32))
+	platform_data.seed_box(Vector3i(14, 4, 14), Vector3i(19, 6, 19), 0x01aabbaa)
+	var platform_match: MatchSimulation = _match(platform_data)
+	_owner(platform_match, Vector3(16.5, 6.01, 16.5))
+	var platform_director: ZombieDirector = DIRECTOR.new()
+	platform_director.configure(platform_data, {"spawn_sectors":[Vector3(3.5, 4.01, 16.5)]}, ids)
+	var platform_spawn: Dictionary = platform_director.choose_spawn(platform_match, 1, 12)
+	check(platform_spawn.ok and platform_spawn.route_valid, "fifty-block5x5 platform retains a proven lower approach outside radius2")
+	if platform_spawn.ok:
+		var platform_zombie: SharedPlayerState = _zombie(platform_match, 2, platform_spawn.point)
+		var platform_hits: int = 0
+		for tick: int in range(420):
+			var inputs: Dictionary = platform_director.commands(platform_match)
+			var proposals: Array[Dictionary] = platform_director.drain_attack_intents()
+			platform_match.step_fixed(inputs)
+			for intent: Dictionary in proposals:
+				if intent.kind == "breach" and tick % 90 == 0:
+					if not platform_match.resolve_zombie_breach(intent.actor_id, intent.cell).is_empty():
+						platform_hits += 1
+			platform_match.drain_events()
+			platform_match.drain_transactions()
+		check(platform_zombie.feet().x > 10 and platform_hits > 0, "wide platform receives actual approach and local exposed-block breach")
+	# A real narrow tower, with an ordinary safe lower sector and physical support.
+	var tower_data: VoxelData = _flat(Vector3i(32, 16, 32))
+	tower_data.seed_box(Vector3i(18, 4, 16), Vector3i(19, 10, 17), 0x01aabbaa)
+	var tower_match: MatchSimulation = _match(tower_data)
+	var elevated_owner: SharedPlayerState = _owner(tower_match, Vector3(18.5, 10.01, 16.5))
+	var tower_director: ZombieDirector = DIRECTOR.new()
+	tower_director.configure(tower_data, {"spawn_sectors":[Vector3(4.5, 4.01, 16.5)]}, ids)
+	var candidate: Dictionary = tower_director.choose_spawn(tower_match, 1, 12)
+	check(candidate.ok and candidate.route_valid, "high player permits a proven safe ground approach and spawn")
+	if not candidate.ok:
+		return
+	var tower_zombie: SharedPlayerState = _zombie(tower_match, 2, candidate.point)
+	var receipts: int = 0
+	var last_hit: int = -90
+	var exposed_only: bool = true
+	for tick: int in range(720):
+		var inputs: Dictionary = tower_director.commands(tower_match)
+		var proposals: Array[Dictionary] = tower_director.drain_attack_intents()
+		tower_match.step_fixed(inputs)
+		for intent: Dictionary in proposals:
+			if intent.kind != "breach":
+				continue
+			var endpoint: Vector3 = Vector3(intent.cell) + Vector3.ONE * .5
+			var origin: Vector3 = tower_zombie.feet() + Vector3.UP * 1.1
+			var ray: Dictionary = tower_data.cast_voxel(origin, endpoint - origin, origin.distance_to(endpoint) + .1)
+			exposed_only = exposed_only and intent.cell.y > 1 and MatchSimulation.in_reach(tower_zombie, intent.cell) and ray.hit and ray.cell == intent.cell
+			if tick >= last_hit + 90 and not tower_match.resolve_zombie_breach(intent.actor_id, intent.cell).is_empty():
+				receipts += 1
+				last_hit = tick
+		tower_match.drain_events()
+		tower_match.drain_transactions()
+	check(receipts >= 3 and exposed_only, "high-target fallback gives reachable exposed support/front blocks to common damage authority")
+	check(tower_data.get_block(Vector3i(18, 1, 16)) != 0 and tower_data.get_block(Vector3i(18, 3, 16)) != 0, "fallback preserves protected bedrock and does not dig remote floor")
+	check(elevated_owner.feet().y < 10 and elevated_owner.health > 0, "real local support destruction lowers the tower occupant without teleport or phantom damage")

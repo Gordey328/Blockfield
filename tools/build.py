@@ -63,11 +63,13 @@ def run_command(name, command, timeout=180):
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--export',action='store_true')
+    parser.add_argument('--suite',action='append',default=[],help='Run only named fixtures (repeatable); parser/import and runtime smoke always run')
     args=parser.parse_args()
+    selected=set(args.suite)
     run('import',['--editor','--import','--quit'])
     for label in ('world','session','integration'):
         path=ROOT/'tests'/label/f'test_{"lab" if label=="integration" else label}.gd'
-        if path.exists():run('test-'+label,(['--fixed-fps','60'] if label=='integration' else [])+['--script',str(path)])
+        if path.exists() and (not selected or label in selected):run('test-'+label,(['--fixed-fps','60'] if label=='integration' else [])+['--script',str(path)])
     suites=[('grenade','tests/gameplay/test_grenade.gd'),('vxl-save','tests/world/test_vxl_save.gd'),('falling-clusters','tests/world/test_falling_clusters.gd'),('lighting','tests/world/test_lighting.gd'),('topdown','tests/world/test_topdown.gd'),('presentation','tests/presentation/test_presentation.gd'),('localization','tests/presentation/test_localization.gd'),('effects','tests/presentation/test_effects.gd'),('post-effects','tests/presentation/test_post_effects.gd'),('extensions','tests/presentation/test_extensions.gd'),('ui','tests/ui/test_ui.gd')]
     suites += [('focus','tests/gameplay/test_focus.gd'),('source-parity','tests/gameplay/test_source_parity.gd'),('character-actions','tests/presentation/test_character_actions.gd'),('corpse','tests/presentation/test_corpse.gd'),('weapon-native','tests/presentation/test_weapon_native.gd'),('water','tests/world/test_water.gd'),('irradiance','tests/world/test_irradiance.gd'),('world-resources','tests/world/test_world_resources.gd'),('audio','tests/audio/test_audio.gd')]
     suites += [('source-motion','tests/gameplay/test_source_motion.gd'),('spectator-view','tests/presentation/test_spectator_view.gd'),('reflection','tests/world/test_reflection.gd')]
@@ -100,6 +102,7 @@ def main():
                ('survival-panel','tests/ui/test_survival_panel.gd'),
                ('survival-setup','tests/ui/test_survival_setup.gd'),
                ('survival-scene','tests/integration/test_survival_scene.gd')]
+    suites += [('startup-work','tests/integration/test_startup_work.gd')]
     suites += [('blockfield-map','tests/world/test_blockfield_map.gd'),('native-map-main','tests/integration/test_native_map_main.gd')]
     suites += [('collapse-optimization','tests/world/test_collapse_optimization.gd'),
                ('empty-chunk-optimization','tests/world/test_empty_chunk_optimization.gd'),
@@ -112,9 +115,12 @@ def main():
                ('world-dirty-optimization','tests/world/test_world_dirty_optimization.gd'),
                ('main-optimization','tests/integration/test_main_optimization.gd')]
     suites += [('shared-grenade','tests/simulation/test_grenade_rules.gd'),('player-rules','tests/simulation/test_player_rules.gd'),('match-objectives','tests/simulation/test_match_objectives.gd'),('match-simulation','tests/simulation/test_match_simulation.gd'),('match-reset','tests/simulation/test_match_reset.gd'),('actor-presentation','tests/ui/test_actor_presentation.gd')]
+    unknown=selected-{'world','session','integration'}-{name for name,_ in suites}
+    if unknown: parser.error('Unknown suites: '+', '.join(sorted(unknown)))
     for name,path in suites:
+        if selected and name not in selected: continue
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','survival-setup','survival-panel','survival-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-setup','survival-panel','survival-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     if args.export: export_web()
 

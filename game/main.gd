@@ -85,6 +85,12 @@ var _spawn_warning_marker: MeshInstance3D
 var _spawn_warning_until_tick: int = -1
 var _last_player_corpse: OpenSpadesCorpse
 
+func _enter_tree() -> void:
+	# Child _ready runs first: avoid generating/meshing a lab that will be
+	# discarded immediately by the authored match map in this parent's _ready.
+	if offline_tdm_mode:
+		(get_node("VoxelWorld") as VoxelWorld).bootstrap_lab = false
+
 func _ready() -> void:
 	if get_tree().has_meta("blockfield_launch"):
 		var requested: Variant = get_tree().get_meta("blockfield_launch")
@@ -96,7 +102,9 @@ func _ready() -> void:
 		get_tree().remove_meta("blockfield_utility")
 	if offline_tdm_mode:
 		var arena_data: VoxelData = SURVIVAL_ARENA.build() if offline_survival_mode else TDM_ARENA.build()
-		world.set_map_data(arena_data,"Crossroads · Выживание" if offline_survival_mode else "Crossroads · 3×3",true)
+		var arena: Dictionary = SURVIVAL_ARENA.metadata() if offline_survival_mode else TDM_ARENA.metadata()
+		var start_feet: Vector3 = arena.owner_spawn if offline_survival_mode else arena.team_spawns[0][0]
+		world.set_map_data(arena_data,"Crossroads · Выживание" if offline_survival_mode else "Crossroads · 3×3",true,start_feet)
 		# Effects and actor views sample the current rendered camera pose.
 		player.process_priority = process_priority-1
 	graphics_options.merge({"gi":false,"water_waves":true,"water_refraction":true,"water_reflections":false,"ragdolls":true})
@@ -159,6 +167,7 @@ func _ready() -> void:
 		if not configured.get("ok",false):
 			push_error("Offline TDM configuration failed: %s" % configured.get("error","unknown"))
 			return
+		player._adopt_match_owner((session as OFFLINE_TDM).get_owner_state())
 	_load_resource_packs()
 	if skin_id not in OpenSpadesExtensions.get_skins():skin_id="original"
 	player.skin_id=skin_id
@@ -248,6 +257,22 @@ func _apply_game_launch() -> void:
 		_map_baseline = bytes
 		_map_baseline_name = str(entry.resource).get_file()
 		_finish_map_load(OK)
+	if offline_tdm_mode:
+		# Do not start the combat clock/input while initial chunk publication is
+		# still competing with the first gameplay frames. World keeps its normal
+		# bounded slices, and the loading overlay remains responsive/cancellable.
+		world.get_topdown_image_progressive()
+		var deadline: int = Time.get_ticks_msec() + 30000
+		while true:
+			var preparation: Dictionary = world.get_visual_preparation_stats()
+			if bool(preparation.ready): break
+			if Time.get_ticks_msec() >= deadline:
+				_fail_game_launch("Подготовка карты заняла слишком много времени." if russian else "Map preparation took too long.", true)
+				return
+			await get_tree().process_frame
+			if not is_inside_tree(): return
+		# Present completed terrain once before admitting live input.
+		await get_tree().process_frame
 	session.select_weapon(int(configuration.weapon))
 	LAUNCH_CATALOG.save_selection(configuration)
 	_launch_status = "ready"

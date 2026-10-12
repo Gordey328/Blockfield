@@ -3,6 +3,11 @@
 Accepted user scope: 2026-10-12. Implementation and release evidence belong in
 docs/zombie-survival.md and docs/status.md.
 
+Amended by [ADR0033](0033-zombie-pursuit-and-startup.md): latest user request
+replaces cheaper detour/breach selection with a stable random choice and adds
+elevated forward destruction and startup work. The original rationale/evidence
+below is retained as history.
+
 The user requests an offline mode with configurable time, zombies per wave and
 spawn dependence on elapsed time. Confirmed choices: begin after completed
 multiplayer removal; survive the selected time then clear surviving enemies;

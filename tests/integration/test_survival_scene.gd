@@ -45,9 +45,13 @@ func run() -> void:
 	app = SCENE.instantiate()
 	root.add_child(app)
 	current_scene = app
-	await frames(8)
+	var launch_deadline: int = Time.get_ticks_msec() + 35000
+	while app.get_launch_state().status == "loading" and Time.get_ticks_msec() < launch_deadline:
+		await frames(1)
 	var session: OfflineSurvivalSession = app.session
 	check(app.get_launch_state().status == "ready", "ordinary selected survival reaches ready")
+	check(app.world.get_visual_preparation_stats().ready and app.world.get_rebuild_stats().pending_chunks == 0 and not app.world.get_rebuild_stats().active_build,
+		"ordinary survival finishes initial terrain before enabling combat")
 	check(not has_meta("blockfield_launch"), "launch metadata consumed once")
 	check(app.offline_survival_mode and session.mode == "survival", "new adapter, not TDM score policy")
 	check(app.world.data == session.simulation.data, "one authoritative map is adopted by renderer")
@@ -59,6 +63,10 @@ func run() -> void:
 	await frames(12)
 	action("forward", false)
 	check(session.get_owner_state().feet().distance_to(start) > 0.1, "normal movement controls reach shared authority")
+	for index: int in range(20):
+		if session.get_owner_state().tool_raise >= .999: break
+		await frames(1)
+	check(session.get_owner_state().tool_raise >= .999, "selected weapon finishes its ordinary raise before fire")
 	action("primary", true)
 	await frames(3)
 	action("primary", false)

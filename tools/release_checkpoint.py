@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--revision', default='HEAD')
-    parser.add_argument('--import-cache', type=Path, help='Seed the frozen project with an existing .godot cache; parser/import and all checks still run')
+    parser.add_argument('--import-cache', type=Path, help='Seed the frozen project with an existing .godot cache; parser/import and selected checks still run')
+    parser.add_argument('--suite', action='append', default=[], help='Pass a named fixture selection to build.py; default remains all fixtures')
     args = parser.parse_args()
     revision = subprocess.run(['git', 'rev-parse', '--verify', args.revision + '^{commit}'],
                               cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
@@ -40,6 +41,8 @@ def main():
         'config/custom_user_dir_name="blockfield-check-' + revision[:12] + '"', 1)
     config.write_text(private_config, encoding='utf-8')
     sys.argv = [str(folder / 'tools' / 'build.py')]
+    for suite in args.suite:
+        sys.argv += ['--suite', suite]
     try:
         build.main()
     finally:

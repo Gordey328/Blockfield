@@ -1,7 +1,8 @@
 class_name ZombieNavigation
 extends RefCounted
 ## One pair of bounded A* searches per authority tick, shared by spawn and pursuit.
-## Costs are seconds, including every body-clearance block and the shared hit cadence.
+## Detour and breach are independently validated; the director chooses an encounter
+## randomly. Estimated damage time is diagnostic and never selects the mode.
 ## This is a single-surface, authored-arena planner; it does not support stacked maps.
 const MOTION = preload("res://gameplay/source_player_motion.gd")
 const MAX_EXPANSIONS: int = 1800
@@ -102,7 +103,7 @@ func _column(column: Vector2i) -> Dictionary:
 		_columns[column] = value
 	return value
 
-func _nearest(point: Vector3, radius: int) -> Vector2i:
+func _nearest(point: Vector3, radius: int, project_height: bool = false) -> Vector2i:
 	var center: Vector2i = Vector2i(floori(point.x), floori(point.z))
 	var result: Vector2i = Vector2i(-1, -1)
 	var best: float = INF
@@ -110,13 +111,30 @@ func _nearest(point: Vector3, radius: int) -> Vector2i:
 		for dz: int in range(-radius, radius + 1):
 			var column: Vector2i = center + Vector2i(dx, dz)
 			var value: Dictionary = _column(column)
-			if value.is_empty() or not value.cells.is_empty() or absf(value.point.y - point.y) > 2.1:
+			if value.is_empty() or not value.cells.is_empty() or (not project_height and absf(value.point.y - point.y) > 2.1):
 				continue
 			var distance: float = point.distance_squared_to(value.point)
 			if distance < best:
 				best = distance
 				result = column
 	return result
+
+func has_direct_obstacle(start: Vector3, goal: Vector3) -> bool:
+	var horizontal: Vector2 = Vector2(goal.x - start.x, goal.z - start.z)
+	var steps: int = clampi(ceili(horizontal.length()), 1, 128)
+	for index: int in range(1, steps + 1):
+		var sample: Vector3 = start.lerp(goal, float(index) / steps)
+		var value: Dictionary = _column(Vector2i(floori(sample.x), floori(sample.z)))
+		if value.is_empty() or not value.cells.is_empty():
+			return true
+	return false
+
+func can_climb_step(start: Vector3, forward: Vector3) -> bool:
+	var value: Dictionary = _column(Vector2i(floori(forward.x), floori(forward.z)))
+	if value.is_empty() or not value.cells.is_empty():
+		return false
+	var rise: float = value.point.y - start.y
+	return rise >= -2.1 and rise <= 1.1 and can_stand(value.point)
 
 func segment_clear(start: Vector3, finish: Vector3) -> bool:
 	if not start.is_finite() or not finish.is_finite() or start.distance_to(finish) > 3.0:
@@ -147,23 +165,24 @@ func plan(start: Vector3, goal: Vector3, simulation: MatchSimulation,
 			or _data.dimensions.x * _data.dimensions.z > MAX_COLUMNS:
 		return {"ok":false, "status":"unsupported"}
 	var source: Vector2i = _nearest(start, 2)
-	var destination: Vector2i = _nearest(goal, 2)
+	# A tower does not make the ground-level approach or all future spawns invalid.
+	var destination: Vector2i = _nearest(goal, 2, true)
+	if destination.x < 0:
+		# A solid five-by-five platform can consume a normal fifty-block
+		# inventory. Its safe lower approach may lie outside the first ring.
+		destination = _nearest(goal, 8, true)
 	if source.x < 0 or destination.x < 0:
 		return {"ok":false, "status":"unreachable"}
 	var before: int = int(_stats.expanded_nodes)
 	var detour: Dictionary = _search(source, destination, simulation, false, crowd)
 	var detour_seconds: float = float(detour.get("seconds", INF))
-	# A proved detour gives an admissible upper bound: more expensive breaches
-	# cannot change this decision. Short pursuits therefore avoid a full-map search.
-	var competitive_limit: float = detour_seconds * (1.1 if preferred_mode == "breach" else .9) \
-		+ (.25 if preferred_mode == "breach" else -.25)
-	var breach: Dictionary = _search(source, destination, simulation, true, crowd, competitive_limit)
+	var obstacle: bool = has_direct_obstacle(start, goal)
+	var breach: Dictionary = _search(source, destination, simulation, true, crowd) if obstacle else \
+		{"ok":false, "exhausted":false, "pruned":false, "seconds":INF}
 	_stats.max_expansions_per_job = maxi(_stats.max_expansions_per_job, int(_stats.expanded_nodes) - before)
 	var breach_seconds: float = float(breach.get("seconds", INF))
 	var selected: Dictionary = detour
-	if bool(breach.ok) and (not bool(detour.ok) or \
-			(preferred_mode == "breach" and breach_seconds <= detour_seconds * 1.1 + .25) or \
-			(preferred_mode != "breach" and breach_seconds < detour_seconds * .9 - .25)):
+	if bool(breach.ok) and (not bool(detour.ok) or preferred_mode == "breach"):
 		selected = breach
 	if not bool(selected.ok):
 		return {"ok":false, "status":"budget_exhausted" if detour.exhausted or breach.exhausted else "unreachable"}
@@ -174,6 +193,10 @@ func plan(start: Vector3, goal: Vector3, simulation: MatchSimulation,
 	selected.breach_ruled_out = breach.pruned and not breach.ok
 	selected.comparison_complete = not detour.exhausted and not breach.exhausted
 	selected.map_sequence = _data.map_sequence
+	selected.has_obstacle = obstacle
+	selected.both_available = bool(detour.ok) and bool(breach.ok)
+	selected.approach_point = _column(destination).point
+	selected.elevated_goal = goal.y > selected.approach_point.y + 1.1
 	return selected
 
 func _search(source: Vector2i, destination: Vector2i, simulation: MatchSimulation,
@@ -218,12 +241,10 @@ func _search(source: Vector2i, destination: Vector2i, simulation: MatchSimulatio
 				continue
 			var seconds: float = (1.0 + absf(rise) * 1.5) / _walk_speed
 			seconds += .2 * clampi(int(crowd.get(next_column, 0)), 0, 12)
-			for cell: Vector3i in next_data.cells:
-				var hits: int = maxi(1, ceili(simulation.get_block_remaining_health(cell) / _breach_damage))
-				seconds += hits * _breach_cycle
-			if blocked and current.z == 0:
-				# One initial windup; subsequent cells share the attacker's cycle.
-				seconds -= maxf(0.0, _breach_cycle - _breach_windup)
+			# Within the breach option find a short exposed passage. Expensive
+			# block health must not suppress the user's randomly selected option.
+			if blocked:
+				seconds += .25
 			var cost: float = costs[current] + seconds
 			if cost + _heuristic(next_column, destination) > cost_limit:
 				pruned = true
@@ -249,12 +270,20 @@ func _search(source: Vector2i, destination: Vector2i, simulation: MatchSimulatio
 	reverse.reverse()
 	var path: Array[Vector3] = []
 	var blockers: Dictionary[int, Array] = {}
+	var estimate: float = 0.0
+	var hits_total: int = 0
 	for state: Vector3i in reverse:
 		var entry: Dictionary = _column(Vector2i(state.x, state.y))
 		if not entry.cells.is_empty():
 			blockers[path.size()] = entry.cells.duplicate()
+			for cell: Vector3i in entry.cells:
+				hits_total += maxi(1, ceili(simulation.get_block_remaining_health(cell) / _breach_damage))
+		if not path.is_empty():
+			estimate += path.back().distance_to(entry.point) / _walk_speed
 		path.append(entry.point)
-	return {"ok":true, "exhausted":false, "pruned":pruned, "seconds":costs[found], "path":path, "blockers":blockers}
+	if hits_total > 0:
+		estimate += _breach_windup + (hits_total - 1) * _breach_cycle
+	return {"ok":true, "exhausted":false, "pruned":pruned, "seconds":estimate, "path":path, "blockers":blockers}
 
 func _heuristic(a: Vector2i, b: Vector2i) -> float:
 	return float(absi(a.x - b.x) + absi(a.y - b.y)) / _walk_speed

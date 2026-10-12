@@ -23,6 +23,7 @@ const IRRADIANCE = preload("res://world/voxel_irradiance.gd")
 const REFLECTION = preload("res://world/planar_reflection.gd")
 
 var data: VOXEL_DATA = VOXEL_DATA.new()
+@export var bootstrap_lab: bool = true
 var dimensions: Vector3i:
 	get:
 		return data.dimensions
@@ -114,7 +115,7 @@ var _vxl_job_stats: Dictionary = {"active": false, "kind": "", "progress": 0.0, 
 
 func _ready() -> void:
 	_ensure_material()
-	if _blocks.is_empty():
+	if bootstrap_lab and _blocks.is_empty():
 		generate_lab()
 
 func _exit_tree() -> void:

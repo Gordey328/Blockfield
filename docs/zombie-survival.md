@@ -1,5 +1,11 @@
 # Zombie survival: implementation and evidence
 
+The original release below is historical. Latest same-day instructions replace
+cheaper-path selection with random choice and add pursuit/elevated/startup fixes;
+see [ADR0033](decisions/0033-zombie-pursuit-and-startup.md). Current follow-up results
+are recorded in [the follow-up evidence](zombie-pursuit-startup.md), without reusing
+these old browser checks as proof.
+
 Updated: 2026-10-12 (Europe/Moscow). This report records the implemented offline
 mode, development checks and the published frozen release. The accepted runtime
 is 16874505fa75ae4804e027db123fa2a8524b2ab8; documentation evidence commits do not
