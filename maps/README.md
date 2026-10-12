@@ -1,5 +1,14 @@
 # Bundled voxel conversions
 
+Two additional small survival adaptations are bundled: Small Minecraft Chunk by
+The_Wolfian and MIRA HQ by CapnSoda202, downloaded from public Teardown community
+archives at the user's request on2026-10-12. Their compiled resources are
+survival_minecraft_chunk.bfmap and survival_mira_hq.bfmap. Matching provenance
+notices retain source/archive hashes, attribution and the absence of an identified
+separate reuse license; these assets are not relicensed as repository MIT. Raw
+XML/VOX/Lua/archives stay local and unexecuted. See docs/survival-maps.md for crops,
+added foundation, removed roofs/subsurface spaces and acceptance limits.
+
 The user supplied the `csgo_mirage` GoldSrc map archive and explicitly requested
 publishing its converted map with Blockfield on GitHub Pages on 2026-10-11.
 The supplied archive includes an ALL-CS.RU download-site page. Original map/model/
