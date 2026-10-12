@@ -37,6 +37,19 @@ original9046/0, Main8/0 and TDM62/0 pass. Only corpse runtime changes after0a;
 all specialist source handoffs/engine leases returned. Root repeats final affected
 archive checks/export, then expanded paired actual-Main Web profiles and a separate
 branch preview. Existing main/reduced Pages paths remain separately owned.
+Final860 affected gate/export pass. Identical expanded TDM shows remaining corpse
+cost even after exact optimization; user specifies iPhone12 mini/Chrome and then
+explicitly permits removing corpse physics entirely. [ADR0028](decisions/0028-static-death-models.md)
+records the static original Dead-model adaptation. Production Main will no longer
+dispatch a solver; existing retention and death/respawn rules remain. Specialists
+receive new non-overlapping ownership: presentation only Corpse/static fixture,
+gameplay only TDM weapon getter/player-state copy and their fixtures, world only
+World dirty/water invalidation and its fixture; root Main/HUD caption/build/docs.
+These remaining quality-preserving CPU/invalidation changes need fresh frozen
+checks and final scenario-checked Web measurement/publication. Root retains one
+mixed-viewport TDM run and a premature Title read as rejected evidence, with no
+claims based on them. Ordinary860 mobile layout starts/fires/selects tools at812×375
+with no warning/error logs; physical-phone performance is still open.
 See [branch evidence](web-max-optimization.md), [ADR0027](decisions/0027-quality-preserving-web-optimization.md).
 
 ## Combined Mirage/effects Pages release — 2026-10-11 (published development build)

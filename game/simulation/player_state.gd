@@ -85,10 +85,69 @@ func copy() -> SharedPlayerState:
 	var result := SharedPlayerState.new(player_id, player_name, match_epoch, profile)
 	# Only this script's scalar/value properties are copied. Motion/RNG are owned
 	# copies, so replay cannot mutate another actor or cosmetic RNG stream.
-	for property: Dictionary in get_script().get_script_property_list():
-		var key: String = property.name
-		if key in ["motion", "shot_rng"]: continue
-		result.set(key, get(key))
+	if get_script() != SharedPlayerState:
+		# Retain the original reflective behavior for extension scripts, including
+		# their extra properties and setter semantics. Base actors use typed reads.
+		for property: Dictionary in get_script().get_script_property_list():
+			var key: String = property.name
+			if key in ["motion", "shot_rng"]: continue
+			result.set(key, get(key))
+	else:
+		result.player_id = player_id
+		result.match_epoch = match_epoch
+		result.spawn_generation = spawn_generation
+		result.connected = connected
+		result.player_name = player_name
+		result.team = team
+		result.profile = profile
+		result.weapon = weapon
+		result.pending_weapon = pending_weapon
+		result.tool = tool
+		result.displayed_tool = displayed_tool
+		result.displayed_weapon = displayed_weapon
+		result.tool_raise = tool_raise
+		result.sprint_state = sprint_state
+		result.aim_down_state = aim_down_state
+		result.aiming = aiming
+		result.sprinting = sprinting
+		result.sneaking = sneaking
+		result.yaw = yaw
+		result.pitch = pitch
+		result.health = health
+		result.magazine = magazine
+		result.reserve = reserve
+		result.blocks = blocks
+		result.grenades = grenades
+		result.kills = kills
+		result.deaths = deaths
+		result.score = score
+		result.last_tick = last_tick
+		result.consumed_input_sequence = consumed_input_sequence
+		result.input_move = input_move
+		result.input_buttons = input_buttons
+		result.previous_buttons = previous_buttons
+		result.trigger_held = trigger_held
+		result.dry_fire_held = dry_fire_held
+		result.next_shot_tick = next_shot_tick
+		result.last_shot_tick = last_shot_tick
+		result.reloading = reloading
+		result.reload_started_tick = reload_started_tick
+		result.reload_deadline_tick = reload_deadline_tick
+		result.grenade_deadline_tick = grenade_deadline_tick
+		result.block_deadline_tick = block_deadline_tick
+		result.spade_deadline_tick = spade_deadline_tick
+		result.dig_deadline_tick = dig_deadline_tick
+		result.digging = digging
+		result.first_dig = first_dig
+		result.cooking = cooking
+		result.cook_started_tick = cook_started_tick
+		result.cook_action_sequence = cook_action_sequence
+		result.release_pending = release_pending
+		result.death_tick = death_tick
+		result.respawn_tick = respawn_tick
+		result.event_sequence = event_sequence
+		result.walk_distance = walk_distance
+		result.walk_steps = walk_steps
 	result.motion = motion.copy()
 	result.shot_rng.state = shot_rng.state
 	return result

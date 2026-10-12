@@ -193,7 +193,7 @@ func _process(delta: float) -> void:
 	elif offline_tdm_mode: _update_shared_actor_views()
 	audio.positional=positional_audio
 	audio.environmental=environmental_audio
-	for corpse in _corpses:corpse.step(delta)
+	# Static death models need no per-frame solver or terrain queries.
 	# Original skins publish the final pose once; extension skins retain setters.
 	var batch_pose: bool = _player_view.has_method("begin_pose_update") and _player_view.has_method("end_pose_update")
 	if batch_pose: _player_view.begin_pose_update()
@@ -1104,7 +1104,7 @@ func _spawn_player_corpse() -> void:
 func spawn_corpse(state: Dictionary) -> OpenSpadesCorpse:
 	var corpse:=OpenSpadesCorpse.new()
 	add_child(corpse)
-	corpse.setup(world,state)
+	corpse.setup_static(world,state)
 	_corpses.append(corpse)
 	if _corpses.size()>16:
 		var oldest: OpenSpadesCorpse=_corpses.pop_front()

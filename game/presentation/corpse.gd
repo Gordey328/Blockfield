@@ -50,6 +50,13 @@ var _step_dimensions := Vector3i.ZERO
 var _step_water_level: float = 1.0
 var _first_line_ray: LineRay = LineRay.new()
 var _second_line_ray: LineRay = LineRay.new()
+var _static_mode: bool = false
+var _static_pose_ready: bool = false
+var _static_anchor := Vector3.ZERO
+var _static_yaw: float = 0.0
+var _static_pose := Transform3D.IDENTITY
+var _static_center := Vector3.ZERO
+var _static_points := PackedVector3Array()
 
 func setup(voxel_world: Node3D, state: Dictionary) -> void:
 	clear()
@@ -93,6 +100,32 @@ func setup(voxel_world: Node3D, state: Dictionary) -> void:
 	add_impulse(state.get("impulse",Vector3.ZERO))
 	refresh_resources()
 
+func setup_static(voxel_world: Node3D, state: Dictionary) -> void:
+	# Production uses the original already-prone Dead model. Retain setup/step
+	# independently for the source-physics oracle and explicit legacy callers.
+	clear()
+	world = voxel_world
+	player_id = int(state.get("player_id",-1))
+	team = clampi(int(state.get("team",0)),0,1)
+	color = state.get("color",MODELS.TEAM_COLORS[team])
+	var feet: Vector3 = state.get("feet_position",Vector3.ZERO)
+	var yaw: float = float(state.get("yaw",0.0))
+	if not feet.is_finite() or not is_finite(yaw):return
+	top_level = true
+	transform = Transform3D.IDENTITY
+	_static_mode = true
+	_static_yaw = yaw
+	_static_anchor = feet
+	# One bounded vertical placement query, never a per-frame contact solver.
+	var floor_hit: Dictionary = _ray(feet+Vector3.UP*.05,Vector3(feet.x,-1.0,feet.z),128)
+	if bool(floor_hit.hit) and not bool(floor_hit.start_solid) and Vector3i(floor_hit.normal).y > 0:
+		_static_anchor.y = Vector3(floor_hit.position).y
+	_active = true
+	refresh_resources()
+
+func is_static() -> bool:
+	return _static_mode
+
 func clear() -> void:
 	for part: Node3D in _parts.values():
 		part.hide()
@@ -106,6 +139,10 @@ func clear() -> void:
 	_edge_initialized.clear()
 	simulation_time = 0.0
 	_active = false
+	_static_mode = false
+	_static_pose_ready = false
+	_static_points.clear()
+	_static_center = Vector3.ZERO
 
 func refresh_resources() -> void:
 	for part: Node3D in _parts.values():
@@ -113,6 +150,26 @@ func refresh_resources() -> void:
 		part.queue_free()
 	_parts.clear()
 	if not _active:
+		return
+	if _static_mode:
+		var part: Node3D = MODELS.create("Player/Dead")
+		part.name = "StaticDead"
+		add_child(part)
+		MODELS.set_tint(part,color)
+		_parts["Dead"] = part
+		var local_bounds: AABB = _static_model_bounds(part,Transform3D.IDENTITY)
+		if not _static_pose_ready:
+			# Same mapped native basis as CharacterView's static Dead fallback,
+			# with the captured yaw and bottom of its mesh resting on the floor.
+			var basis := Basis(Vector3.UP,_static_yaw)*WORLD_AXES*Basis.IDENTITY.scaled(Vector3.ONE*.1)*MODEL_AXES_INVERSE
+			var rotated: AABB = Transform3D(basis,Vector3.ZERO)*local_bounds
+			_static_pose = Transform3D(basis,_static_anchor+Vector3.UP*(.01-rotated.position.y))
+			_static_pose_ready = true
+		part.transform = _static_pose
+		_static_center = _static_pose*local_bounds.get_center()
+		_static_points.resize(9)
+		for index: int in range(8):_static_points[index] = _static_pose*local_bounds.get_endpoint(index)
+		_static_points[8] = _static_center
 		return
 	for name in ["Torso","Head","Arm1","Arm2","Leg1","Leg2"]:
 		var model: String = "Arm" if name.begins_with("Arm") else ("Leg" if name.begins_with("Leg") else name)
@@ -123,12 +180,29 @@ func refresh_resources() -> void:
 		_parts[name] = part
 	_update_models()
 
+func _static_model_bounds(node: Node3D, local: Transform3D) -> AABB:
+	var bounds := AABB()
+	var found: bool = false
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		bounds = local*(node as MeshInstance3D).get_aabb()
+		found = true
+	for child: Node in node.get_children():
+		if not child is Node3D:continue
+		var part := child as Node3D
+		var child_bounds: AABB = _static_model_bounds(part,local*part.transform)
+		if child_bounds.size == Vector3.ZERO:continue
+		bounds = bounds.merge(child_bounds) if found else child_bounds
+		found = true
+	return bounds
+
 func add_impulse(impulse: Vector3) -> void:
+	if _static_mode:return
 	if not impulse.is_finite():
 		return
 	for index in range(velocities.size()): velocities[index] += impulse
 
 func get_center() -> Vector3:
+	if _static_mode:return _static_center
 	var center := Vector3.ZERO
 	for position in positions: center += position
 	return center/float(positions.size()) if not positions.is_empty() else Vector3.ZERO
@@ -138,11 +212,12 @@ func is_visible_from(eye: Vector3) -> bool:
 		return false
 	# Use actual finite segments. Native Corpse's legacy CastRay prefilter passes an
 	# endpoint to a direction API; retaining it would invert/misclassify visibility.
-	for position in positions:
+	for position: Vector3 in _static_points if _static_mode else positions:
 		if not _ray(eye,position,256).hit: return true
 	return false
 
 func step(delta: float) -> void:
+	if _static_mode:return
 	if not _active or not is_finite(delta) or delta <= 0:
 		return
 	# Native client uses four substeps per render frame. Keep that at >=60 Hz and
@@ -426,6 +501,7 @@ func _cast_ray_into(origin: Vector3, endpoint: Vector3, max_steps: int, result: 
 			return
 
 func _update_models() -> void:
+	if _static_mode:return
 	if not _active or _parts.is_empty(): return
 	# Build the native source bases, then W*native*S^-1 for imported mesh vectors.
 	var source := PackedVector3Array()

@@ -7,9 +7,18 @@ Engine: `4.7.2.stable.official.ed1daf0bf`; OpenSpades:
 accepted reduced template SHA256
 `a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922`.
 
-The user requires approval before lowering graphics. This branch retains all
-quality options and rules; its optimization contract is [ADR0027](decisions/0027-quality-preserving-web-optimization.md).
+The user requires approval before lowering graphics. The first pass retains all
+quality options and rules under [ADR0027](decisions/0027-quality-preserving-web-optimization.md).
+After reviewing measured sustained-combat costs, the user explicitly approves
+removing corpse physics entirely; [ADR0028](decisions/0028-static-death-models.md)
+records the resulting static-death presentation contract. No other graphical
+quality reduction is approved.
 No claim of a completed port or universal maximum performance is made.
+
+The user specifies iPhone12 mini with Chrome as the weakest target. The working
+acceptance aim is sustained30fps; desktop viewport tests do not establish A14,
+iOS/WebKit, device-pixel-ratio, memory or thermal performance. A physical-phone
+run remains required before claiming this target is achieved.
 
 ## Audit and implementation
 
@@ -148,12 +157,114 @@ The earlier paired component report remains tied to141; final browser timing
 uses303. Only corpse runtime changes after the full102 gate; final affected
 checks/smokes/export are repeated on a fresh archive before delivery.
 
+Final frozen `86016890b94d18b83105256dc1714143b39e11e8` passes parser/import,
+corpse-optimization1635/0, original-corpse9046/0, Main8/0, presentation245/0,
+actual-TDM62/0, network-scene27/0 and offline-lifecycle19/0. Both client/server
+smokes and the normal reduced-template Web export pass. All final affected logs
+under `.cache/release-86016890b94d/.cache/logs` are diagnostic-free. The only runtime
+change since the full102 gate is the reviewed Corpse extension compatibility fix.
+The clean normal bundle reports source8601689 and `source_dirty=false`.
+
 Expanded browser diagnostics keep authority paused until terrain is ready,
 then warm for5s and measure three10s windows. TDM diagnostic kill limit10000 avoids
 ending the comparison early; production limits are unchanged. Methods add Corpse
 step, bot commands and Match step costs plus actual body counts. Baseline and
 candidate use the identical final fixture/wrappers; their scene CPU is normalized
 per rendered callback or authority step, and frame intervals remain separate.
+
+The identical expanded quality-preserving TDM comparison has5/7/9 bodies at the
+ends of corresponding windows. Baseline/candidate mean rendered rates are
+25.93/26.21,15.79/16.98 and7.24/16.06fps. Main per-render CPU is
+5.382/3.657,19.522/12.342 and43.427/16.117ms. The last window's corpse step
+falls42.917→15.673ms per rendered callback. p95 frame intervals remain
+55.122/61.657,83.333/102.157 and141.667/89.457ms. These are one sequential
+desktop-browser comparison with evolving authority timelines, diagnostic overhead
+and browser scheduling; it demonstrates the remaining bottleneck, not phone30fps.
+Both reports contain identical graphics and `network_client_created=false`.
+Baseline lab p95 is19.233/21.4/20.370ms; candidate lab is20/25/25.926ms;
+no overall lab FPS improvement is established from this noisy run.
+
+Retained rejected diagnostics: the first candidate TDM tab reverted to its default
+615×476/DPR1.5 viewport. That mixed-size report is saved separately, the viewport
+is reapplied and verified1280×720/DPR1 before the accepted TDM/lab run. Candidate
+Title was read before completion and returned the previous lab report; it is
+retained as rejected-title-capture and is not used as Title evidence. The final
+static-body source receives fresh scenario-checked profiles before publication.
+Four Chromium UnknownError logs during diagnostic scene creation are retained;
+the fresh ordinary860 Web tab has no warning/error logs and is checked separately.
+
+Ordinary860 Web at812×375 starts through the tap-only mobile menu with controls
+forced On, fires through the screen button and selects spade/block with the
+corresponding view model/HUD. Snapshot `.cache/previews/maxopt-mobile-quality-860.png`.
+This is mouse interaction with the mobile layout, not a physical multitouch test.
+Frozen mobile suites remain Controls10128/0, Look225/0, Aim79/0, HUD680/0 and
+UI284/0. The target phone still needs physical testing. HUD safe-area placement,
+touch text entry and thermal/memory limits are open; no universal device claim.
+
+## Approved static bodies and additional CPU work
+
+The user approves removing corpse physics rather than the proposed4-body/2s
+profile, and explicitly asks to investigate other costs. Main now chooses the
+original prone Player/Dead model with captured yaw/team tint, one-time bounded
+floor placement and existing16 hard/6 invisible-soft retention. Bodies remain
+fixed after impacts or supporting-block removal. There are no per-render solver
+dispatches. Existing legacy physics remains solely available to explicit callers
+and source fixtures. Static22/0 and real IntelUHD Compatibility25/0 verify the
+immediate2.3×0.6×2.5m prone model, blue/green tint, zero solver/model/terrain work
+across1000 step/impulse calls, resource refresh and exact subsequent pixels.
+Original9046/0 and independent1635/0 remain clean. Capture:
+`.cache/previews/static-corpse/prone-blue-green.png`; source corpse SHA256
+`68e4fb1423814185fc841457ffe70eb3166fb0a2f5c0111d562a51656f1dddf6`.
+
+Further inspected CPU work is independent of corpses: TDM readouts cloned a full
+owner state for four weapon/ammo fields, and every state clone rebuilt reflective
+property descriptors. Direct synchronous scalar readouts retain caller-owned
+profile dictionaries; base actor copies use typed value assignments and retain
+owned motion/RNG. Subclass reflection behavior remains explicit. World now queues
+unique affected chunk keys, preserving first-seen AO/collision/color/cancellation
+semantics, and avoids geometry rebuilds when water enablement is unchanged.
+These changes require independent oracle fixtures, replay/wire regressions and
+fresh browser evidence; no decision cadence or visible terrain is reduced.
+
+Final private actor-copy2320/0 and guarded weapon-readout78/0 pass. PlayerRules144/0,
+prediction729/0, SimulationCodec2316/0, Match226/0, fanout4065/0, AI4440/0,
+TDM81/0, actual-TDM62/0, source-goldens194/0 and UI284/0 pass. The owned-copy
+benchmark includes motion/RNG construction:155.293→18.569µs median per copy,
+8.36×. Complete weapon readout25.869→6.337µs,4.08×, against the old getter using
+the already optimized copy. Each uses five alternating paired4000-call cohorts.
+All four checked file hashes match the workspace; manifests, exact commands and
+reports are under `.cache/gameplay-scalar-copy-8601689/.cache/`.
+
+Independent review finds and resolves three extension contracts: custom World/Data
+bounds/mapping retain the original27 virtual queries; raw public water changes
+retain mesh/waves/reflection reconciliation and invalidate actual older geometry;
+session/actor/motion readout hooks retain the original owned-snapshot dispatch.
+Final guarded dirty2416/0, World30/0, water18/0, impact4441/0, preparation53/0
+and actual native-Main25/0 pass. Paired World invalidation2430/0 matches every
+ordered queue:1600 changes66.526→20.851ms (68.7% lower),25600 changes
+1070.822→345.025ms (67.8% lower). This is World invalidation CPU, separate from
+Data collapse/meshing/GPU; a large synchronous edit still exceeds a frame budget.
+Report `.cache/benchmarks/world-dirty-maxopt-native-guarded.json`, source manifest
+`.cache/world-dirty-maxopt-check/source-manifest-guarded.json`. Earlier unguarded
+benchmarks are superseded. One native-Main exit leak failed the private gate;
+the verbose and ordinary repeats both25/0 with clean exits are retained. An earlier
+helper's Windows cp1251 output failure after the expected malformed-UTF8 fixture
+warning is retained; its UTF8-safe repetition passed.
+Final review also preserves a World/Data subclass's repeated water-invalidation
+notifications. Final dirty2428/0, water18/0 and actual native-Main25/0 pass cleanly;
+manifest `.cache/world-dirty-maxopt-check/source-manifest-water-guarded.json`.
+The invalidation benchmark remains tied to WorldSHA
+`b69c2f0b8b1165ef29e52b21cce29d034d38c4e35badf1216bdfc6c922b3c11a`;
+only the water setter's extension guard changes afterward, not measured dirty loops.
+
+Remaining audited limits: unchanged idle World/rebuild CPU is already small in
+the expanded lab/Title windows, while these profiles do not cover Mirage traversal
+or destructive edits. BFM decode is synchronous; a bulk decoder needs malformed,
+atomic and transient-memory evidence. Chunk mesh/collider publication is indivisible,
+so its4ms work scheduler cannot guarantee4ms on the phone. Greedy surface merging
+must preserve per-cell color/AO/damage updates; streaming cache retention needs an
+explicit memory cap and epoch/invalidation proof. These are open directions, not
+claimed gains or silent quality reductions.
 
 ## Reproduction and evidence
 

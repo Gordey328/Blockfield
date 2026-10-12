@@ -38,13 +38,13 @@ func _run() -> void:
 	app.session.damage_player(100, Vector3(38,14,40), "weapon")
 	await frames(2)
 	var own_corpse: OpenSpadesCorpse = app._last_player_corpse
-	check(app.session.health == 0 and is_instance_valid(own_corpse), "real damage signal creates the local source corpse")
+	check(app.session.health == 0 and is_instance_valid(own_corpse), "real damage signal creates the local static corpse")
 	check(app.player.camera_mode == BlockfieldPlayer.CameraMode.DEATH, "actual controller enters death camera")
 	if is_instance_valid(own_corpse):
 		var center := own_corpse.get_center()
 		await frames(8)
-		check(own_corpse.get_center().distance_to(center) > .01, "death body continues to move in the actual scene")
-		check(app.get_player_corpse_center().distance_to(own_corpse.get_center()) < .00001, "death camera focus follows the moving corpse center")
+		check(own_corpse.is_static() and own_corpse.get_center() == center and own_corpse.positions.is_empty(), "approved death body remains static without solver state in the actual scene")
+		check(app.get_player_corpse_center().distance_to(own_corpse.get_center()) < .00001, "death camera focus retains the fixed visible corpse center")
 	app.hud.set_menu_visible(true)
 	app.clear_corpses()
 	await frames(2)

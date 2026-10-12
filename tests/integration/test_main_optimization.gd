@@ -9,6 +9,11 @@ class RaySpy extends VoxelWorld:
 		rays += 1
 		return {"hit":false}
 
+class CorpseSpy extends OpenSpadesCorpse:
+	var step_calls: int = 0
+	func step(_delta: float) -> void:
+		step_calls += 1
+
 func _initialize() -> void: call_deferred("_run")
 
 func _run() -> void:
@@ -43,6 +48,17 @@ func _run() -> void:
 	app._apply_graphics()
 	check(app.get_graphics_options()==graphics,"all original quality options survive optimization checks")
 	check(app.network_client==null,"offline lab never creates a multiplayer client")
+	var body: OpenSpadesCorpse = app.spawn_corpse({"feet_position":app.player.global_position,"yaw":0.5,"team":1})
+	check(body.is_static(),"actual Main death presentation selects static body mode")
+	var frozen_center: Vector3 = body.get_center()
+	var corpse_spy: CorpseSpy = CorpseSpy.new()
+	app.add_child(corpse_spy)
+	app._corpses.append(corpse_spy)
+	for frame: int in 60: app._process(1.0/60.0)
+	check(corpse_spy.step_calls==0,"actual rendered Main never dispatches a corpse solver")
+	check(body.get_center()==frozen_center,"body remains fixed through sixty actual Main callbacks")
+	app.clear_corpses()
+	check(app._corpses.is_empty() and app._last_player_corpse==null,"static body teardown clears owner camera references")
 	spy.free()
 	app.queue_free()
 	await process_frame

@@ -11,6 +11,11 @@ live-pellet and exact corpse-state fixtures validate the optimization contracts.
 Full-row acceptance and statuses below are unchanged; component CPU savings do
 not establish whole-game or physical-phone performance.
 
+The user subsequently approves removal of corpse physics on this branch.
+[ADR0028](decisions/0028-static-death-models.md) records the explicit static-model
+presentation deviation and its verification contract. Authoritative death/respawn
+rules and existing body retention remain; no full-row status is promoted.
+
 Status vocabulary: `NOT_STARTED`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED_ITERATION_2`. `IMPLEMENTED` requires complete code for the row but has not passed full acceptance. A partial subsystem is recorded in the evidence log while the row remains `NOT_STARTED`. When a requirement is intentionally adapted for the browser or new multiplayer stack, record the decision in an ADR and link it in the row; do not silently remove the row.
 
 Iteration 1 delivers the offline client and local authoritative rules, including a testing mode that exposes all original weapons, tools, team appearances and player states without a server. Iteration 2 delivers multiplayer. Rows marked `1+2` require offline behavior in iteration 1 and synchronized behavior in iteration 2.
@@ -62,7 +67,7 @@ promote full P01/P08–P16 or W03 acceptance.
 | P03 | Water wading, air/ground/water friction, fall slowdown and damage feedback | `Player.cpp:978,1084,1160`; `PhysicsConstants.h:28`; `Client_Update.cpp:589` | 1+2 | IMPLEMENTED |
 | P04 | 100 HP, hurt direction/screen feedback, death, respawn timer and resupply | `Player.cpp:66,286,370,1290`; `HurtRingView.cpp`; `Client_Draw.cpp:228,266,591` | 1+2 | IMPLEMENTED |
 | P05 | Team 0, team 1, spectator; names and colors supplied by match state | `World.h:51`; `Player.h:146`; `NetClient.cpp:1192`; `LimboView.cpp:56` | 1+2 | IMPLEMENTED |
-| P06 | Complete articulated soldier model: standing/crouching, walking/sprinting, arms, head, death and intel carrier | `ClientPlayer.cpp:725,803,875,909,941,947,969` | 1+2 | IMPLEMENTED |
+| P06 | Complete articulated soldier model: standing/crouching, walking/sprinting, arms, head, death and intel carrier; optimization branch uses approved static death model ([ADR0028](decisions/0028-static-death-models.md)) | `ClientPlayer.cpp:725,803,875,909,941,947,969` | 1+2 | IMPLEMENTED |
 | P07 | First-person viewmodel + third-person tool/weapon models for every item | `ClientPlayer.cpp:224-258`; `Resources/Scripts/Skin/` | 1+2 | IMPLEMENTED |
 | P08 | Rifle, both 0.75 and 0.76 tuning profiles | `Weapon.cpp:200,284,373` | 1+2 | IMPLEMENTED |
 | P09 | SMG, both 0.75 and 0.76 tuning profiles | `Weapon.cpp:227,317,373` | 1+2 | IMPLEMENTED |
@@ -109,7 +114,7 @@ promote full P01/P08–P16 or W03 acceptance.
 | U09 | Rebind controls; mouse sensitivity/exponent/invert; ADS hold/toggle and ADS sensitivity | `Client_Input.cpp:44-88`; `Resources/Scripts/Gui/Preferences.as:673` | 1 | IMPLEMENTED |
 | U10 | Persist player profile, control bindings, graphics/audio/game preferences in browser storage | `Sources/Core/Settings.cpp`; `Resources/Scripts/Gui/Preferences.as` | 1 | IMPLEMENTED |
 | U11 | Audio: spatial shots, reload/dry-fire, impacts, footsteps/water, grenade/collapse and objective/UI feedback | `Client_Update.cpp`; `Client_NetHandler.cpp`; `Resources/Scripts/Skin/` | 1 | IMPLEMENTED |
-| U12 | Effects: blood, shell ejection, muzzle flash, tracers, fragments, smoke, grenade water/land effects and camera shake; accepted50 noncolliding particles/simple casings (ADR0025) | `Client_LocalEnts.cpp`; `Corpse.cpp`; `GunCasing.cpp`; `Tracer.cpp`; `Client_Update.cpp:51` + user replacement2026-10-11 | 1 | IMPLEMENTED |
+| U12 | Effects: blood, shell ejection, muzzle flash, tracers, fragments, smoke, grenade water/land effects and camera shake; accepted50 noncolliding particles/simple casings (ADR0025), approved static bodies on optimization branch ([ADR0028](decisions/0028-static-death-models.md)) | `Client_LocalEnts.cpp`; `Corpse.cpp`; `GunCasing.cpp`; `Tracer.cpp`; `Client_Update.cpp:51` + user replacement2026-10-11/12 | 1 | IMPLEMENTED |
 | U13 | Original map objects, soldier parts, weapon/tool models, UI textures and audio converted with provenance | `ClientPlayer.cpp`; `Client_Scene.cpp:546`; resource packs cited by `README.md:104` | 1 | IMPLEMENTED |
 | U14 | Lighting, shadows, fog, water animation and flashlight | `Client_Scene.cpp`; `Client_Input.cpp:564`; `Resources/Scripts/Gui/StartupScreen/ConfigViewTabs.as:184,213` | 1 | IMPLEMENTED |
 | U15 | Optional graphics: AA, GI, HDR, blur, bloom, lens flare, color correction, depth of field, SSAO, particle quality | `Resources/Scripts/Gui/StartupScreen/ConfigViewTabs.as:112-177`; `Sources/Draw/`; implemented Compatibility adaptations in [ADR0004](decisions/0004-compatibility-renderer.md) | 1 | IMPLEMENTED |

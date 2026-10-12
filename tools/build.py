@@ -108,6 +108,10 @@ def main():
                ('live-shot-acceleration','tests/gameplay/test_live_shot_acceleration.gd'),
                ('presentation-optimization','tests/presentation/test_presentation_optimization.gd'),
                ('corpse-optimization','tests/presentation/test_corpse_optimization.gd'),
+               ('corpse-static','tests/presentation/test_static_corpse.gd'),
+               ('tdm-weapon-readout-optimization','tests/gameplay/test_tdm_weapon_readout_optimization.gd'),
+               ('player-state-copy-optimization','tests/gameplay/test_player_state_copy_optimization.gd'),
+               ('world-dirty-optimization','tests/world/test_world_dirty_optimization.gd'),
                ('main-optimization','tests/integration/test_main_optimization.gd')]
     for name,path in suites:
         path=ROOT/path

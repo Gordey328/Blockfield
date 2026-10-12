@@ -506,7 +506,17 @@ func _clear_pending_intent() -> void:
 
 
 func get_weapon_info() -> Dictionary:
-	var owner: SharedPlayerState = get_owner_state()
+	# Four synchronous scalar reads need no owned copy of motion/RNG/all state.
+	# The returned profile Dictionary remains an independent mutable value.
+	var owner: SharedPlayerState
+	if get_script() == OfflineTDMSession:
+		owner = simulation.get_actor(OWNER_ID) if simulation != null else null
+		# Extension snapshots/copy hooks can transform values or have effects.
+		# Keep their original dynamic dispatch and timing, including motion hooks.
+		if owner != null and (owner.get_script() != SharedPlayerState or owner.motion == null or owner.motion.get_script() != MOTION.State):
+			owner = get_owner_state()
+	else:
+		owner = get_owner_state()
 	var version: String = owner.profile if owner != null else "0.75"
 	var weapon: int = owner.weapon if owner != null else Weapon.RIFLE
 	var info: Dictionary = PROFILES.get_info(version, weapon)

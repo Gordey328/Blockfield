@@ -49,6 +49,7 @@ var wade_origin_level: float:
 	set(value):
 		data.wade_origin_level = value
 var water_enabled := true
+var _water_geometry_state: int = -1
 var water_waves_enabled := true
 var water_refraction_enabled := true
 var water_reflections_enabled := false
@@ -229,18 +230,47 @@ func _mark_dirty(cell: Vector3i, geometry_changed: bool = true) -> void:
 	# AO uses the eight neighbors on the exterior face plane. An edit at a
 	# chunk edge/corner must also rebuild diagonal neighboring chunks.
 	var native := dimensions == Vector3i(512, 64, 512)
-	for z in range(cell.z - 1, cell.z + 2):
-		for x in range(cell.x - 1, cell.x + 2):
-			for y in range(cell.y - 1, cell.y + 2):
-				var neighbor := Vector3i(posmod(x, dimensions.x) if native else x, y, posmod(z, dimensions.z) if native else z)
-				if is_in_bounds(neighbor):
-					_queue_geometry_update(_chunk_of(neighbor))
+	var own_script: Script = get_script()
+	if own_script.get_base_script() != null or data.get_script() != VOXEL_DATA:
+		# Custom bounds/chunk mapping can be effectful. Preserve every original
+		# virtual query and queue call instead of assuming rectangular base data.
+		for z in range(cell.z - 1, cell.z + 2):
+			for x in range(cell.x - 1, cell.x + 2):
+				for y in range(cell.y - 1, cell.y + 2):
+					var neighbor := Vector3i(posmod(x, dimensions.x) if native else x, y, posmod(z, dimensions.z) if native else z)
+					if is_in_bounds(neighbor):
+						_queue_geometry_update(_chunk_of(neighbor))
+	else:
+		var x_chunks := _affected_chunk_axis(cell.x, dimensions.x, native)
+		var y_chunks := _affected_chunk_axis(cell.y, dimensions.y, false)
+		var z_chunks := _affected_chunk_axis(cell.z, dimensions.z, native)
+		# The Cartesian product preserves the old first-seen Z/X/Y order,
+		# including wrapped borders. Interior edits yield one key, not 27 copies.
+		for z: int in z_chunks:
+			for x: int in x_chunks:
+				for y: int in y_chunks:
+					var key := Vector3i(x, y, z)
+					# A later edit must still cancel sampled geometry and erase older
+					# colors. Otherwise the queued key is already identical work.
+					if not _geometry_dirty.has(key) or not _dirty.has(key) or _color_dirty.has(key) or (_active_chunk != null and _active_key == key):
+						_queue_geometry_update(key)
 	if geometry_changed:
 		_collision_dirty[_chunk_of(cell)] = true
 		for direction in DIRECTIONS:
 			var neighbor := cell + direction
 			if is_in_bounds(neighbor):
 				_collision_dirty[_chunk_of(neighbor)] = true
+
+func _affected_chunk_axis(coordinate: int, extent: int, wrapped: bool) -> Array[int]:
+	var keys: Array[int] = []
+	for neighbor: int in range(coordinate - 1, coordinate + 2):
+		var sample: int = posmod(neighbor, extent) if wrapped else neighbor
+		if sample < 0 or sample >= extent:
+			continue
+		var key: int = sample / CHUNK_SIZE
+		if keys.is_empty() or keys[-1] != key:
+			keys.append(key)
+	return keys
 
 func _queue_color_update(cell: Vector3i) -> void:
 	var key := _chunk_of(cell)
@@ -503,6 +533,7 @@ func _clear_world_visuals() -> void:
 	_preparation_turn = false
 	_topdown_initial_turn = false
 	_view_chunk = Vector3i(-1000, 0, -1000)
+	_water_geometry_state = -1
 
 func generate_lab() -> void:
 	if data.generate_lab(data.epoch + 1) != OK:
@@ -567,6 +598,9 @@ func _prepare_loaded_map(title: String, deferred_visuals: bool = false, validate
 		_spawn = validated_spawn
 	_create_water(deferred_visuals)
 	set_view_position(_spawn)
+	# The reset removed every older chunk; queued initial geometry will sample
+	# the current water value. A later raw property change still needs a setter.
+	_water_geometry_state = 1 if water_enabled else 0
 	if not deferred_visuals:
 		rebuild_now()
 	map_loaded.emit(map_name)
@@ -833,7 +867,13 @@ func set_water_enabled(enabled: bool) -> void:
 		_wave_field.set_enabled(enabled and water_waves_enabled)
 	if is_instance_valid(_reflection):
 		_reflection.set_enabled(enabled and water_reflections_enabled)
-	_mark_all_chunks(false)
+	# Public water_enabled may have been assigned directly. Reconcile resources
+	# on every call, and skip geometry only after the same state was requested.
+	var own_script: Script = get_script()
+	if own_script.get_base_script() != null or data.get_script() != VOXEL_DATA or _water_geometry_state != (1 if enabled else 0):
+		# Extensions may use the virtual full-mark call as a notification, even
+		# for an unchanged state. Only the pure base adapters may skip that call.
+		_mark_all_chunks(false)
 
 func set_water_fog(color: Color, distance: float) -> void:
 	_water_fog_color = color
@@ -860,6 +900,7 @@ func _mark_all_chunks(geometry_changed: bool = true) -> void:
 				_queue_geometry_update(Vector3i(x, y, z))
 				if geometry_changed:
 					_collision_dirty[Vector3i(x, y, z)] = true
+	_water_geometry_state = 1 if water_enabled else 0
 
 func rebuild_now() -> void:
 	_ensure_material()
@@ -885,6 +926,11 @@ func _rebuild_chunk(key: Vector3i) -> void:
 	_finish_active_build()
 
 func _start_chunk_build(key: Vector3i) -> void:
+	# A raw water property change can be sampled before its setter is called.
+	# The mixed geometry then requires a complete invalidation, even if the raw
+	# value is changed back to the last requested state before reconciliation.
+	if _water_geometry_state != (1 if water_enabled else 0):
+		_water_geometry_state = -1
 	var rebuild_collision := _collision_dirty.has(key) or not _chunks.has(key)
 	_active_key = key
 	if _chunks.has(key):
