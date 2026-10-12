@@ -73,3 +73,43 @@ map checks stop when the user requests immediate publication. Draft captures wit
 red source helper markers are preserved under`draft-with-source-helpers`.
 No full map fidelity, all-route connectivity, bot navigation, source simulation
 or original parity acceptance is claimed.
+
+## Publication requested by the user
+
+The user stops further map checks and requests immediate upload. Source
+`021122bf0adeedece3016de8b7a6eb84c6b34581` is pushed on`codex/teardown-dust2`.
+It contains the compiled Dust2 package, converter/fixtures and provenance docs;
+the runtime inherits the accepted optimized dev source. Unrelated UI-plan,
+optimization-plan and Steam edits are excluded. Normal bundled-map export uses
+the accepted reduced single-thread template SHA256
+`a1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922` and excludes
+ignored local maps. Output:`.cache/dust2-inspection/build/web`.
+
+Publication preserves the existing optimized/reduced sibling builds. Bundle
+`6988cef85a3a9d75aaf595f1ead4c33e89ca0d87` changes only root build-info.json,
+index.html/index.pck and maps/README.md/maps/dust2.bfmap. The engine JS/WASM are
+unchanged. Repeatable upload:
+`tools/publish_pages.py --directory .cache/dust2-pages`; Pages reports queued,
+then building. URL:https://gordey328.github.io/Blockfield/?v=021122b .
+World/modes → Open dust2. Temporary local HTTP helper is stopped after upload.
+Pages reports built for the exact bundle. Actual public build-info.json identifies
+source021122bf0adeedece3016de8b7a6eb84c6b34581 and both map hashes; downloaded
+public maps/dust2.bfmap is99,193bytes with the exact d9d8e1f6…ab61 hash.
+This is publication/availability confirmation, not another gameplay suite.
+
+## Reproduce conversion
+
+```powershell
+$dustPython = 'C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $dustPython tools/map_import/teardown.py C:/Users/Gordey/Desktop/dust2csgo --scene de_dust2.xml --output C:/Users/Gordey/Desktop/dust2csgo_converted/dust2.bfmap --meters-per-block 0.6
+```
+
+Final converter code hashes:
+`teardown.py=4da42e98484b9ef2d512d01426068008c34a190f776d55ce3bca68b7ce515ea4`,
+`teardown_vox.py=73e1e0ac9598d3c4e76c23093524ac565c33ebd5d943e14e7cc414c097aa0f01`.
+Hidden/disconnected malformed VOX graphs and output inside the source directory
+are rejected. Actual reports include all385source hashes and explicit omissions.
+Author-format references: [Teardown modding](https://teardowngame.com/modding/),
+[Euler API](https://teardowngame.com/modding/api.html#QuatEuler),
+[voxscript API](https://teardowngame.com/modding/voxscript.html),
+[MagicaVoxel format](https://github.com/ephtracy/voxel-model).

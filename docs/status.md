@@ -3,6 +3,47 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Teardown Dust2 conversion and publication — 2026-10-12 (published)
+
+User supplies `C:/Users/Gordey/Desktop/dust2csgo` and requests conversion with
+larger Blockfield blocks. Actual source is Teardown scene0.9.2/XML and VOX150:
+347VOX files,457models,9,055,974stored voxels; main.xml is menu-only and the
+selected current map is de_dust2.xml. Ground comes from heightmap_full.png through
+the supplied ground.lua; no arbitrary Lua execution. Author CleverGrief's
+info.txt contains `[noupload]`, preserved in provenance. The user subsequently
+explicitly requests immediate upload without more checks; the single compiled
+Dust2 package is bundled and the current approved dev runtime is being published.
+Raw/source and local alternatives remain excluded.
+Root owns integration, isolated engine/browser checks and ADR0029/evidence;
+teardown_format owns only new tools/map_import/teardown.py/teardown_vox.py;
+teardown_tests owns only tests/tools/test_teardown_import.py. Contract remains BFM1,
+Y-fast packed cells,0/0x01RRGGBB, uniform meters/block and supported0.9x2.7 feet
+spawn. Existing unrelated optimization-plan/Steam investigation edits preserved.
+Source runtime is dee5603618ae237172b19a1156ff00543157986c;
+Godot4.7.2.stable.official.ed1daf0bf and upstream OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned. Initial inspection/read-only
+source research and conversion complete:220x44x189 at0.6m/block,392,015solids,
+99,193bytes, hashd9d8e1f6f7e7d14719242def88c306f3af0dda681c765c3a41222bf91bcaab61.
+Thirty enabled Python checks pass with source/package and no skips; reproduction
+is byte-identical and385input hashes unchanged. Reserved255 helper markers are
+excluded; actual red/black retained. Parser/import, native Main25/0, BFM95/0,
+normal Compatibility GPU6/0 and local Web export pass. Browser loads the Dust2
+menu shortcut, walks and supports drag look. User requests stopping further map
+checks and uploading immediately. Source021122b is pushed on codex/teardown-dust2;
+normal bundled-map export passes. System
+`python` resolves to an unusable Store alias; use the bundled Python runtime
+(numpy2.3.5/Pillow12.3.0). Specialist ownership returned; no runtime gameplay edits.
+Pages bundle6988cef85a3a9d75aaf595f1ead4c33e89ca0d87 reports built. Actual public
+metadata identifies source021122bf0adeedece3016de8b7a6eb84c6b34581 and both
+Mirage/Dust2; downloaded Dust2 is99,193bytes with the exact checked hash.
+Only root metadata/HTML/PCK/map-notice/Dust2 paths change; optimized/reduced
+siblings are preserved. URL:https://gordey328.github.io/Blockfield/?v=021122b .
+World/modes → Open dust2. Local helper stopped; no additional map checks after
+the user's upload request. Requested conversion/publication complete; all-route
+engine play, bot navigation and source simulation remain limits. No parity promotion.
+See [ADR0029](decisions/0029-local-teardown-map-conversion.md).
+
+
 ## Approved optimization integration into dev — 2026-10-12
 
 The user accepts the optimization and explicitly authorizes merging everything into
