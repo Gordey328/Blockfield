@@ -67,6 +67,7 @@ var _native_palette: LabPalette
 var _team_buttons: Array[Button] = []
 var _spawn_team: OptionButton
 var _network_menu: Control
+var _menu_tabs: TabContainer
 const MOBILE_CONTROLS=preload("res://ui/mobile_controls.gd")
 var mobile_controls: Control
 var touch_controls_mode:=0 # Auto / on / off, persisted with UI preferences.
@@ -351,6 +352,9 @@ func _create_menu() -> void:
 		_network_menu=NETWORK_MENU.new()
 		margin.add_child(_network_menu)
 		_network_menu.setup(self,main,session,player)
+		var network_footer: Node = _network_menu.get_child(_network_menu.get_child_count()-1)
+		if main.has_method("open_game_home"):
+			network_footer.add_child(_game_home_button())
 		return
 	if _is_offline_tdm():
 		_create_tdm_menu(margin)
@@ -367,6 +371,7 @@ func _create_menu() -> void:
 	var badge:=_label("OPENSPADES → GODOT\nРАЗРАБОТКА · ИТЕРАЦИЯ 1",13,Color("87a6ae"))
 	badge.set_meta("mobile_hide",true)
 	header.add_child(badge)
+	if main.has_method("open_game_home"): header.add_child(_game_home_button())
 	layout.add_child(_label("Испытательный полигон",22,Color("afc9c5")))
 	var intro:=_label("Все оригинальные виды оружия и две команды. Локальная сессия — сервер не нужен.",15,Color("99b0b8"))
 	intro.set_meta("mobile_hide",true)
@@ -376,6 +381,7 @@ func _create_menu() -> void:
 	tdm_entry.set_meta("mobile_tdm_entry",true)
 	layout.add_child(tdm_entry)
 	var tabs:=TabContainer.new()
+	_menu_tabs = tabs
 	tabs.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	tabs.add_theme_font_size_override("font_size",17)
 	layout.add_child(tabs)
@@ -407,7 +413,12 @@ func _create_tdm_menu(margin: MarginContainer) -> void:
 	margin.add_child(layout)
 	var brand: Label=_ui_label("КОМАНДНЫЙ БОЙ 3×3","TEAM BATTLE 3×3",30)
 	brand.set_meta("mobile_brand",true)
-	layout.add_child(brand)
+	brand.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var heading: HBoxContainer = HBoxContainer.new()
+	brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(brand)
+	if main.has_method("open_game_home"): heading.add_child(_game_home_button())
+	layout.add_child(heading)
 	var tabs: TabContainer=TabContainer.new()
 	tabs.size_flags_vertical=Control.SIZE_EXPAND_FILL
 	layout.add_child(tabs)
@@ -1144,6 +1155,16 @@ func set_menu_visible(enabled: bool) -> void:
 	_sync_controls()
 
 func is_menu_open() -> bool:return _menu!=null and _menu.visible
+func _game_home_button() -> Button:
+	var button: Button = _ui_button("В меню", "Main menu", func(): main.open_game_home())
+	button.name = "GameHome"
+	return button
+
+func open_settings_menu() -> void:
+	set_menu_visible(true)
+	if _menu_tabs != null and _menu_tabs.get_tab_count() > 3:
+		_menu_tabs.current_tab = 3
+
 func is_chat_open() -> bool:return _chat!=null and _chat.is_open
 func get_chat_messages() -> Array[Dictionary]:
 	return _chat.messages.duplicate(true) if _chat!=null else []

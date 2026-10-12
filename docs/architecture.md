@@ -1,6 +1,13 @@
 # Architecture and current contracts
 
 ## Boundaries
+- Ordinary entry creates GameShell without a world/simulation; the server route
+  remains explicit. GameMapCatalog whitelists mode/map/weapon, preserves a separate
+  saved selection and supplies baked previews. Entry hands a one-shot launch to
+  Main through SceneTree metadata. Main keeps input gated through map adoption and
+  session-owned weapon selection, then opens gameplay. Loading/recovery/Home are
+  presentation; shared/local/network authority stays with the adapters. See
+  [ADR0030](decisions/0030-game-shell-and-offline-launch.md).
 - Web startup uses `game/web/loading.html`, derived from the pinned engine shell. The existing `Engine.onProgress` byte callback supplies decimal MB for the engine/game pack; exported file sizes supply the complete denominator before downloads start. Its original startup/error/overlay lifecycle stays intact; see [ADR0017](decisions/0017-web-download-progress.md).
 - VoxelData: shared packed cells, source queries, VXL, edit/collapse rules, atomic ordered transactions and bounded journal. VoxelWorld adopts Data and owns chunk meshes/collision, water/GI/reflections, top-down textures and visual falling clusters. Never apply an adopted transaction to Data then World twice.
 - LocalSession owns the serverless offline lab and its source-shaped local rules. SharedPlayerState, PlayerRules, GrenadeRules, MatchObjectives and MatchSimulation provide pure fixed60Hz multi-actor authority for the dedicated server. NetworkSession subclasses only the presentation interface, mirrors owned confirmed/predicted state and never runs inherited offline authority. The two adapters remain explicit compatibility paths, with source goldens covering their behavior.

@@ -86,5 +86,10 @@ func run() -> void:
 	app.stop_audio()
 	app.queue_free()
 	await frames(4)
+	# Fixed FPS advances fixture frames faster than the real Vorbis mixer can
+	# release its final stopped stream. Drain real time before checking shutdown.
+	var audio_deadline: int = Time.get_ticks_msec() + 200
+	while Time.get_ticks_msec() < audio_deadline:
+		await process_frame
 	print("NATIVE MAP MAIN TESTS: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

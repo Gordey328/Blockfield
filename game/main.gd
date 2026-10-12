@@ -4,6 +4,14 @@ extends Node3D
 const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
 const TDM_ARENA = preload("res://ai/tdm_arena.gd")
 const BLOCKFIELD_MAP = preload("res://world/blockfield_map.gd")
+const LAUNCH_CATALOG = preload("res://ui/map_catalog.gd")
+const LAUNCH_OVERLAY = preload("res://ui/launch_overlay.gd")
+var _launch_configuration: Dictionary = {}
+var _launch_status: String = "idle"
+var _launch_in_progress: bool = false
+var _launch_error: String = ""
+var _launch_overlay: CanvasLayer
+var _shell_utility: String = ""
 const NETWORK_CLIENT = preload("res://network/client_replica.gd")
 const NETWORK_SESSION = preload("res://network/network_session.gd")
 var network_client: NETWORK_CLIENT
@@ -76,6 +84,14 @@ var _corpses: Array[OpenSpadesCorpse]=[]
 var _last_player_corpse: OpenSpadesCorpse
 
 func _ready() -> void:
+	if get_tree().has_meta("blockfield_launch"):
+		var requested: Variant = get_tree().get_meta("blockfield_launch")
+		get_tree().remove_meta("blockfield_launch")
+		_launch_configuration = requested.duplicate(true) if requested is Dictionary else {}
+		_launch_status = "loading"
+	if get_tree().has_meta("blockfield_utility"):
+		_shell_utility = str(get_tree().get_meta("blockfield_utility"))
+		get_tree().remove_meta("blockfield_utility")
 	if offline_tdm_mode:
 		var arena_data: VoxelData = TDM_ARENA.build()
 		world.set_map_data(arena_data,"Crossroads · 3×3",true)
@@ -181,6 +197,77 @@ func _ready() -> void:
 	elif offline_tdm_mode:
 		_update_shared_actor_views()
 	hud.set_menu_visible(true)
+	if _launch_status == "loading":
+		_launch_overlay = LAUNCH_OVERLAY.new()
+		add_child(_launch_overlay)
+		_launch_overlay.home_requested.connect(open_game_home)
+		_launch_overlay.retry_requested.connect(_apply_game_launch)
+		_apply_game_launch.call_deferred()
+	elif _shell_utility == "settings":
+		hud.open_settings_menu()
+
+func get_launch_state() -> Dictionary:
+	return {"status": _launch_status, "configuration": _launch_configuration.duplicate(true), "error": _launch_error}
+
+func _apply_game_launch() -> void:
+	# This request is consumed once by Main. UI never grants a live inventory.
+	if _launch_status == "ready" or _launch_in_progress: return
+	_launch_in_progress = true
+	_launch_status = "loading"
+	_launch_error = ""
+	hud.set_menu_visible(true)
+	var russian: bool = locale == "ru"
+	var checked: Dictionary = LAUNCH_CATALOG.validate(_launch_configuration)
+	if not checked.ok:
+		_fail_game_launch("Выберите доступную карту и оружие." if russian else "Choose an available map and weapon.", false)
+		return
+	var configuration: Dictionary = checked.configuration
+	if network_mode or offline_tdm_mode != (configuration.mode == "tdm"):
+		_fail_game_launch("Режим запуска не соответствует матчу." if russian else "The launch mode does not match this session.", false)
+		return
+	_launch_configuration = configuration.duplicate(true)
+	var entry: Dictionary = LAUNCH_CATALOG.get_entry(configuration.map_id)
+	var map_name: String = str(entry.name_ru if russian else entry.name_en)
+	_launch_overlay.show_progress(map_name, "Подготовка карты…" if russian else "Preparing map…", russian)
+	# Allow the real loading state to paint before foreground map work starts.
+	await get_tree().process_frame
+	if not offline_tdm_mode and configuration.map_id != "lab":
+		var bytes: PackedByteArray = FileAccess.get_file_as_bytes(str(entry.resource))
+		if bytes.is_empty():
+			_fail_game_launch("Не удалось прочитать карту." if russian else "The map could not be read.", true)
+			return
+		var request: int = _begin_vxl_request("Подготовка карты…" if russian else "Preparing map…")
+		var error: Error = await _load_map_bytes(bytes, str(entry.resource).get_file(), request)
+		if not _vxl_request_current(request): return
+		_vxl_notice_caption = ""
+		if error != OK:
+			_fail_game_launch(("Не удалось загрузить карту: " if russian else "Map loading failed: ") + error_string(error), true)
+			return
+		_map_baseline = bytes
+		_map_baseline_name = str(entry.resource).get_file()
+		_finish_map_load(OK)
+	session.select_weapon(int(configuration.weapon))
+	LAUNCH_CATALOG.save_selection(configuration)
+	_launch_status = "ready"
+	_launch_in_progress = false
+	_launch_overlay.queue_free()
+	_launch_overlay = null
+	hud.set_menu_visible(false)
+
+func _fail_game_launch(message: String, can_retry: bool) -> void:
+	_launch_status = "error"
+	_launch_in_progress = false
+	_launch_error = message
+	hud.set_menu_visible(true)
+	_launch_overlay.show_error(message, can_retry, locale == "ru")
+
+func open_game_home() -> void:
+	player.controls_enabled = false
+	hud.set_menu_visible(true)
+	_cancel_vxl_request()
+	LabInputBindings.release_actions()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://scenes/entry.tscn")
 
 func _physics_process(_delta: float) -> void:
 	if network_mode and network_client != null: _poll_network()
@@ -773,6 +860,10 @@ func _update_vxl_progress() -> void:
 	if percent == _vxl_notice_percent: return
 	_vxl_notice_percent = percent
 	hud.show_notice("%s %d%%" % [_vxl_notice_caption,percent])
+	if _launch_status == "loading" and is_instance_valid(_launch_overlay):
+		var entry: Dictionary = LAUNCH_CATALOG.get_entry(str(_launch_configuration.get("map_id", "")))
+		if not entry.is_empty():
+			_launch_overlay.show_progress(str(entry.name_ru if locale == "ru" else entry.name_en), "%s %d%%" % [_vxl_notice_caption, percent], locale == "ru")
 
 func _show_web_export(bytes: PackedByteArray,filename: String,mime: String) -> bool:
 	var exports := _begin_web_export(filename,mime)

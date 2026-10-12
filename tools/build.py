@@ -102,6 +102,7 @@ def main():
     suites += [('audio-optimization','tests/audio/test_audio_optimization.gd'),('vxl-jobs','tests/world/test_vxl_jobs.gd'),('model-cache-bounds','tests/presentation/test_model_cache_bounds.gd'),('vxl-main','tests/integration/test_vxl_main.gd')]
     suites += [('tdm-bots','tests/ai/test_tdm_bots.gd'),('offline-tdm','tests/session/test_offline_tdm.gd'),('offline-tdm-scene','tests/integration/test_offline_tdm_scene.gd')]
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
+    suites += [('game-shell','tests/ui/test_game_shell.gd'),('game-launch','tests/integration/test_game_launch.gd')]
     suites += [('blockfield-map','tests/world/test_blockfield_map.gd'),('native-map-main','tests/integration/test_native_map_main.gd')]
     suites += [('collapse-optimization','tests/world/test_collapse_optimization.gd'),
                ('empty-chunk-optimization','tests/world/test_empty_chunk_optimization.gd'),
@@ -115,7 +116,7 @@ def main():
                ('main-optimization','tests/integration/test_main_optimization.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','network-scene','network-scene-epoch','network-block-damage','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     latency_report=ROOT/'.cache'/'benchmarks'/'network-latency.json'
     run_command('test-network-latency',[sys.executable,str(ROOT/'tools'/'latency_proxy.py'),
                 '--godot',str(engine()),'--project',str(ROOT/'game'),'--report',str(latency_report)],timeout=50)

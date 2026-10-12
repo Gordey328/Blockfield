@@ -1,0 +1,154 @@
+{
+	"description": "Offline GPU captures of existing game worlds and original imported models; no AI imagery.",
+	"engine": "4.7.2-stable (official)",
+	"generator": "tools/render_menu_previews.gd",
+	"previews": {
+		"map_crossroads.png": {
+			"camera_fov": 57.0,
+			"camera_position": [
+				79.0,
+				31.0,
+				63.0
+			],
+			"camera_target": [
+				40.0,
+				4.0,
+				28.0
+			],
+			"dimensions": [
+				640.0,
+				360.0
+			],
+			"image_sha256": "78561808872eddefadf3e0a40a2a64777187c0dec9b6bda71bdbb1ef8823ebb5",
+			"kind": "actual_game_world",
+			"source": "res://ai/tdm_arena.gd",
+			"source_sha256": "f66fe45b87b1fa5fed21794b2d432ed51b5ee76a268f97973049d15058411c44"
+		},
+		"map_lab.png": {
+			"camera_fov": 57.0,
+			"camera_position": [
+				80.0,
+				30.0,
+				86.0
+			],
+			"camera_target": [
+				45.0,
+				6.0,
+				42.0
+			],
+			"dimensions": [
+				640.0,
+				360.0
+			],
+			"image_sha256": "d3344a6edf9380aedc6d496a2856a8e2e70d6e7e9717493850134532ebcc5258",
+			"kind": "actual_game_world",
+			"source": "res://world/voxel_data.gd",
+			"source_sha256": "c6f746c63a7ad4893bd61f6a2af0876cba2e54be4b8f289e23a48004a896d719"
+		},
+		"map_mirage.png": {
+			"camera_fov": 55.0,
+			"camera_position": [
+				179.0,
+				104.0,
+				188.0
+			],
+			"camera_target": [
+				86.0,
+				12.0,
+				84.0
+			],
+			"dimensions": [
+				640.0,
+				360.0
+			],
+			"image_sha256": "2b6fd93a059648b0bf164e9642b0a485c0d5deaa146f29c3e23505ade00a3c96",
+			"kind": "actual_game_world",
+			"source": "res://assets/maps/csgo_mirage.bfmap",
+			"source_sha256": "08b69203a2dde4d276053647312dbcdd5bf20f0730203ee24c4c293934e35d3a"
+		},
+		"map_title.png": {
+			"camera_fov": 57.0,
+			"camera_position": [
+				312.5,
+				53.0,
+				322.5
+			],
+			"camera_target": [
+				244.5,
+				1.0,
+				242.5
+			],
+			"dimensions": [
+				640.0,
+				360.0
+			],
+			"image_sha256": "2135a642d8ca073880eac4185d18e5ecf0cf2b8c7718f6ba981ece02c2ae3768",
+			"kind": "actual_game_world",
+			"source": "res://assets/openspades/maps/Title.vxl",
+			"source_sha256": "48fe6c8e9b8287c1aea12e67742362cd7001d72c7bc027b993f7a22982beed62"
+		},
+		"weapon_rifle.png": {
+			"camera_direction": [
+				0.937243759632111,
+				0.206193625926971,
+				0.281173139810562
+			],
+			"camera_projection": "orthogonal",
+			"camera_size": 15.2933731079102,
+			"dimensions": [
+				512,
+				192
+			],
+			"image_sha256": "087690ed6674f55944758cc836ea3418701fd0b8e896b43f67c3f340332c1e32",
+			"kind": "original_imported_weapon",
+			"source": "res://assets/openspades/models/Weapons/Rifle/Weapon.glb",
+			"source_sha256": "6099d144bf74968e9dcad3c7542bfc6c5313cb0f43cd56a8570498a2263cbc8f",
+			"studio_ambient_energy": 3.0,
+			"studio_key_energy": 3.0,
+			"transparent": true
+		},
+		"weapon_shotgun.png": {
+			"camera_direction": [
+				0.937243759632111,
+				0.206193625926971,
+				0.281173139810562
+			],
+			"camera_projection": "orthogonal",
+			"camera_size": 12.6641397476196,
+			"dimensions": [
+				512,
+				192
+			],
+			"image_sha256": "2227cc237b0b16f4443af57b45279ed15b83470c31ee338d1efd2bad0f0d5479",
+			"kind": "original_imported_weapon",
+			"source": "res://assets/openspades/models/Weapons/Shotgun/Weapon.glb",
+			"source_sha256": "a2054015c2f298146e301b2d648bf28127f3251cd5f9a934307dffe68cd73bcd",
+			"studio_ambient_energy": 3.0,
+			"studio_key_energy": 3.0,
+			"transparent": true
+		},
+		"weapon_smg.png": {
+			"camera_direction": [
+				0.937243759632111,
+				0.206193625926971,
+				0.281173139810562
+			],
+			"camera_projection": "orthogonal",
+			"camera_size": 14.4677839279175,
+			"dimensions": [
+				512,
+				192
+			],
+			"image_sha256": "ebf888013264e4a580e3a8a8b6b8c500277a1e7d7af7b871903078631e8f1090",
+			"kind": "original_imported_weapon",
+			"source": "res://assets/openspades/models/Weapons/SMG/Weapon.glb",
+			"source_sha256": "d8fb58f785a16f95287ce482c2787b57732fa39284c2f66ce8224d71ef2a077f",
+			"studio_ambient_energy": 3.0,
+			"studio_key_energy": 3.0,
+			"transparent": true
+		}
+	},
+	"renderer": "Compatibility",
+	"upstream": "OpenSpades v0.1.3",
+	"upstream_commit": "dcf449c845d509bbde9d79239b32d201c1389961"
+}

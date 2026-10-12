@@ -3,6 +3,38 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Game UI first delivery — 2026-10-12 (in progress)
+
+User authorizes implementation of Home, map/loadout selection and game start,
+using the current HUD style and adapting for phones. Root creates an attached
+isolated worktree from dev dee5603618ae237172b19a1156ff00543157986c, branch
+`codex/game-ui-first-delivery`. Root owns entry/Main/LabHUD integration, shared
+config/docs/build/release. `ui_flow_audit` owns only GameShell/new scene;
+`hud_ux_audit` owns catalog/real baked previews/render helper;
+`ui_launch_checks` owns two new behavioral fixtures. Three-value configuration
+and non-overlapping ownership were agreed before edits. No shared-world/gameplay
+rule or multiplayer authority change. Current3×3 remains Crossroads/fixed blue;
+other curated maps start training. Home does not instantiate the world or bots.
+Godot4.7.2.stable.official.ed1daf0bf and upstream OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned.
+All three specialist source handoffs are returned; independent read-only launch
+review has no findings. Root holds serial engine/release lease. Initial import
+failures and successful diagnostic/import are retained. First13 affected suites
+and two smokes pass; final shell415/0 includes six sizes, true render aspect and
+detached-scene Window restoration; actual launch38/0. Preview7/0 is visually
+checked, with corrected exact512×192 weapon captures. Vorbis fixture cleanup is
+drained in real time after a retained25/0 shutdown failure. Filtered dedicated
+export exposed a client global reference; client-only resolution repairs it and
+the exported Title pack smoke now passes. Local ordinary Web confirms actual
+Crossroads/shotgun, five bots, Home return, training Mirage/SMG and readable
+portrait/landscape preparation; the existing IAB capture fallback remains.
+Evidence/failures: [delivery evidence](game-ui-first-delivery.md). Concurrent
+Dust2/optimization/Steam work is preserved in the original checkout. Next: freeze
+this source, run full registered gate/export and final ordinary-browser checks,
+then publish/verify an independent Pages development path. Physical-phone
+comfort/performance and broader port acceptance remain open.
+See [ADR0030](decisions/0030-game-shell-and-offline-launch.md).
+
 ## Approved optimization integration into dev — 2026-10-12
 
 The user accepts the optimization and explicitly authorizes merging everything into
