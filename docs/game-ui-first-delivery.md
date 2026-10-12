@@ -67,5 +67,44 @@ with selected shotgun6/48 and five bots, finished-match Home return, and
 Mirage/SMG30/120 through the new training route. These are browser-sized desktop
 checks; physical-phone ergonomics/performance remain open. The IAB mouse-capture
 Chromium error uses the existing drag-look fallback. Captures are retained under
-`.cache/previews/game-ui-browser`, including the rejected portrait. Frozen full
-gate, final ordinary-browser checks and publication remain pending.
+`.cache/previews/game-ui-browser`, including the rejected portrait.
+
+## Frozen release and public checks
+
+Runtime source `912adec7e7868f1338cd273f6a5d97bef43df99a` is committed/pushed on
+`codex/game-ui-first-delivery`. Reproducible release command:
+
+```powershell
+& C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe tools/release_checkpoint.py --revision 912adec7e7868f1338cd273f6a5d97bef43df99a --server --import-cache game/.godot
+```
+
+The frozen archive passes editor/import and all108 registered test runs
+(107 Godot fixtures plus latency465/0), ordinary runtime/server launcher smokes,
+reduced-template Web export, dedicated export and its actual exported-PCK Title
+smoke. Shell415/0 and real Main launch38/0 are included. No rejected engine
+diagnostics. The private fixture settings directory is removed from the restored
+production project before export. Engine/upstream/template pins remain unchanged.
+
+Publication command:
+
+```powershell
+& C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe tools/publish_pages_variant.py --folder .cache/release-912adec7e786/build/web --slug game-ui --seed-repo C:/Users/Gordey/Documents/ChatGPT/Blockfield/.cache/pages-variant-reduced-1791733987902191800
+```
+
+Pages bundle `8804b56ad454c9a42ccabcd46802e11523afb428` reports built. Public URL:
+https://gordey328.github.io/Blockfield/game-ui/. All eight checked public files
+(metadata/HTML/JS/WASM/PCK/LICENSE/Mirage/Inter notice) match the frozen export by
+SHA256. Existing root/reduced/optimized paths are preserved.
+
+Public ordinary Web shows Home and desktop setup, launches Crossroads with the
+selected shotgun, runs five bots and ends a real round. Warm restart/fire through
+the existing touch control drops shotgun6 to4; Home return and375×812 preparation
+retain the selected weapon. The initial cold-start CDP timeout is retained as a
+tool-level failed action; a fresh screenshot confirms that the launch completed,
+and the warm interaction succeeds. No script repair is inferred from this timeout.
+Phone-sized browser captures supplement the native six-size checks; actual
+iPhone hardware feel/performance remains open. Local touch preference is restored
+to its original Auto; public pre-existing On is preserved.
+After public reload,375×812 setup still selects the saved shotgun; final public
+warning/error list is empty. Temporary viewport override is reset, local tab and
+HTTP helper are closed, and only the public deliverable tab is retained.

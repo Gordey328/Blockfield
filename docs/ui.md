@@ -1,5 +1,23 @@
 # Offline client UI
 
+## Game home and preparation
+
+The user-authorized first game UI delivery adds a lightweight GameShell home and
+map/weapon setup before Main is instantiated. It shares CombatTheme/Inter and
+uses baked actual map/original weapon captures. Crossroads alone starts offline
+3×3; Lab/Title/Mirage start training. Catalog selection persists independently of
+existing preferences; Main loads/adopts the map and chooses the actual starting
+weapon through its session adapter. CSS-sized EXPAND layout is scoped to the
+shell and restores the cached Window on teardown. Dedicated entry stays separate.
+See [ADR0030](decisions/0030-game-shell-and-offline-launch.md).
+
+Frozen912adec passes shell415/0, real launch38/0 and the108-run registered gate,
+with real Web desktop/portrait/landscape and public launch checks at
+https://gordey328.github.io/Blockfield/game-ui/. Legacy training/settings/network
+tools remain reachable; death/results/settings redesign is a later delivery.
+Physical-phone feel/performance and complete source parity remain open. Exact
+commands, failures, artifacts and hashes: [delivery evidence](game-ui-first-delivery.md).
+
 Source baseline: OpenSpades v0.1.3, commit `dcf449c845d509bbde9d79239b32d201c1389961`.
 This document records the current offline implementation and its limits; it does not certify complete OpenSpades parity or multiplayer readiness.
 

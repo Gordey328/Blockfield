@@ -4,6 +4,13 @@ Baseline: OpenSpades `v0.1.3`, commit `dcf449c845d509bbde9d79239b32d201c1389961`
 
 This is the acceptance ledger for the full port. An exported sandbox does **not** establish full parity. Every row needs a Godot implementation location plus recorded verification before `VERIFIED`. The subsystem log records partial work separately from accepted rows.
 
+2026-10-12 first game UI delivery: [ADR0030](decisions/0030-game-shell-and-offline-launch.md)
+and [evidence](game-ui-first-delivery.md) add lightweight Home, curated map/loadout
+selection, actual session-owned launch and saved selection. Frozen912adec includes
+shell415/0, launch38/0, the108-run gate and actual public Web checks. U01/U02/U10
+remain IMPLEMENTED; this authored UI addition does not accept full source parity
+or physical-phone ergonomics/performance.
+
 2026-10-12 optimization branch: [ADR0027](decisions/0027-quality-preserving-web-optimization.md)
 and [evidence](web-max-optimization.md) cover P06/P10/P13/W02/W09 and existing UI
 and corpse presentation, preserving quality/rules. Independent ordered-collapse,

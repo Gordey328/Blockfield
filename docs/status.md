@@ -3,7 +3,7 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Game UI first delivery — 2026-10-12 (in progress)
+## Game UI first delivery — 2026-10-12 (published development build)
 
 User authorizes implementation of Home, map/loadout selection and game start,
 using the current HUD style and adapting for phones. Root creates an attached
@@ -28,11 +28,23 @@ export exposed a client global reference; client-only resolution repairs it and
 the exported Title pack smoke now passes. Local ordinary Web confirms actual
 Crossroads/shotgun, five bots, Home return, training Mirage/SMG and readable
 portrait/landscape preparation; the existing IAB capture fallback remains.
-Evidence/failures: [delivery evidence](game-ui-first-delivery.md). Concurrent
-Dust2/optimization/Steam work is preserved in the original checkout. Next: freeze
-this source, run full registered gate/export and final ordinary-browser checks,
-then publish/verify an independent Pages development path. Physical-phone
-comfort/performance and broader port acceptance remain open.
+Frozen runtime912adec7e7868f1338cd273f6a5d97bef43df99a passes all108 test runs
+(107 Godot fixtures plus latency465/0), parser/import, client/server smokes,
+ordinary Web and dedicated/PCK exports. Source branch is pushed. Independent
+Pages bundle8804b56ad454c9a42ccabcd46802e11523afb428 reports built at
+https://gordey328.github.io/Blockfield/game-ui/; all eight checked public hashes
+match the frozen export and sibling paths are preserved. Public Home/setup,
+actual selected-shotgun Crossroads/five bots, round finish/restart and touch fire
+6to4 are checked. Portrait setup preserves selection; local touch Auto/public
+pre-existing On preferences retained. Initial cold CDP action timeout is retained,
+with subsequent actual launch/warm interaction confirmation. Evidence/failures:
+[delivery evidence](game-ui-first-delivery.md). Concurrent Dust2/optimization/Steam
+work is preserved in the original checkout. Physical-phone comfort/performance
+and broader port acceptance remain open. No parity promotion. Requested first
+delivery is complete; next UI scope is dedicated pause/death/results/settings.
+Public reload confirms stored shotgun selection and an empty final warning/error
+list. Temporary local tab/HTTP helper are closed; browser viewport is reset and
+the public deliverable tab is retained. Code/validation/release leases are returned.
 See [ADR0030](decisions/0030-game-shell-and-offline-launch.md).
 
 ## Approved optimization integration into dev — 2026-10-12
