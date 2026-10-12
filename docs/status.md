@@ -3,27 +3,46 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Survival expansion — 2026-10-12 (in progress)
+## Survival expansion — 2026-10-12 (completed and published)
 
-Latest request: faster responsive Start survival, separate configurable zombie
-player/block damage, a visible grenade-throwing zombie and several small downloaded
-Teardown adaptations based on known games. Work continues in the attached clean
-zombie-survival worktree from460714f7aed30ea0936a9e0567e946314cf6fa41; shared dirty
-primary checkout is preserved. Earlier completed release below is historical.
-Authority owns settings/session/trusted grenade rules and their fixtures; AI owns
-director/navigation/pooled zombie view and fixtures; map specialist owns new
-download/import/adaptation outputs, Python checks and map provenance. Coordinator
-owns existing Main/Entry/HUD/catalog/level integration, startup/effects/HDR work,
-shared build/docs and release. Contracts agreed before parallel edits. No new
-user chats or messages to unrelated chats. No specialist engine lease yet.
-Map sources downloaded: Small Minecraft Chunk2652603687/The_Wolfian and
-MIRA HQ2905630454/CapnSoda202; conversion and real navigation acceptance pending.
-Settings keys zombie_damage1..100/default20 and zombie_block_damage1..100/default40.
-Every4thadmitted life becomes a grenadier: finite3throws,60tick warning,480tick
-cooldown, at most4hostile projectiles; ordinary shared physics, isolated damage
-profile and honest cleanup. Human grenades/TDM stay independent. Local desktop
-Web acceptance and selective native regressions planned, no deployed-browser or
-mobile-UI retest as requested. ui-2 remains PAUSED.
+Runtime 1630770bf574280d852abd52204998043a324611 adds faster Start survival,
+independent zombie player/block damage, grenadiers and two real downloaded small
+Teardown adaptations: Small Minecraft Chunk2652603687/The_Wolfian and
+MIRA HQ2905630454/CapnSoda202. Three survival levels include Crossroads. Source
+starts from460714f7aed30ea0936a9e0567e946314cf6fa41 in the attached managed
+zombie-survival worktree; shared dirty primary checkout is preserved. All three
+specialist source/serial engine leases are returned. Coordinator owns existing
+integration/config/release; no other user chat was created or messaged.
+
+Settings zombie_damage1..100/default20 and zombie_block_damage1..100/default40
+persist and appear in setup/pause/results. Every fourth admitted life is a visible
+orange/olive grenadier: finite3throws,60tick warning,480tick cooldown, at most4
+hostile projectiles. Ordinary shared ordnance has an isolated zombie damage
+profile; cleanup waits real remaining grenades. Human grenades/TDM remain covered.
+Home warms bounded resources without a hidden world; survival stages setup and
+smoke preparation and allocates HDR targets only when enabled. Native warm-menu
+click→ready:2361.510→711.913ms; largest process gap1315.656→159.342ms. These are
+native fixture samples, not browser/phone FPS or whole download/Home latency.
+
+Frozen source passes parser/import,25 selected native fixtures, runtime smoke and
+ordinary Web export. Python source-map/reproduction checks10/0; native real-level
+timelines/full-horde34/0, all three maps reach12alive and stay within4hostile
+projectiles. Native Compatibility view capture95/0 visibly distinguishes the
+grenadier/overhand windup. Local normal desktop Web exercises both imported
+levels, damage5/65 then1/1, early equipment-loading overlay, movement/look/fire/
+reload, actual pursuit/hurt/defeat, pause/retry and return Home. MIRA reaches12live.
+Four Chromium UnknownErrors accompany unsupported pointer capture and the
+working drag fallback; no recorded GDScript error. A brief native shutdown warning
+retains11zero-reference ObjectDB records, without active resources. Rare planner
+peaks remain; no phone FPS or original Dust2/Mirage navigation acceptance is added.
+No deployed-browser or mobile-UI retest was performed, as requested. Own local
+HTTP helper/tab are stopped/closed; ui-2 remains PAUSED. Exact checks, commands,
+source attribution and publication evidence: [expansion report](survival-expansion.md).
+Pages bundle652342c9c16e95b53c34c57290465b9b8c9949a0 is built/no API error;
+all30public files SHA-match the frozen clean runtime. Source branch/dev point to
+the runtime before docs-only evidence; optimized/game-ui/reduced siblings are
+preserved. URL: https://gordey328.github.io/Blockfield/?v=1630770bf574 .
+Earlier releases below are historical; this does not complete the full port.
 
 ## Zombie pursuit and startup follow-up — 2026-10-12 (completed and published)
 
