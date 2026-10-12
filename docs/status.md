@@ -3,7 +3,42 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Quality-preserving Web optimization branch — 2026-10-12 (in progress)
+## Web optimization branch — 2026-10-12 (published development build)
+
+Checked runtime `274b3608b39a63919f9b1f86470a6f62badff034` is committed/pushed on
+`codex/web-max-optimization` and published separately at
+https://gordey328.github.io/Blockfield/optimized/ as bundle
+`619464014b87325a36af28063dee9a87edf4add8`. Main/reduced Pages metadata is unchanged;
+all eight deployed metadata/core/map/license hashes match the frozen export.
+Godot4.7.2.stable.official.ed1daf0bf, OpenSpadesdcf449c845d509bbde9d79239b32d201c1389961,
+Compatibility/single-thread and the accepted reduced template remain pinned.
+Final parser/import, all106 tests (105 Godot fixtures plus latency465/0), both
+runtime smokes and normal Web export pass, with no rejected engine diagnostics.
+All specialist source handoffs/engine leases are returned; shared integration and
+final browser/release evidence belong to root. Exact files/commands/hashes and
+retained failed attempts are in [branch evidence](web-max-optimization.md).
+
+The user permits removing corpse physics; original prone static Dead models retain
+team tint, source resources,16/6 retention, death camera and teardown, with no
+per-render solver. No other graphical reduction or multiplayer removal is applied.
+Further CPU changes remove owner readout copies, use typed actor-state copies and
+deduplicate terrain invalidation while preserving custom extension behavior.
+Same1280×720/DPR1 actual-Main Web comparison: baseline TDM25.93/15.79/7.24fps,
+final36.75/38.53/36.40fps, with corresponding5/7/9 bodies and zero solver dispatches;
+final Lab56–58fps and Title59.5fps. TDM p95 still exceeds33.33ms in two windows.
+The812×375/DPR1 desktop experiment gives31.82–35.87fps and does not establish a
+resolution benefit. User target iPhone12 mini/Chrome, sustained30fps, thermal/memory
+and physical touch comfort remain unverified; desktop size is not phone hardware.
+Fresh normal local Web3×3 starts/fires, shows prone bodies, finishes/restarts and
+walks. Actual deployed Mirage loads through the menu, walks/fires, supports mouse
+look in the mobile layout, digs floor, places a cube and resets original spawn/view/
+terrain; public warning/error list is empty. Captures/profiles retained. Browser
+viewport override restored; only the public deliverable tab is retained. Temporary
+HTTP helpers are stopped before task completion. Unrelated optimization-plan/Steam
+edits remain outside this task. Next action: assess this preview on the actual phone
+before claiming physical-device acceptance or selecting another quality tradeoff.
+
+### Implementation and review history
 
 User requests a carefully audited maximum-practical optimization branch; graphical
 quality reductions require separate prior approval with an explained benefit.

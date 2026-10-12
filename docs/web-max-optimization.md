@@ -257,6 +257,16 @@ The invalidation benchmark remains tied to WorldSHA
 `b69c2f0b8b1165ef29e52b21cce29d034d38c4e35badf1216bdfc6c922b3c11a`;
 only the water setter's extension guard changes afterward, not measured dirty loops.
 
+Frozen final `274b3608b39a63919f9b1f86470a6f62badff034` passes all106 test runs
+(105 Godot fixtures plus latency465/0), parser/import, both runtime smokes and
+normal reduced-template Web export. Final new fixtures are static22/0, weapon
+readout72/0, actor-copy2314/0, dirty2428/0 and Main12/0; lifecycle19/0, actual
+TDM62/0 and mobile/UI regressions pass. The complete final log directory
+`.cache/release-274b3608b39a/.cache/logs` contains no rejected engine errors.
+The four core changed module hashes exactly match the checked specialist files.
+The bundle identifies source274b360 and `source_dirty=false`; Mirage bytes/hash,
+engine, upstream and reduced template remain unchanged. Source branch is pushed.
+
 Remaining audited limits: unchanged idle World/rebuild CPU is already small in
 the expanded lab/Title windows, while these profiles do not cover Mirage traversal
 or destructive edits. BFM decode is synchronous; a bulk decoder needs malformed,
@@ -267,6 +277,73 @@ explicit memory cap and epoch/invalidation proof. These are open directions, not
 claimed gains or silent quality reductions.
 
 ## Reproduction and evidence
+
+Final source274 actual-Main Web uses the same probe SHA256
+`e0e2e56cea9e9844879178486aa6cbfa5db5f330165bf36a1dc1d3c65cee0fb4` as the
+expanded baseline, actual1280×720 canvas/DPR1 and no native engine jobs. All saved
+reports are read only after Complete and checked for the matching scenario.
+
+| Scene/window | Baseline mean fps | Final mean fps | Baseline p95 ms | Final p95 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 3×3,1 | 25.93 | 36.75 | 55.122 | 39.600 |
+| 3×3,2 | 15.79 | 38.53 | 83.333 | 33.333 |
+| 3×3,3 | 7.24 | 36.40 | 141.667 | 38.800 |
+| Lab,1 | 55.03 | 57.31 | 19.233 | 19.697 |
+| Lab,2 | 54.72 | 57.64 | 21.400 | 19.800 |
+| Lab,3 | 54.87 | 56.41 | 20.370 | 23.309 |
+| Title,1 | 55.77 | 59.57 | 18.056 | 16.667 |
+| Title,2 | 55.41 | 59.55 | 19.048 | 17.729 |
+| Title,3 | 55.10 | 59.54 | 19.048 | 18.052 |
+
+Body counts match5/7/9 at the TDM windows' ends. Main CPU per-render falls
+5.382/19.522/43.427→0.294/0.278/0.262ms; corpse step dispatches are0 throughout.
+Peak draw calls350/433/449→324/330/331. Graphics dictionaries match, except the
+explicitly approved static-body implementation behind the retained visibility key.
+All reports confirm no network client. The sustained accumulation failure is removed
+in this desktop experiment, while p95 still exceeds the33.33ms30fps budget in two
+TDM windows. Player physics2.784–3.169ms/call remains comparable to this baseline;
+native-copy speedups do not establish a corresponding complete-Web-physics gain.
+Timed wrappers cover6.57–7.58ms exclusive script CPU per render; remaining wall
+time includes uninstrumented engine/render/audio/browser work. It is not all
+attributable to GPU without a separate measurement.
+
+Raw reports: `.cache/benchmarks/maxopt-static-final-{tdm,lab,title}.json`, alongside
+the matching expanded baseline files and `maxopt-static-final-conditions.json`.
+These sequential short desktop runs are not physical iPhone, thermal or universal
+30fps acceptance. Native component gains and actual Web frames remain distinct.
+
+The additional812×375/DPR1 desktop viewport experiment gives35.87/34.07/31.82fps,
+p9539.7/44.444/50ms, with5/7/9 static bodies. Fewer pixels do not establish a gain
+in this run; no render-resolution reduction is shipped or recommended from it.
+Four Chromium UnknownError messages occur at diagnostic scene recreation and are
+retained in `maxopt-static-final-console.json`. The fresh ordinary274 Web tab has
+no warning/error logs: tap-only3×3 start, screen-button fire (10→8 ammunition),
+visible prone bodies, a real completed round and restart, and keyboard walking in
+the mobile layout pass. Snapshot `.cache/previews/maxopt-static-final-tdm-mobile.png`.
+Native acceptance and browser observations remain separately identified.
+
+## Publication and actual public verification
+
+Source branch `codex/web-max-optimization` is pushed. Clean checked source
+`274b3608b39a63919f9b1f86470a6f62badff034` is published at
+[the separate optimized preview](https://gordey328.github.io/Blockfield/optimized/),
+Pages bundle `619464014b87325a36af28063dee9a87edf4add8`, status built.
+Publication's Git diff contains only optimized/ paths; existing main/reduced
+metadata remains unchanged. All eight actual public metadata/HTML/JS/WASM/PCK/
+Mirage/font-license/root-license hashes equal the checked normal export. Reports:
+`.cache/maxopt-pages-publication.json`, `.cache/maxopt-public-verification.json`.
+
+Actual public normal Web at812×375 loads Mirage through the menu, starts play,
+walks, fires via the screen button, looks with a mouse drag in the mobile layout,
+digs a floor cell and places a cube. Invalid intersecting/too-far placements are
+rejected before the valid cube. Reset restores the original spawn/view and terrain;
+the minimap refills through its existing preparation budget. Existing touch/UI/
+resource preferences remain. Final public warning/error log is empty. Captures:
+`.cache/previews/maxopt-public-mirage{,-block}.png`; console report:
+`.cache/benchmarks/maxopt-public-console.json`. Viewport override is reset and the
+public preview tab is retained; temporary diagnostic tabs/helpers are cleaned up.
+This development branch is not merged into main and does not promote full-port
+parity or assert that the physical iPhone target is achieved.
 
 Use bundled Python
 `C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`.
