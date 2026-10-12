@@ -3,7 +3,7 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Market-oriented Rush — 2026-10-12 (implementation in progress)
+## Market-oriented Rush — 2026-10-12 (completed development iteration)
 
 User authorizes researching mobile/Web games and changing any game feature.
 Managed market-iteration worktree starts at origin/dev76eae15, including checked
@@ -14,10 +14,29 @@ ownership; coordinator owns shared integration/config/records/docs/release.
 choose a three-minute FPS Rush hypothesis with run upgrades and personal records.
 No market-success, physical-phone or full-port acceptance is claimed.
 Pinned engine4.7.2.stable.official.ed1daf0bf and upstream
-dcf449c845d509bbde9d79239b32d201c1389961 remain. Engine version readback passes;
-implementation and serial gameplay/browser checks remain in progress.
-Next action: finish specialist handoffs, run parser/behavioral integration checks,
-inspect the ordinary Web build and publish a checked development iteration.
+dcf449c845d509bbde9d79239b32d201c1389961 remain. All source/engine leases close.
+Frozen f451aad passes30 fixtures/parser/runtime/export; final checked runtime
+3dd42ab0cce287257fdd9954a784673c292c7b77 passes seven selected fixtures/export
+after only Home/HUD changes. Gameplay/simulation/AI/world trees are identical.
+Rush850/0, final UI274/0, actual scene66/0 and records13/0 pass. Ordinary local
+desktop/375x812 Web starts selected SMG, moves, fires/reloads, displays progress,
+pauses, records defeat and replays. Mobile Fire30to26 is actually exercised.
+Controlled diagnostic Web creates3 real deaths, holds tick40 while frozen frame
+counter372to1020 advances, renders all3 desktop/portrait cards, then actual mobile
+Power click gives rank1 and tick62. Diagnostic code is ignored/dirty and excluded
+from publication. Its first premature frame-based check is corrected and retained.
+Public Pages bundle bcc4463691f5cb71eb201e48a483f81555fee3f0 reports built/no error;
+all30 public files hash-match the freeze, only rush/ paths change. Public Home,
+selected shotgun6to5, hostile damage, score/progress, pause and Home are checked;
+public warning/error list is empty. [Draft PR4](https://github.com/Gordey328/Blockfield/pull/4)
+targets dev; source branch codex/market-rush is pushed and attached.
+Own helpers49540/45236 are stopped, viewport reset, temporary tabs closed and
+only public deliverable retained. Logs/probe/snapshots are ignored evidence.
+Exact commands/results/limitations are in [Rush evidence](rush-iteration.md).
+URL: https://gordey328.github.io/Blockfield/rush/?v=3dd42ab .
+Next action: player-test the loop and reduce the57.2MB uncompressed engine/pack
+payload before portal/mobile release acceptance; physical-phone comfort/FPS,
+full3-minute manual victory, retention/market fit and SDK/ad integration stay open.
 
 ## Survival expansion — 2026-10-12 (completed and published)
 

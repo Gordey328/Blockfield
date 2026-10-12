@@ -111,7 +111,7 @@ promote full P01/P08–P16 or W03 acceptance.
 
 | ID | Feature and acceptance requirement | Evidence | Iteration | Status |
 | --- | --- | --- | --- | --- |
-| A03 | Blockfield Rush: canonical three-minute survival, one-click Home/replay, kill-based run upgrades and per-weapon local records | User2026-10-12; [ADR0035](decisions/0035-market-oriented-rush.md); new authority/UI/record/scene fixtures; ordinary Web acceptance in progress; market fit and physical-phone acceptance remain separate | Market iteration | IMPLEMENTED |
+| A03 | Blockfield Rush: canonical three-minute survival, one-click Home/replay, kill-based run upgrades and per-weapon local records | User2026-10-12; [ADR0035](decisions/0035-market-oriented-rush.md); frozen3dd42ab/parser/export; Rush850/0, UI274/0, records13/0, real scene66/0; ordinary local/public start/fire/pause/results and controlled Web card render/input/freeze; built Pages/public30 SHA-match; [evidence and limits](rush-iteration.md). Physical phone, full-duration manual win, retention/market fit and portal acceptance remain separate | Market iteration | VERIFIED |
 
 ## Presentation, UI and content
 
