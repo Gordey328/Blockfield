@@ -1,6 +1,14 @@
 # Architecture and current contracts
 
 ## Boundaries
+- OfflineSurvivalSession reuses OfflineTDMSession's local command/presentation bridge,
+  with its own bounded roster, timed overlapping waves, supply and finite outcomes.
+  ZombieDirector proposes commands and bite/breach intents; MatchSimulation and the
+  survival authority validate and commit them. Navigation compares full detour and
+  breach time, including damaged blocks and clearance. Main pools twelve unarmed
+  ZombieViews and presents committed terrain once; SurvivalPanel/HUD only display.
+  GameMapCatalog admits canonical settings and Crossroads only. See
+  [ADR0032](decisions/0032-timed-zombie-survival.md) and [evidence](zombie-survival.md).
 - Entry creates GameShell without a world/simulation; all launch routes are local. GameMapCatalog whitelists mode/map/weapon, preserves a separate
   saved selection and supplies baked previews. Entry hands a one-shot launch to
   Main through SceneTree metadata. Main keeps input gated through map adoption and

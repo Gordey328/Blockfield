@@ -83,6 +83,10 @@ var _desktop_emulation:=true
 var _touch_mode_choice: OptionButton
 var _hud_brand: Label
 const OFFLINE_TDM=preload("res://gameplay/offline_tdm_session.gd")
+const SURVIVAL_PANEL = preload("res://ui/survival_panel.gd")
+const OFFLINE_SURVIVAL = preload("res://gameplay/offline_survival_session.gd")
+var _survival_panel: SURVIVAL_PANEL
+var _survival_panel_locale: String = ""
 var _tdm_score: Label
 var _combat_readout: CombatReadout
 var _tdm_menu_status: Label
@@ -183,6 +187,7 @@ func _create_hud() -> void:
 	var top: Label
 	if _is_offline_tdm(): top=_ui_label("BLOCKFIELD / БОЙ 3×3","BLOCKFIELD / TEAM BATTLE",18)
 	else: top=_label("BLOCKFIELD  /  ЛОКАЛЬНЫЙ ПОЛИГОН",18)
+	if _is_offline_survival(): top.text = _ui("BLOCKFIELD / ВЫЖИВАНИЕ", "BLOCKFIELD / SURVIVAL")
 	_hud_brand=top
 	top.add_theme_font_size_override("font_size",12)
 	top.add_theme_color_override("font_color",CombatTheme.MUTED)
@@ -345,6 +350,15 @@ func _create_menu() -> void:
 	for side in ["left","right"]:margin.add_theme_constant_override("margin_"+side,52)
 	for side in ["top","bottom"]:margin.add_theme_constant_override("margin_"+side,30)
 	_menu.add_child(margin)
+	if _is_offline_survival():
+		_survival_panel = SURVIVAL_PANEL.new()
+		margin.add_child(_survival_panel)
+		_survival_panel.configure(session, main.locale)
+		_survival_panel_locale = main.locale
+		_survival_panel.resume_requested.connect(func() -> void: set_menu_visible(false))
+		_survival_panel.restart_requested.connect(func() -> void: main.restart_offline_tdm())
+		_survival_panel.home_requested.connect(func() -> void: main.open_game_home())
+		return
 	if _is_offline_tdm():
 		_create_tdm_menu(margin)
 		return
@@ -447,8 +461,33 @@ func _create_tdm_menu(margin: MarginContainer) -> void:
 func _is_offline_tdm() -> bool:
 	return main != null and main.get("offline_tdm_mode") == true
 
+func _is_offline_survival() -> bool:
+	return main != null and main.get("offline_survival_mode") == true
+
+func _update_survival_status() -> void:
+	var state: Dictionary = (session as OFFLINE_SURVIVAL).get_survival_state()
+	var phase: String = str(state.get("phase", "preparation"))
+	var seconds: int = ceili(maxf(0, float(state.get("time_remaining", 0))))
+	var title: String = _ui("ВОЛНА %d · ЖИВЫХ %d", "WAVE %d · ALIVE %d") % [int(state.get("wave", 0)), int(state.get("live", 0))]
+	var detail: String = _ui("%d:%02d · %d/%d · +%dс", "%d:%02d · %d/%d · +%ds") % [seconds / 60, seconds % 60, int(state.get("wave_spawned", 0)), int(state.get("wave_planned", 0)), ceili(float(state.get("next_wave_seconds", 0)))]
+	if phase == "preparation":
+		title = _ui("ПОСТРОЙ УКРЫТИЕ", "BUILD YOUR DEFENSES")
+		detail = _ui("Первая волна через %d с", "First wave in %d s") % ceili(float(state.get("preparation_remaining", 0)))
+	elif phase == "cleanup":
+		title = _ui("ЗАЧИСТКА · ОСТАЛОСЬ %d", "CLEANUP · %d REMAINING") % int(state.get("live", 0))
+		detail = _ui("Новых зомби больше не будет", "No more zombies will spawn")
+	_combat_readout.survival_text = title + "\n" + detail
+	_combat_readout.score_text = ""
+	_combat_readout.score_y = maxf(88.0, mobile_controls.get_layout_height() + 8.0) if uses_mobile_controls() and mobile_controls != null else 18.0
+	if is_instance_valid(_survival_panel) and _survival_panel_locale != main.locale:
+		_survival_panel.configure(session, main.locale)
+		_survival_panel_locale = main.locale
+
 func _update_tdm_status() -> void:
 	if not _is_offline_tdm(): return
+	if _is_offline_survival():
+		_update_survival_status()
+		return
 	var match_session: OFFLINE_TDM=session as OFFLINE_TDM
 	var seconds: int=ceili(maxf(0.0,float(match_session.match_duration_ticks-maxi(0,match_session.simulation.tick+1))/60.0))
 	var score_text: String="%d : %d   ·   %d:%02d"%[session.team_scores[0],session.team_scores[1],seconds/60,seconds%60]
@@ -755,7 +794,7 @@ func _process(delta: float) -> void:
 	_combat_readout.status_text=_weapon_status.text
 	if uses_mobile_controls() and session.current_tool==LocalSession.Tool.WEAPON and not session.is_reloading and session.magazine>0 and session.reserve>0 and session.magazine<floori(float(info.clip_size)/4):
 		_combat_readout.status_text=_ui("Перезарядите","Reload")
-	_mode.text="%s   ·   %s"%[world.map_name,session.mode.to_upper()]
+	_mode.text = world.map_name if _is_offline_survival() else "%s   ·   %s" % [world.map_name, session.mode.to_upper()]
 	_update_tdm_status()
 	_performance.visible=_show_statistics
 	# Face totals walk every loaded chunk. Gather diagnostics only while their
@@ -780,6 +819,7 @@ func _process(delta: float) -> void:
 	_results.text=_ui("Победа: %s","Winner: %s")%LabMap.team_name_for(session,session.winning_team) if session.winning_team>=0 else ""
 	if _is_offline_tdm() and (session as OFFLINE_TDM).finished and session.winning_team<0:
 		_results.text=_ui("Ничья","Draw")
+	if _is_offline_survival(): _results.text = ""
 	_update_hottracked_name()
 	_update_feed()
 	if _large_map.visible:
@@ -862,7 +902,9 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") and not event.is_echo():
 		if _chat.expanded:_chat.set_expanded(false);_sync_controls()
 		else:set_menu_visible(true)
-	elif event.is_action_pressed("scoreboard"):_scoreboard.show()
+	elif event.is_action_pressed("scoreboard"):
+		if _is_offline_survival(): set_menu_visible(true)
+		else: _scoreboard.show()
 	elif event.is_action_pressed("map") and not event.is_echo():toggle_map()
 	elif event.is_action_pressed("map_scale") and not event.is_echo():change_map_scale()
 	elif event.is_action_pressed("chat") and not event.is_echo():open_chat(false)
@@ -1067,6 +1109,9 @@ func _set_hud_rect(control: Control,rectangle: Rect2) -> void:
 	control.offset_bottom=rectangle.end.y
 
 func _adapt_mobile_menu(node: Node,mobile: bool,portrait: bool) -> void:
+	if node is SURVIVAL_PANEL:
+		node.refresh()
+		return # This panel owns CSS sizing and its pinned action row.
 	if node.has_meta("mobile_hide"):node.visible=not mobile
 	if node is MarginContainer:
 		if node.has_meta("mobile_outer_margin"):
@@ -1131,6 +1176,7 @@ func set_menu_visible(enabled: bool) -> void:
 	if _menu==null:return
 	if _is_offline_tdm() and (session as OFFLINE_TDM).finished: enabled=true
 	_menu.visible=enabled
+	if is_instance_valid(_survival_panel): _survival_panel.set_menu_open(enabled)
 	_hud.visible=not enabled and not _hud_hidden
 	if enabled:
 		_scoreboard.hide()
@@ -1279,6 +1325,7 @@ func _update_feed() -> void:
 		var age:=_event_clock-float(event.hud_time)
 		if age>15 or shown>=limit:continue
 		if mobile and str(event.get("type","")) in ["respawn","team","mode"]:continue
+		if _is_offline_survival() and str(event.get("type","")) in ["respawn", "team", "mode"]: continue
 		var text:=_event_text(event)
 		if text.is_empty():continue
 		shown+=1

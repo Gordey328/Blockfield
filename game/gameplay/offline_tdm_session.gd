@@ -135,6 +135,10 @@ func local_player_id() -> int:
 	return OWNER_ID
 
 
+func get_match_mode() -> String:
+	return "tdm"
+
+
 func get_owner_state() -> SharedPlayerState:
 	var owner: SharedPlayerState = simulation.get_actor(OWNER_ID) if simulation != null else null
 	return owner.copy() if owner != null else null
@@ -292,7 +296,7 @@ func update(delta: float) -> void:
 	invulnerable = false
 	_trigger_held = _owner.trigger_held
 	_grenade_release_pending = _owner.release_pending
-	mode = "tdm"
+	mode = get_match_mode()
 	capture_limit = kill_limit
 	ctf_flags.clear()
 	ctf_bases.clear()

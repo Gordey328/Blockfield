@@ -93,6 +93,13 @@ def main():
     suites += [('tdm-bots','tests/ai/test_tdm_bots.gd'),('offline-tdm','tests/session/test_offline_tdm.gd'),('offline-tdm-scene','tests/integration/test_offline_tdm_scene.gd')]
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
     suites += [('game-shell','tests/ui/test_game_shell.gd'),('game-launch','tests/integration/test_game_launch.gd')]
+    suites += [('survival-settings','tests/session/test_survival_settings.gd'),
+               ('survival-session','tests/session/test_survival_session.gd'),
+               ('zombie-ai','tests/ai/test_zombie_ai.gd'),
+               ('zombie-view','tests/presentation/test_zombie_view.gd'),
+               ('survival-panel','tests/ui/test_survival_panel.gd'),
+               ('survival-setup','tests/ui/test_survival_setup.gd'),
+               ('survival-scene','tests/integration/test_survival_scene.gd')]
     suites += [('blockfield-map','tests/world/test_blockfield_map.gd'),('native-map-main','tests/integration/test_native_map_main.gd')]
     suites += [('collapse-optimization','tests/world/test_collapse_optimization.gd'),
                ('empty-chunk-optimization','tests/world/test_empty_chunk_optimization.gd'),
@@ -107,7 +114,7 @@ def main():
     suites += [('shared-grenade','tests/simulation/test_grenade_rules.gd'),('player-rules','tests/simulation/test_player_rules.gd'),('match-objectives','tests/simulation/test_match_objectives.gd'),('match-simulation','tests/simulation/test_match_simulation.gd'),('match-reset','tests/simulation/test_match_reset.gd'),('actor-presentation','tests/ui/test_actor_presentation.gd')]
     for name,path in suites:
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','survival-setup','survival-panel','survival-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     if args.export: export_web()
 

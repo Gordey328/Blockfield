@@ -42,6 +42,7 @@ var _pending_cell: Dictionary[int,Vector3i] = {}
 var _secondary: Dictionary[int,bool] = {}
 var _block_health: Dictionary[Vector3i,Dictionary] = {} # Persists until terrain edit/destruction or match reset.
 var _grenade_team: Dictionary[int,int] = {}
+var _zombie_breach_deadlines: Dictionary[Vector3i,int] = {}
 func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: String = "sandbox") -> Dictionary:
 	if map_data == null or map_data.read_only or map_data.blocks.size() != map_data.dimensions.x*map_data.dimensions.y*map_data.dimensions.z \
 			or map_data.epoch <= 0 or map_data.epoch > RULES.MAX_UINT32 or map_data.last_tick > 0 \
@@ -83,6 +84,7 @@ func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: S
 	_secondary.clear()
 	_block_health.clear()
 	_grenade_team.clear()
+	_zombie_breach_deadlines.clear()
 	objectives = new_objectives
 	return _result(true)
 
@@ -164,6 +166,89 @@ func set_team(id: int, team: int) -> Dictionary:
 	result.events = RULES.frozen(events)
 	return result
 
+func register_zombie_slot(id: int) -> Dictionary:
+	# Slots are admitted once per epoch and reused by the survival scheduler.
+	var result: Dictionary = add_actor("Zombie %d" % id, 2, 7100 + id * 97, Vector3.INF, id)
+	if result.ok:
+		get_actor(id).registry_kind = "zombie"
+	return result
+
+func spawn_zombie_slot(id: int, feet: Vector3) -> Dictionary:
+	var actor: SharedPlayerState = get_actor(id)
+	if actor == null or actor.registry_kind != "zombie" or actor.is_alive() or not _spawn_clear(feet):
+		return _result(false, "Invalid zombie slot/spawn")
+	# Zombie lives have no timed self-respawn. An explicit new wave allocation
+	# may reuse a dead slot immediately, without issuing another registry ID.
+	actor.respawn_tick = -1
+	var result: Dictionary = spawn_actor(id, 1, 0, feet)
+	if result.ok:
+		actor.tool = RULES.Tool.SPADE
+		actor.displayed_tool = RULES.Tool.SPADE
+		actor.tool_raise = 1.0
+		actor.magazine = 0
+		actor.reserve = 0
+		actor.blocks = 0
+		actor.grenades = 0
+	return result
+
+func resolve_zombie_bite(id: int, victim_id: int, damage: int = 20, reach: float = 2.2) -> Array[Dictionary]:
+	var actor: SharedPlayerState = get_actor(id)
+	var victim: SharedPlayerState = get_actor(victim_id)
+	if actor == null or victim == null or actor.registry_kind != "zombie" or victim.registry_kind == "zombie" \
+			or not RULES.can_act(actor) or not RULES.can_act(victim) or actor.team == victim.team \
+			or actor.feet().distance_to(victim.feet()) > reach or damage <= 0:
+		return RULES.frozen([])
+	var origin: Vector3 = actor.feet() + Vector3.UP * 1.1
+	var endpoint: Vector3 = victim.feet() + Vector3.UP * 1.1
+	var difference: Vector3 = endpoint - origin
+	var hit: Dictionary = data.cast_voxel(origin, difference, difference.length())
+	if bool(hit.get("hit", false)) and origin.distance_to(hit.position) < difference.length() - 0.05:
+		return RULES.frozen([])
+	var action: Dictionary = RULES.event(actor, tick, "zombie_bite", {"victim_id": victim_id})
+	var events: Array[Dictionary] = [action]
+	events.append_array(_damage(victim, damage, id, "bite", str(action.event_id), actor.team))
+	_process_releases(events)
+	_record_events(events)
+	return RULES.frozen(events)
+
+func resolve_zombie_breach(id: int, cell: Vector3i, damage: int = 40, cadence_ticks: int = 90) -> Array[Dictionary]:
+	var actor: SharedPlayerState = get_actor(id)
+	if actor == null or actor.registry_kind != "zombie" or not RULES.can_act(actor) or cell.y <= 1 \
+			or not data.is_in_bounds(cell) or data.get_block(cell) == 0 or not in_reach(actor, cell) \
+			or tick < int(_zombie_breach_deadlines.get(cell, -1)) or damage <= 0 or cadence_ticks < 1:
+		return RULES.frozen([])
+	var origin: Vector3 = actor.feet() + Vector3.UP * 1.1
+	var endpoint: Vector3 = Vector3(cell) + Vector3.ONE * 0.5
+	var difference: Vector3 = endpoint - origin
+	var hit: Dictionary = data.cast_voxel(origin, difference, difference.length() + 0.1)
+	if not bool(hit.get("hit", false)) or hit.cell != cell:
+		return RULES.frozen([])
+	_zombie_breach_deadlines[cell] = tick + cadence_ticks
+	var destroyed: bool = _damage_block(actor, cell, damage)
+	var events: Array[Dictionary] = [RULES.event(actor, tick, "zombie_breach",
+		{"cell": cell, "position": endpoint, "damage": damage, "destroyed": destroyed})]
+	_record_events(events)
+	return RULES.frozen(events)
+
+func get_block_remaining_health(cell: Vector3i) -> float:
+	if data == null or data.get_block(cell) == 0:
+		return 0.0
+	var color: int = data.get_block(cell)
+	var health: Dictionary = _block_health.get(cell, {})
+	return float(health.health) if not health.is_empty() and int(health.color) == color else 100.0
+
+func survival_supply(id: int) -> Array[Dictionary]:
+	var actor: SharedPlayerState = get_actor(id)
+	if actor == null or actor.registry_kind == "zombie" or not RULES.can_act(actor):
+		return RULES.frozen([])
+	actor.health = mini(100, actor.health + 25)
+	actor.reserve = PROFILES.get_info(actor.profile, actor.weapon).max_stock
+	actor.blocks = 50
+	actor.grenades = mini(3, actor.grenades + 1)
+	var events: Array[Dictionary] = [RULES.event(actor, tick, "restock", {"survival": true})]
+	_record_events(events)
+	return RULES.frozen(events)
+
 func clear_controls(id: int) -> bool:
 	var actor := get_actor(id)
 	if actor == null: return false
@@ -208,6 +293,21 @@ func step_fixed(commands: Dictionary = {}) -> Array[Dictionary]:
 		var sprint := actor.sprint_state
 		var supplied: Variant = commands.get(actor.player_id,null)
 		var input: PlayerRules.Command = supplied if supplied is PlayerRules.Command else null
+		if actor.registry_kind == "zombie":
+			# Even malformed/custom directors cannot route a zombie through source
+			# firearm, grenade, spade damage, class or building authority.
+			actor.tool = RULES.Tool.SPADE
+			actor.displayed_tool = RULES.Tool.SPADE
+			actor.input_buttons &= RULES.Buttons.JUMP | RULES.Buttons.CROUCH | RULES.Buttons.SNEAK
+			if input != null:
+				var bounded_zombie: PlayerRules.Command = RULES.Command.new()
+				bounded_zombie.sequence = input.sequence
+				bounded_zombie.spawn_generation = input.spawn_generation
+				bounded_zombie.buttons = input.buttons & (RULES.Buttons.JUMP | RULES.Buttons.CROUCH | RULES.Buttons.SNEAK)
+				bounded_zombie.move = input.move
+				bounded_zombie.yaw = input.yaw
+				bounded_zombie.pitch = input.pitch
+				input = bounded_zombie
 		# Every live cook reserves its eventual projectile, so a capacity gate
 		# cannot consume a grenade whose local projectile would be discarded.
 		if actor.tool == RULES.Tool.GRENADE and not actor.cooking and not _cook_capacity():

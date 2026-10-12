@@ -64,3 +64,13 @@ debris. Smaller visible counts and changed trajectories are accepted. Authoritat
 unsupported-component removal, grenade rules, bullets, damage and map transactions
 retain their contracts. See [ADR0025](decisions/0025-fixed-noncolliding-effects.md).
 This replacement does not accept unrelated parity or the complete port.
+
+## Accepted gameplay addition — 2026-10-12
+
+The user requests offline zombie waves after completed multiplayer removal.
+Survive a configurable duration then clear remaining enemies; waves may overlap
+on a strict active-time schedule. Settings cover duration, quota and growth with
+elapsed time. Zombies choose the easier detour or breach using travel and remaining
+block-health costs. This addition uses separate survival round rules and does not
+accept the full port. See [ADR0032](decisions/0032-timed-zombie-survival.md) and
+[the design and confirmed answers](zombie-waves-plan.md).

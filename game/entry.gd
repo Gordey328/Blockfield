@@ -20,6 +20,7 @@ func _launch_game(configuration: Dictionary) -> void:
 	get_tree().set_meta("blockfield_launch", checked.configuration.duplicate(true))
 	LabInputBindings.release_actions()
 	var scene_path: String = "res://scenes/offline_tdm.tscn" if checked.configuration.mode == "tdm" else "res://scenes/main.tscn"
+	if checked.configuration.mode == "survival": scene_path = "res://scenes/offline_survival.tscn"
 	get_tree().change_scene_to_file(scene_path)
 
 func _open_utility(kind: String) -> void:

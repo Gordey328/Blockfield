@@ -7,6 +7,12 @@ supports offline3×3: one human and five bots. The lab, Title, Mirage and Dust2 
 training maps. The lab exposes both team appearances, spade/block/grenade, targets,
 local CTF/TC rules and terrain editing. Selection and preferences are saved locally.
 
+Home → Zombie waves opens finite survival on Crossroads: choose duration, wave
+interval, up-to quota and growth with active game time. Waves overlap; survive the
+timer and clear the remaining zombies. They compare detours with breaking cover.
+Building remains available, with finite inventory and a safe supply point. See
+[mode rules and verification](docs/zombie-survival.md).
+
 The user cancelled multiplayer; all game transport, server, prediction, replication,
 reconnect and networking menus are removed. Shared local simulation remains for
 bots and combat. See [scope decision](docs/decisions/0031-offline-only-game.md).

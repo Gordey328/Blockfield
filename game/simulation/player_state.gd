@@ -7,6 +7,7 @@ var match_epoch: int = 1
 var spawn_generation: int = 0
 var player_name: String = "Player"
 var team: int = 2
+var registry_kind: String = "soldier" # Authored actor policy, separate from faction/spectator.
 var profile: String = "0.75"
 var weapon: int = 0
 var pending_weapon: int = -1
@@ -97,6 +98,7 @@ func copy() -> SharedPlayerState:
 		result.spawn_generation = spawn_generation
 		result.player_name = player_name
 		result.team = team
+		result.registry_kind = registry_kind
 		result.profile = profile
 		result.weapon = weapon
 		result.pending_weapon = pending_weapon

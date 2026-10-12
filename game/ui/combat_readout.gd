@@ -4,6 +4,8 @@ extends Control
 var session: LocalSession
 var compact: bool = false
 var score_text: String = ""
+var survival_text: String = ""
+var _last_survival_text: String = ""
 var score_y: float = 18.0
 var status_text: String = ""
 var _last_state: Dictionary = {}
@@ -36,13 +38,14 @@ func get_panel_rects() -> Array[Rect2]:
 
 func _process(_delta: float) -> void:
 	var state: Dictionary = get_display_state()
-	if state != _last_state or size != _last_size or compact != _last_compact or score_text != _last_score or score_y != _last_score_y or status_text != _last_status:
+	if state != _last_state or size != _last_size or compact != _last_compact or score_text != _last_score or score_y != _last_score_y or status_text != _last_status or survival_text != _last_survival_text:
 		_last_state = state
 		_last_size = size
 		_last_compact = compact
 		_last_score = score_text
 		_last_score_y = score_y
 		_last_status = status_text
+		_last_survival_text = survival_text
 		queue_redraw()
 
 func _text(value: String, position: Vector2, height: int, tint: Color = CombatTheme.WHITE) -> void:
@@ -56,6 +59,7 @@ func _draw() -> void:
 	var state: Dictionary = get_display_state()
 	if state.is_empty(): return
 	if not score_text.is_empty(): _draw_score()
+	if not survival_text.is_empty(): _draw_survival()
 	if not bool(state.live): return
 	var islands: Array[Rect2] = get_panel_rects()
 	for rectangle: Rect2 in islands: draw_style_box(_panel,rectangle)
@@ -108,6 +112,16 @@ func _draw_slots(origin: Vector2) -> void:
 		var selected: bool = index == session.current_tool
 		CombatTheme.draw_icon(self,["tool_spade","tool_block","tool_weapon","tool_grenade"][index],Rect2(origin+Vector2(x,77),Vector2(16,16)),CombatTheme.ACCENT if selected else CombatTheme.MUTED)
 		_text(str(index+1),origin+Vector2(x+21,90),10,CombatTheme.ACCENT if selected else CombatTheme.MUTED)
+
+func _draw_survival() -> void:
+	var width: float = 218.0 if compact else 328.0
+	var rectangle: Rect2 = Rect2((size.x - width) * 0.5, score_y, width, 48.0 if compact else 56.0)
+	draw_style_box(_panel, rectangle)
+	var lines: PackedStringArray = survival_text.split("\n")
+	for index: int in mini(2, lines.size()):
+		var height: int = (13 if compact else 17) if index == 0 else (11 if compact else 13)
+		var text_width: float = CombatTheme.font().get_string_size(lines[index], HORIZONTAL_ALIGNMENT_LEFT, -1, height).x
+		_text(lines[index], Vector2(rectangle.get_center().x - text_width * 0.5, rectangle.position.y + 19.0 + index * 19.0), height, CombatTheme.ACCENT if index == 0 else CombatTheme.WHITE)
 
 func _draw_score() -> void:
 	# At the480px portrait canvas, this clears the112px minimap frame.

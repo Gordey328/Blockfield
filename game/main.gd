@@ -1,6 +1,11 @@
 extends Node3D
 @export var offline_tdm_mode: bool = false
+@export var offline_survival_mode: bool = false
 const OFFLINE_TDM = preload("res://gameplay/offline_tdm_session.gd")
+const OFFLINE_SURVIVAL = preload("res://gameplay/offline_survival_session.gd")
+const SURVIVAL_ARENA = preload("res://ai/survival_arena.gd")
+const ZOMBIE_VIEW = preload("res://presentation/zombie_view.gd")
+const SURVIVAL_SETTINGS = preload("res://gameplay/survival_settings.gd")
 const TDM_ARENA = preload("res://ai/tdm_arena.gd")
 const BLOCKFIELD_MAP = preload("res://world/blockfield_map.gd")
 const LAUNCH_CATALOG = preload("res://ui/map_catalog.gd")
@@ -74,6 +79,10 @@ var _vxl_notice_percent: int = -1
 var focus_control := LabFocus.new()
 var console_service:=preload("res://ui/lab_console.gd").new()
 var _corpses: Array[OpenSpadesCorpse]=[]
+var _zombie_views: Dictionary[int, Node3D] = {}
+var _survival_supply_views: Array[Node3D] = []
+var _spawn_warning_marker: MeshInstance3D
+var _spawn_warning_until_tick: int = -1
 var _last_player_corpse: OpenSpadesCorpse
 
 func _ready() -> void:
@@ -86,8 +95,8 @@ func _ready() -> void:
 		_shell_utility = str(get_tree().get_meta("blockfield_utility"))
 		get_tree().remove_meta("blockfield_utility")
 	if offline_tdm_mode:
-		var arena_data: VoxelData = TDM_ARENA.build()
-		world.set_map_data(arena_data,"Crossroads · 3×3",true)
+		var arena_data: VoxelData = SURVIVAL_ARENA.build() if offline_survival_mode else TDM_ARENA.build()
+		world.set_map_data(arena_data,"Crossroads · Выживание" if offline_survival_mode else "Crossroads · 3×3",true)
 		# Effects and actor views sample the current rendered camera pose.
 		player.process_priority = process_priority-1
 	graphics_options.merge({"gi":false,"water_waves":true,"water_refraction":true,"water_reflections":false,"ragdolls":true})
@@ -142,7 +151,11 @@ func _ready() -> void:
 	player.build_error.connect(func(message: String):hud.show_alert(message,"warning"))
 	_load_settings()
 	if offline_tdm_mode:
-		var configured: Dictionary = (session as OFFLINE_TDM).configure_match(world.data,TDM_ARENA.metadata(),player_name)
+		var configured: Dictionary
+		if offline_survival_mode:
+			configured = (session as OFFLINE_SURVIVAL).configure_survival(world.data, SURVIVAL_ARENA.metadata(), _launch_configuration.get("survival", SURVIVAL_SETTINGS.defaults()), player_name)
+		else:
+			configured = (session as OFFLINE_TDM).configure_match(world.data,TDM_ARENA.metadata(),player_name)
 		if not configured.get("ok",false):
 			push_error("Offline TDM configuration failed: %s" % configured.get("error","unknown"))
 			return
@@ -183,6 +196,7 @@ func _ready() -> void:
 		_setup_objectives()
 	elif offline_tdm_mode:
 		_update_shared_actor_views()
+		if offline_survival_mode: _create_survival_supply_views()
 	hud.set_menu_visible(true)
 	if _launch_status == "loading":
 		_launch_overlay = LAUNCH_OVERLAY.new()
@@ -209,7 +223,8 @@ func _apply_game_launch() -> void:
 		_fail_game_launch("Выберите доступную карту и оружие." if russian else "Choose an available map and weapon.", false)
 		return
 	var configuration: Dictionary = checked.configuration
-	if offline_tdm_mode != (configuration.mode == "tdm"):
+	var expected_mode: String = "survival" if offline_survival_mode else ("tdm" if offline_tdm_mode else "training")
+	if str(configuration.mode) != expected_mode:
 		_fail_game_launch("Режим запуска не соответствует матчу." if russian else "The launch mode does not match this session.", false)
 		return
 	_launch_configuration = configuration.duplicate(true)
@@ -260,6 +275,8 @@ func _process(delta: float) -> void:
 	_update_vxl_progress()
 	if not offline_tdm_mode: session.update(delta)
 	if offline_tdm_mode: _update_shared_actor_views()
+	if offline_survival_mode and is_instance_valid(_spawn_warning_marker):
+		_spawn_warning_marker.visible = (session as OFFLINE_TDM).simulation.tick < _spawn_warning_until_tick
 	audio.positional=positional_audio
 	audio.environmental=environmental_audio
 	# Static death models need no per-frame solver or terrain queries.
@@ -1153,6 +1170,7 @@ func _match_event_audio(event: Dictionary) -> void:
 			_spawn_target_corpse(event)
 
 func _spawn_target_corpse(event: Dictionary) -> void:
+	if offline_survival_mode: return # Zombie slots own their bounded prone death pose.
 	if not bool(graphics_options.ragdolls):return
 	var target:=session.get_target(int(event.get("target_id",-1)))
 	if target.is_empty():return
@@ -1227,6 +1245,9 @@ func restart_offline_tdm() -> void:
 		return
 	_clear_match_views()
 	world.set_map_data(result.data,"Crossroads · 3×3",true)
+	if offline_survival_mode:
+		world.map_name = "Crossroads · Выживание"
+		_create_survival_supply_views()
 	_update_shared_actor_views()
 	hud.set_menu_visible(true)
 
@@ -1248,8 +1269,18 @@ func present_offline_tick(transactions: Array) -> void:
 		if str(event.get("type","")) == "events_overflow":
 			refresh_requested = true
 			continue
-		if str(event.get("type","")) == "tdm_finished":
+		if str(event.get("type","")) in ["tdm_finished", "survival_finished"]:
 			hud.set_menu_visible(true)
+			continue
+		if str(event.get("type", "")) == "survival_wave":
+			hud.show_notice(("Волна %d" if locale == "ru" else "Wave %d") % int(event.get("wave", 1)))
+			player._play_sound("Feedback/Alert", 0.5)
+			continue
+		if str(event.get("type", "")) in ["survival_warning", "zombie_spawn_warning"]:
+			hud.show_notice("Орда приближается" if locale == "ru" else "Horde approaching")
+			player._play_sound("Feedback/Alert", 0.35)
+			if event.get("position") is Vector3:
+				_show_zombie_spawn_warning(event.position, int(event.get("tick", 0)), float(event.get("seconds", 1.0)))
 			continue
 		_match_present_event(event)
 	# Older effects cannot re-darken a replacement whose receipt was dropped.
@@ -1258,6 +1289,13 @@ func present_offline_tick(transactions: Array) -> void:
 
 func _clear_match_views() -> void:
 	clear_corpses()
+	for node: Node3D in _zombie_views.values(): node.queue_free()
+	_zombie_views.clear()
+	for node: Node3D in _survival_supply_views: node.queue_free()
+	_survival_supply_views.clear()
+	if is_instance_valid(_spawn_warning_marker): _spawn_warning_marker.queue_free()
+	_spawn_warning_marker = null
+	_spawn_warning_until_tick = -1
 	for target in _target_nodes: target.queue_free()
 	_target_nodes.clear()
 	for node in _objective_nodes: node.queue_free()
@@ -1295,6 +1333,16 @@ func _update_shared_actor_views() -> void:
 	var present: Dictionary[int,bool] = {}
 	for target: Dictionary in session.targets:
 		if int(target.team) >= 2: continue
+		if offline_survival_mode:
+			var zombie: ZOMBIE_VIEW = _zombie_views.get(int(target.id)) as ZOMBIE_VIEW
+			if zombie == null:
+				zombie = ZOMBIE_VIEW.new()
+				add_child(zombie)
+				zombie.setup(target)
+				_zombie_views[int(target.id)] = zombie
+			zombie.set_paused((session as OFFLINE_TDM).paused)
+			zombie.update_state(target)
+			continue
 		present[target.id] = true
 		var exists := false
 		for node in _target_nodes:
@@ -1309,6 +1357,7 @@ func _update_shared_actor_views() -> void:
 		if not present.has(_target_nodes[index].target_id):
 			_target_nodes[index].queue_free()
 			_target_nodes.remove_at(index)
+
 	var signature := "%s:%d:%d" % [session.mode,session.ctf_bases.size(),session.territories.size()]
 	if signature != _match_objective_signature and not session.ctf_bases.is_empty():
 		_match_objective_signature = signature
@@ -1334,6 +1383,54 @@ func _update_shared_actor_views() -> void:
 			_grenade_nodes[id].queue_free()
 			_grenade_nodes.erase(id)
 
+func _show_zombie_spawn_warning(point: Vector3, tick: int, seconds: float) -> void:
+	if not point.is_finite(): return
+	if not is_instance_valid(_spawn_warning_marker):
+		_spawn_warning_marker = MeshInstance3D.new()
+		var mesh: TorusMesh = TorusMesh.new()
+		mesh.inner_radius = 0.7
+		mesh.outer_radius = 1.0
+		mesh.rings = 12
+		mesh.ring_segments = 12
+		_spawn_warning_marker.mesh = mesh
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = Color("ed7b65")
+		material.emission_enabled = true
+		material.emission = Color("7c3024")
+		_spawn_warning_marker.material_override = material
+		add_child(_spawn_warning_marker)
+	_spawn_warning_marker.position = point + Vector3.UP * 0.12
+	_spawn_warning_marker.visible = true
+	_spawn_warning_until_tick = tick + maxi(1, ceili(seconds * 60.0))
+
+func _create_survival_supply_views() -> void:
+	for node: Node3D in _survival_supply_views: node.queue_free()
+	_survival_supply_views.clear()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color("6bbb99")
+	material.emission_enabled = true
+	material.emission = Color("204c3d")
+	for point: Vector3 in SURVIVAL_ARENA.metadata().get("supply_points", []):
+		var pad: MeshInstance3D = MeshInstance3D.new()
+		var mesh: CylinderMesh = CylinderMesh.new()
+		mesh.top_radius = 2.0
+		mesh.bottom_radius = 2.0
+		mesh.height = 0.04
+		mesh.radial_segments = 24
+		pad.mesh = mesh
+		pad.material_override = material
+		pad.position = point + Vector3.UP * 0.02
+		add_child(pad)
+		_survival_supply_views.append(pad)
+		var label: Label3D = Label3D.new()
+		label.text = "СНАБЖЕНИЕ" if locale == "ru" else "SUPPLY"
+		label.font_size = 36
+		label.pixel_size = 0.002
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.position = point + Vector3.UP * 3.2
+		add_child(label)
+		_survival_supply_views.append(label)
+
 func _match_objective(kind: String, index: int, point: Vector3) -> void:
 	var node := OpenSpadesModels.create("MapObjects/Intel" if kind == "intel" else "MapObjects/CheckPoint")
 	node.scale = Vector3.ONE*(.1 if kind == "intel" else .3)
@@ -1358,13 +1455,14 @@ func _match_present_event(event: Dictionary) -> void:
 		"tracer":
 			effects.tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
 			hud.add_map_tracer(event.origin,event.position,event.weapon,own and player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON)
-		"block_hit", "spade_block_hit":
+		"block_hit", "spade_block_hit", "zombie_breach":
 			_match_mark_block_damage(event)
 			var color: int = world.get_block(event.cell)
 			if color == 0: color = _impact_colors.get(event.cell,0x016f6f6f)
-			effects.block_hit(event.position,Vector3(event.normal),VoxelWorld.block_color(color),event.position.y < world.water_level)
-			if event.type == "spade_block_hit": _play_spatial("Weapons/Spade/HitBlock",event.position)
-			else: audio.bullet_impact(event.position,Vector3(event.normal),event.position.y < world.water_level)
+			var normal: Vector3 = Vector3(event.get("normal", Vector3.UP))
+			effects.block_hit(event.position,normal,VoxelWorld.block_color(color),event.position.y < world.water_level)
+			if event.type in ["spade_block_hit", "zombie_breach"]: _play_spatial("Weapons/Spade/HitBlock",event.position)
+			else: audio.bullet_impact(event.position,normal,event.position.y < world.water_level)
 		"grenade_bounced": _play_spatial("Weapons/Grenade/Bounce",event.position)
 		"grenade_water":
 			_play_spatial("Weapons/Grenade/DropWater",event.position)

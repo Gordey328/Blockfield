@@ -3,6 +3,47 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Zombie survival implementation — 2026-10-12 (in progress)
+
+The multiplayer predecessor actually completed its removal, all78 tests, browser
+checks and publication before this work started. Managed zombie-survival/Blockfield
+worktree, branch codex/zombie-survival, starts at devb35f694793b9e58ab9400e7c9008288bbb686c14
+(runtime6605204017b56abd49780c21786714a84c00a431). Shared dirty checkout is preserved.
+Godot4.7.2.stable.official.ed1daf0bf and OpenSpades
+dcf449c845d509bbde9d79239b32d201c1389961 remain pinned. Latest user choices are in
+[the survival plan](zombie-waves-plan.md): finite time then cleanup, overlapping
+timed waves, automatic cheaper detour/breach, begin after multiplayer removal.
+Contracts agreed before parallel changes. survival_authority owns new settings/
+session, existing TDM bridge's small virtual mode, shared simulation/state helpers
+and session fixtures. zombie_code_audit owns only new AI/navigation/arena and its
+AI fixture. zombie_design_refs owns only new zombie view/pause-result panel and
+their fixtures. Root owns Entry/Main/HUD/catalog/shell/combat integration, new scene,
+setup/actual-scene fixtures, shared build config, ADR/docs and serial engine/Web
+release. No other user-owned chat is created or messaged. No agent engine leases
+were issued during edits; source handoffs now ready for root parser.
+OfflineSurvivalSession inherits the existing shared command/presentation bridge,
+overrides TDM round/roster/spawn/supply policy and uses only local authority.
+Twelve reusable zombie lives remain bounded; no firearms, hit Areas, HP labels or
+soldier corpses for zombies. Their own rig lies briefly then hides/reuses. Main
+presents committed terrain/damage once. AI compares time costs while an alternative
+exists, including block health; one bounded pair of searches shares each tick.
+UI adds the mode and canonical wave settings; first authored map remains Crossroads.
+Parser/import and meaningful fixtures pass: settings28/0, session131/0, AI302/0,
+view82/0 plus native GPU83/0, panel158/0, setup42/0 and actual scene34/0.
+Regressions include TDM81/0, TDM scene68/0, shell434/0 and launch46/0. A real breach
+fixture exposed grid-plane versus metric ray misuse; custom zombie LOS now uses
+cast_voxel, with the retained initial failure and passage regression documented.
+Ordinary mutable Web checks show preparation, timer/pause, pursuit/bite, death,
+retry/Home, mobile gestures/buttons, real kills and a 60-second victory. A full
+12-live sample is 40FPS/25.0ms; fire/retreat with three kills is 29FPS/34.5ms.
+These are short desktop samples, not sustained phone FPS; Web static memory is
+unavailable (0), not a zero-memory claim. Native 12-slot planning measurement is
+recorded separately. A mutable full suite stopped at the existing HDR fixture's
+changed expectation for an already-saved zero speed. The frozen full gate uses a
+fresh private settings directory. Next: freeze source, run every registered check,
+verify the final normal export and publish/hash-check root Pages. Details and
+remaining limits: [zombie survival](zombie-survival.md).
+
 ## Multiplayer removal — 2026-10-12 (completed and published)
 
 User-requested multiplayer removal began only after the UI predecessor completed

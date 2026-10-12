@@ -1,0 +1,606 @@
+class_name OfflineSurvivalSession
+extends OfflineTDMSession
+## Timed survival authority. Inherits only the existing local command/view bridge;
+## roster, clocks, allocation, attacks, supply and end conditions are independent.
+const SETTINGS = preload("res://gameplay/survival_settings.gd")
+const ZOMBIES = preload("res://ai/zombie_director.gd")
+const ZOMBIE_IDS: Array[int] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+const BITE_WINDUP: int = 27
+const BITE_CYCLE: int = 72
+const BITE_DAMAGE: int = 20
+const BITE_RANGE: float = 2.2
+const CROWD_PROTECTION: int = 24
+const BREACH_WINDUP: int = 45
+const BREACH_CYCLE: int = 90
+const BREACH_DAMAGE: int = 40
+const VISIBLE_WARNING_TICKS: int = 60
+const STALL_TICKS: int = 1200
+const SUPPLY_STAND_TICKS: int = 120
+const SUPPLY_SAFE_DISTANCE: float = 8.0
+
+var phase: String = "preparation"
+var outcome: String = ""
+var wave: int = 0
+var headshots: int = 0
+var damage_taken: int = 0
+var _settings: Dictionary = {}
+var _test_overrides: bool = false
+var _zombie_director: ZombieDirector
+var _preparation_ticks: int = 0
+var _active_ticks: int = 0
+var _duration_ticks: int = 0
+var _interval_ticks: int = 0
+var _wave_start: int = 0
+var _wave_window_ticks: int = 0
+var _wave_planned: int = 0
+var _wave_attempted: int = 0
+var _wave_spawned: int = 0
+var _wave_skipped: int = 0
+var _planned: int = 0
+var _spawned: int = 0
+var _skipped: int = 0
+var _pending_spawn: Dictionary = {}
+var _attacks: Dictionary[int, Dictionary] = {}
+var _attack_deadlines: Dictionary[int, int] = {}
+var _bite_protection_deadline: int = -1
+var _progress: Dictionary[int, Dictionary] = {}
+var _last_spawn_tick: int = -1
+var _spawn_unavailable_since: int = -1
+var _last_owner_hurt_tick: int = -10000
+var _supply_ticks: int = 0
+var _supply_used_wave: int = 0
+var _supply_status: String = "unavailable"
+var _supply_position: Vector3 = Vector3.ZERO
+var _survival_event_sequence: int = 0
+
+
+func get_match_mode() -> String:
+	return "survival"
+
+
+func configure_match(data: VoxelData, arena: Dictionary, local_name: String = "Player") -> Dictionary:
+	return configure_survival(data, arena, _settings if not _settings.is_empty() else SETTINGS.defaults(), local_name, _test_overrides)
+
+
+func configure_survival(data: VoxelData, arena: Dictionary, settings: Dictionary,
+		local_name: String = "Player", test_overrides: bool = false) -> Dictionary:
+	var checked: Dictionary = SETTINGS.validate(settings, test_overrides)
+	if not checked.ok:
+		return checked
+	if data == null or typeof(arena.get("owner_spawn")) != TYPE_VECTOR3 \
+			or typeof(arena.get("supply_point")) != TYPE_VECTOR3:
+		return {"ok": false, "error": "Survival requires authored owner spawn and supply point"}
+	if not (arena.owner_spawn as Vector3).is_finite() or not (arena.supply_point as Vector3).is_finite():
+		return {"ok": false, "error": "Survival spawn and supply must be finite"}
+	var profile: String = profile_version if PROFILES.valid(profile_version) else "0.75"
+	var candidate: MatchSimulation = SIMULATION.new()
+	var configured: Dictionary = candidate.configure(data, profile, "sandbox")
+	if not configured.ok:
+		return configured
+	candidate.friendly_fire = false
+	var added: Dictionary = candidate.add_actor(local_name, 2, 7197, Vector3.INF, OWNER_ID)
+	if not added.ok:
+		return added
+	var point: Vector3 = arena.owner_spawn + Vector3.UP * SPAWN_CLEARANCE_EPSILON
+	if not _supported_spawn(data, point):
+		return {"ok": false, "error": "Survival owner spawn requires solid support"}
+	var spawned: Dictionary = candidate.spawn_actor(OWNER_ID, 0, _starting_weapon, point)
+	if not spawned.ok:
+		return spawned
+	_face_front(candidate.get_actor(OWNER_ID), data.dimensions)
+	for id: int in ZOMBIE_IDS:
+		var registered: Dictionary = candidate.register_zombie_slot(id)
+		if not registered.ok:
+			return registered
+	var director: ZombieDirector = ZOMBIES.new()
+	var authored: Dictionary = arena.duplicate(true)
+	authored.breach_damage = BREACH_DAMAGE
+	authored.breach_windup_ticks = BREACH_WINDUP
+	authored.breach_cycle_ticks = BREACH_CYCLE
+	director.configure(data, authored, ZOMBIE_IDS.duplicate())
+	simulation = candidate
+	_director = null
+	_zombie_director = director
+	_arena = authored
+	_baseline_blocks = data.blocks.duplicate()
+	_baseline_dimensions = data.dimensions
+	_baseline_water_level = data.water_level
+	_baseline_wade_level = data.wade_origin_level
+	_match_profile = profile
+	_local_name = local_name
+	_settings = checked.settings.duplicate(true)
+	_test_overrides = test_overrides
+	_reset_view_state()
+	_reset_survival()
+	update(0.0)
+	_ingest_events(simulation.drain_events())
+	return {"ok": true, "error": "", "data": data, "arena": _arena.duplicate(true), "settings": _settings.duplicate(true)}
+
+
+func restart_match() -> Dictionary:
+	if simulation == null or _baseline_blocks.is_empty() or simulation.epoch >= RULES.MAX_UINT32:
+		return {"ok": false, "error": "No restartable survival match"}
+	var data: VoxelData = DATA.new()
+	var cleared: Error = data.clear(_baseline_dimensions, simulation.epoch + 1)
+	if cleared != OK:
+		return {"ok": false, "error": "Survival map reset failed"}
+	data.blocks = _baseline_blocks.duplicate()
+	data.water_level = _baseline_water_level
+	data.wade_origin_level = _baseline_wade_level
+	_starting_weapon = simulation.get_actor(OWNER_ID).weapon
+	profile_version = _match_profile
+	return configure_survival(data, _arena.duplicate(true), _settings.duplicate(true), _local_name, _test_overrides)
+
+
+func _reset_survival() -> void:
+	phase = "preparation" if int(_settings.preparation_seconds) > 0 else "active"
+	outcome = ""
+	wave = 0
+	headshots = 0
+	damage_taken = 0
+	_preparation_ticks = 0
+	_active_ticks = 0
+	_duration_ticks = int(_settings.duration_seconds) * RULES.HZ
+	_interval_ticks = int(_settings.wave_interval_seconds) * RULES.HZ
+	match_duration_ticks = _duration_ticks
+	_wave_start = 0
+	_wave_window_ticks = mini(SETTINGS.SPAWN_WINDOW_SECONDS * RULES.HZ, _interval_ticks)
+	_wave_planned = 0
+	_wave_attempted = 0
+	_wave_spawned = 0
+	_wave_skipped = 0
+	_planned = 0
+	_spawned = 0
+	_skipped = 0
+	_pending_spawn.clear()
+	_attacks.clear()
+	_attack_deadlines.clear()
+	_bite_protection_deadline = -1
+	_progress.clear()
+	_last_spawn_tick = -1
+	_spawn_unavailable_since = -1
+	_last_owner_hurt_tick = -10000
+	_supply_ticks = 0
+	_supply_used_wave = 0
+	_supply_status = "unavailable"
+	_supply_position = _arena.supply_point
+	_survival_event_sequence = 0
+
+
+func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
+		tool: int = 255, weapon: int = 255) -> Dictionary:
+	var empty: Array[Dictionary] = []
+	if simulation == null:
+		return {"ok": false, "error": "Survival is not configured", "tick": -1, "transactions": empty, "presentation_refresh_required": false}
+	if paused or finished:
+		update(0.0)
+		return {"ok": true, "error": "", "advanced": false, "tick": simulation.tick, "transactions": empty, "presentation_refresh_required": false}
+	var owner: SharedPlayerState = simulation.get_actor(OWNER_ID)
+	if owner == null or _input_sequence >= RULES.MAX_UINT32:
+		return {"ok": false, "error": "Survival owner/input sequence unavailable", "tick": simulation.tick, "transactions": empty, "presentation_refresh_required": false}
+	var command: PlayerRules.Command = RULES.Command.new()
+	command.sequence = _input_sequence + 1
+	command.spawn_generation = owner.spawn_generation
+	command.buttons = buttons | (RULES.Buttons.RELOAD if _pending_reload else 0)
+	command.move = move
+	command.yaw = yaw
+	command.pitch = pitch
+	command.tool = tool if tool != 255 else _pending_tool
+	# A survival life keeps its chosen class; no future life exists to change it.
+	command.weapon = 255
+	if weapon not in [0, 1, 2, 255] or not command.valid():
+		return {"ok": false, "error": "Invalid survival input", "tick": simulation.tick, "transactions": empty, "presentation_refresh_required": false}
+	if not owner.is_alive():
+		_finish("defeat", "death")
+		_ingest_events(simulation.drain_events())
+		update(0.0)
+		return {"ok": true, "error": "", "advanced": false, "tick": simulation.tick, "transactions": empty, "presentation_refresh_required": false}
+	if _pending_color >= 0:
+		simulation.set_block_color(OWNER_ID, _pending_color)
+	_input_sequence = command.sequence
+	_clear_pending_intent()
+	if phase == "active":
+		_advance_spawns()
+	var commands: Dictionary = _zombie_director.commands(simulation) if _zombie_director != null else {}
+	commands[OWNER_ID] = command
+	simulation.step_fixed(commands)
+	var proposals: Array[Dictionary] = _zombie_director.drain_attack_intents() if _zombie_director != null else []
+	_advance_attacks(proposals)
+	if phase == "preparation":
+		_preparation_ticks += 1
+		if _preparation_ticks >= int(_settings.preparation_seconds) * RULES.HZ:
+			phase = "active"
+	elif phase == "active":
+		_active_ticks += 1
+		if _active_ticks >= _duration_ticks:
+			_close_window()
+			phase = "cleanup"
+	var events: Array[Dictionary] = simulation.drain_events()
+	_track_survival_events(events)
+	_ingest_events(events)
+	_advance_supply()
+	_ingest_events(simulation.drain_events())
+	if not owner.is_alive():
+		_finish("defeat", "death")
+	elif phase == "cleanup" and _live_count() == 0:
+		if _spawned > 0 and not (_wave_spawned == 0 and _spawn_unavailable_since >= 0):
+			_finish("win", "survived")
+		else:
+			_finish("interrupted", "spawn_unavailable")
+	elif phase in ["active", "cleanup"]:
+		_check_stalls()
+	var transactions: Array[Dictionary] = simulation.drain_transactions()
+	var refresh_required: bool = not transactions.is_empty() and bool(transactions[-1].get("refresh_required", false))
+	update(0.0)
+	return {"ok": true, "error": "", "advanced": true, "tick": simulation.tick,
+		"transactions": transactions, "presentation_refresh_required": refresh_required}
+
+
+func _advance_spawns() -> void:
+	# Exactly one allocation attempt per tick. Expired windows never accumulate
+	# debt, even after cap pressure, pause, or a deferred navigation budget.
+	if _active_ticks >= _duration_ticks:
+		return
+	if _active_ticks % _interval_ticks == 0:
+		_close_window()
+		wave += 1
+		_wave_start = _active_ticks
+		_wave_planned = SETTINGS.wave_quota(_settings, _active_ticks)
+		_wave_attempted = 0
+		_wave_spawned = 0
+		_wave_skipped = 0
+		_planned += _wave_planned
+		_supply_ticks = 0
+		_emit_survival_event("survival_wave", {"wave": wave, "quota": _wave_planned, "up_to": true}, simulation.tick + 1)
+	var elapsed: int = _active_ticks - _wave_start
+	if elapsed >= _wave_window_ticks:
+		_close_window()
+		return
+	if not _pending_spawn.is_empty():
+		if simulation.tick + 1 >= int(_pending_spawn.ready_tick):
+			_commit_spawn(_pending_spawn)
+			_pending_spawn.clear()
+		return
+	# Navigation may defer work within an allocation interval, but missed
+	# intervals expire instead of issuing a catch-up burst on later ticks.
+	while _wave_attempted + 1 < _wave_planned:
+		var next_due: int = floori(float((_wave_attempted + 1) * _wave_window_ticks) / float(_wave_planned))
+		if next_due > elapsed:
+			break
+		_wave_attempted += 1
+		_skip_spawn()
+	if _wave_attempted >= _wave_planned:
+		return
+	var due: int = int(floorf(float(_wave_attempted * _wave_window_ticks) / float(_wave_planned)))
+	if elapsed < due:
+		return
+	if _live_count() >= int(_settings.live_limit):
+		_wave_attempted += 1
+		_skip_spawn()
+		return
+	var candidate: Dictionary = _zombie_director.choose_spawn(simulation, OWNER_ID, 12.0) if _zombie_director != null else {"ok": false}
+	if not bool(candidate.get("ok", false)):
+		if bool(candidate.get("budget_deferred", false)) or str(candidate.get("error", "")) in ["budget_deferred", "budget_exhausted"]:
+			return
+		_wave_attempted += 1
+		_skip_spawn()
+		_note_spawn_failure()
+		return
+	_wave_attempted += 1
+	if not bool(candidate.get("route_valid", false)) or not _safe_spawn(candidate.point):
+		_skip_spawn()
+		_note_spawn_failure()
+		return
+	if bool(candidate.get("hidden", false)):
+		_commit_spawn(candidate)
+	else:
+		_pending_spawn = candidate.duplicate(true)
+		_pending_spawn.ready_tick = simulation.tick + 1 + VISIBLE_WARNING_TICKS
+		_emit_survival_event("zombie_spawn_warning", {"position": candidate.point,
+			"seconds": float(VISIBLE_WARNING_TICKS) / RULES.HZ, "wave": wave}, simulation.tick + 1)
+
+
+func _commit_spawn(candidate: Dictionary) -> void:
+	var point: Vector3 = candidate.point
+	if not _safe_spawn(point) or _live_count() >= int(_settings.live_limit):
+		_skip_spawn()
+		if _live_count() < int(_settings.live_limit):
+			_note_spawn_failure()
+		return
+	if int(candidate.get("map_sequence", simulation.data.map_sequence)) != simulation.data.map_sequence:
+		var route: Dictionary = _zombie_director.route_valid(point, simulation.get_actor(OWNER_ID).feet(), simulation) if _zombie_director != null else {"ok": false}
+		if not bool(route.get("ok", false)):
+			_skip_spawn()
+			_note_spawn_failure()
+			return
+	var free_id: int = -1
+	for id: int in ZOMBIE_IDS:
+		if not simulation.get_actor(id).is_alive():
+			free_id = id
+			break
+	if free_id < 0:
+		_skip_spawn()
+		return
+	var result: Dictionary = simulation.spawn_zombie_slot(free_id, point)
+	if not result.ok:
+		_skip_spawn()
+		return
+	_face_front(simulation.get_actor(free_id), simulation.data.dimensions)
+	_attacks.erase(free_id)
+	_attack_deadlines.erase(free_id)
+	_progress[free_id] = {"position": point, "tick": simulation.tick + 1}
+	_wave_spawned += 1
+	_spawned += 1
+	_last_spawn_tick = simulation.tick + 1
+	_spawn_unavailable_since = -1
+
+
+func _note_spawn_failure() -> void:
+	if _spawn_unavailable_since < 0:
+		_spawn_unavailable_since = simulation.tick + 1
+
+
+func _safe_spawn(point: Vector3) -> bool:
+	var owner: SharedPlayerState = simulation.get_actor(OWNER_ID)
+	return point.is_finite() and point.distance_to(owner.feet()) >= 12.0 \
+		and _supported_spawn(simulation.data, point) and simulation._spawn_clear(point)
+
+
+func _skip_spawn() -> void:
+	_wave_skipped += 1
+	_skipped += 1
+
+
+func _close_window() -> void:
+	if _wave_planned == 0:
+		return
+	# All quota not actually admitted expires here; no skipped lives enter a
+	# later wave. Counting once uses the remaining quota rather than attempts.
+	var remaining: int = maxi(0, _wave_planned - _wave_spawned - _wave_skipped)
+	_wave_skipped += remaining
+	_skipped += remaining
+	_wave_attempted = _wave_planned
+	_pending_spawn.clear()
+
+
+func _advance_attacks(proposals: Array[Dictionary]) -> void:
+	var proposed: Dictionary[int, Dictionary] = {}
+	for proposal: Dictionary in proposals:
+		var id: int = int(proposal.get("actor_id", 0))
+		if id in ZOMBIE_IDS and not proposed.has(id):
+			proposed[id] = proposal
+	for id: int in ZOMBIE_IDS:
+		var actor: SharedPlayerState = simulation.get_actor(id)
+		if actor == null or not actor.is_alive() or not proposed.has(id):
+			_attacks.erase(id)
+			continue
+		var proposal: Dictionary = proposed[id]
+		var kind: String = str(proposal.get("kind", ""))
+		if not _valid_attack(actor, proposal):
+			_attacks.erase(id)
+			continue
+		if _attacks.has(id) and (_attacks[id].kind != kind or _attacks[id].get("cell") != proposal.get("cell")):
+			_attacks.erase(id)
+		if not _attacks.has(id):
+			if simulation.tick < int(_attack_deadlines.get(id, -1)):
+				continue
+			var windup: int = BITE_WINDUP if kind == "bite" else BREACH_WINDUP
+			_attacks[id] = {"kind": kind, "cell": proposal.get("cell"), "started": simulation.tick,
+				"deadline": simulation.tick + windup, "windup": windup, "generation": actor.spawn_generation}
+			_emit_survival_event("zombie_attack_started", {"actor_id": id,
+				"kind": kind, "position": actor.feet(), "windup_seconds": float(windup) / RULES.HZ})
+		var attack: Dictionary = _attacks[id]
+		if simulation.tick < int(attack.deadline):
+			continue
+		_attacks.erase(id)
+		_attack_deadlines[id] = int(attack.started) + (BITE_CYCLE if kind == "bite" else BREACH_CYCLE)
+		var confirmed: Array[Dictionary] = []
+		if kind == "bite" and simulation.tick >= _bite_protection_deadline:
+			confirmed = simulation.resolve_zombie_bite(id, OWNER_ID, BITE_DAMAGE, BITE_RANGE)
+			if not MatchSimulation.events_of(confirmed, "hurt").is_empty():
+				_bite_protection_deadline = simulation.tick + CROWD_PROTECTION
+		elif kind == "breach":
+			confirmed = simulation.resolve_zombie_breach(id, proposal.cell, BREACH_DAMAGE, BREACH_CYCLE)
+		if not confirmed.is_empty():
+			_progress[id] = {"position": actor.feet(), "tick": simulation.tick}
+
+
+func _valid_attack(actor: SharedPlayerState, proposal: Dictionary) -> bool:
+	var kind: String = str(proposal.get("kind", ""))
+	if kind == "bite":
+		var owner: SharedPlayerState = simulation.get_actor(OWNER_ID)
+		if not owner.is_alive() or actor.feet().distance_to(owner.feet()) > BITE_RANGE:
+			return false
+		var origin: Vector3 = actor.feet() + Vector3.UP * 1.1
+		var endpoint: Vector3 = owner.feet() + Vector3.UP * 1.1
+		var difference: Vector3 = endpoint - origin
+		var hit: Dictionary = simulation.data.cast_voxel(origin, difference, difference.length())
+		return not bool(hit.get("hit", false)) or origin.distance_to(hit.position) >= difference.length() - 0.05
+	if kind == "breach" and typeof(proposal.get("cell")) == TYPE_VECTOR3I:
+		var cell: Vector3i = proposal.cell
+		if cell.y <= 1 or not simulation.data.is_in_bounds(cell) or simulation.data.get_block(cell) == 0 \
+				or not SIMULATION.in_reach(actor, cell):
+			return false
+		var origin: Vector3 = actor.feet() + Vector3.UP * 1.1
+		var difference: Vector3 = Vector3(cell) + Vector3.ONE * 0.5 - origin
+		var hit: Dictionary = simulation.data.cast_voxel(origin, difference, difference.length() + 0.1)
+		return bool(hit.get("hit", false)) and hit.cell == cell
+	return false
+
+
+func _track_survival_events(events: Array[Dictionary]) -> void:
+	for event: Dictionary in events:
+		if int(event.get("owner_id", 0)) != OWNER_ID:
+			continue
+		if event.type == "hurt":
+			damage_taken += int(event.amount)
+			_last_owner_hurt_tick = simulation.tick
+		elif event.type == "hit_confirmed" and event.part == "head":
+			headshots += 1
+
+
+func _advance_supply() -> void:
+	var owner: SharedPlayerState = simulation.get_actor(OWNER_ID)
+	var between_windows: bool = phase == "cleanup" or (phase == "active" and _active_ticks - _wave_start >= _wave_window_ticks)
+	if not owner.is_alive() or not between_windows or wave == 0:
+		_supply_ticks = 0
+		_supply_status = "unavailable"
+		return
+	if _supply_used_wave >= wave:
+		_supply_ticks = 0
+		_supply_status = "used"
+		return
+	var safe: bool = simulation.tick - _last_owner_hurt_tick >= SUPPLY_STAND_TICKS
+	for id: int in ZOMBIE_IDS:
+		var actor: SharedPlayerState = simulation.get_actor(id)
+		if actor.is_alive() and actor.feet().distance_to(owner.feet()) < SUPPLY_SAFE_DISTANCE:
+			safe = false
+			break
+	if not safe:
+		_supply_ticks = 0
+		_supply_status = "unsafe"
+		return
+	_supply_status = "ready"
+	if owner.feet().distance_to(_supply_position) >= SUPPLY_RADIUS \
+			or Vector2(owner.motion.native_velocity.x, owner.motion.native_velocity.z).length() > 0.02:
+		_supply_ticks = 0
+		return
+	_supply_ticks += 1
+	_supply_status = "progress"
+	if _supply_ticks >= SUPPLY_STAND_TICKS:
+		simulation.survival_supply(OWNER_ID)
+		_supply_used_wave = wave
+		_supply_ticks = 0
+		_supply_status = "used"
+
+
+func _check_stalls() -> void:
+	for id: int in ZOMBIE_IDS:
+		var actor: SharedPlayerState = simulation.get_actor(id)
+		if not actor.is_alive():
+			_progress.erase(id)
+			continue
+		var progress: Dictionary = _progress.get(id, {"position": actor.feet(), "tick": simulation.tick})
+		if actor.feet().distance_to(progress.position) >= 0.6 or _attacks.has(id):
+			_progress[id] = {"position": actor.feet(), "tick": simulation.tick}
+		elif simulation.tick - int(progress.tick) >= STALL_TICKS:
+			_finish("interrupted", "route_unavailable")
+			return
+	# Failure to admit any enemy is a technical failure, never a free victory.
+	if phase == "active" and _live_count() == 0 and (_spawned == 0 and _active_ticks >= STALL_TICKS \
+			or _spawn_unavailable_since >= 0 and simulation.tick - _spawn_unavailable_since >= STALL_TICKS):
+		_finish("interrupted", "spawn_unavailable")
+
+
+func _live_count() -> int:
+	var count: int = 0
+	if simulation != null:
+		for id: int in ZOMBIE_IDS:
+			if simulation.get_actor(id).is_alive():
+				count += 1
+	return count
+
+
+func _finish(result: String, reason: String) -> void:
+	if finished:
+		return
+	_close_window()
+	finished = true
+	paused = true
+	phase = "finished"
+	outcome = result
+	finish_reason = reason
+	winning_team = 0 if result == "win" else -1
+	_supply_ticks = 0
+	_attacks.clear()
+	for id: int in simulation.actors:
+		simulation.clear_controls(id)
+	_emit_survival_event("survival_finished", {"outcome": outcome, "reason": finish_reason,
+		"wave": wave, "spawned": _spawned, "skipped": _skipped, "time": float(_active_ticks) / RULES.HZ})
+	objectives_changed.emit()
+	if result == "win":
+		round_won.emit(0)
+
+
+func _emit_survival_event(kind: String, details: Dictionary, event_tick: int = -1) -> void:
+	_survival_event_sequence += 1
+	var event: Dictionary = details.duplicate(true)
+	event.merge({"type": kind, "epoch": simulation.epoch, "tick": maxi(0, simulation.tick) if event_tick < 0 else event_tick,
+		"owner_id": 0, "spawn_generation": 0, "mode": "survival",
+		"event_id": "%d:survival:%d" % [simulation.epoch, _survival_event_sequence]}, true)
+	_queue_presentation(event)
+	_append_log(event)
+
+
+func get_survival_state() -> Dictionary:
+	var remaining: float = maxf(0.0, float(_duration_ticks - _active_ticks) / RULES.HZ)
+	var preparation_remaining: float = maxf(0.0, float(int(_settings.get("preparation_seconds", 20)) * RULES.HZ - _preparation_ticks) / RULES.HZ)
+	return {"phase": phase, "outcome": outcome, "paused": paused, "finished": finished,
+		"finish_reason": finish_reason, "time_remaining": remaining, "preparation_remaining": preparation_remaining,
+		"elapsed_seconds": float(_active_ticks) / RULES.HZ, "wave": wave,
+		"wave_planned": _wave_planned, "wave_spawned": _wave_spawned, "wave_skipped": _wave_skipped,
+		"planned": _planned, "spawned": _spawned, "skipped": _skipped, "live": _live_count(),
+		"live_limit": int(_settings.get("live_limit", SETTINGS.MAX_LIVE)), "quota_up_to": true,
+		"next_wave_seconds": maxf(0.0, float(_interval_ticks - (_active_ticks - _wave_start)) / RULES.HZ) if phase == "active" else 0.0,
+		"window_remaining": maxf(0.0, float(_wave_window_ticks - (_active_ticks - _wave_start)) / RULES.HZ) if phase == "active" else 0.0,
+		"kills": player_kills, "headshots": headshots, "damage_taken": damage_taken,
+		"supply_position": _supply_position, "supply_progress": float(_supply_ticks) / SUPPLY_STAND_TICKS,
+		"supply_available": _supply_status in ["ready", "progress"], "supply_status": _supply_status,
+		"supply_used_wave": _supply_used_wave, "settings": _settings.duplicate(true)}
+
+
+func get_diagnostics() -> Dictionary:
+	var result: Dictionary = get_survival_state()
+	result.merge({"tick": simulation.tick if simulation != null else -1,
+		"bot_count": _live_count(), "slot_count": ZOMBIE_IDS.size(),
+		"elapsed_ticks": _active_ticks, "preparation_ticks": _preparation_ticks,
+		"pending_spawn": not _pending_spawn.is_empty(), "presentation_overflow": _presentation_overflow,
+		"bots": _zombie_director.get_diagnostics() if _zombie_director != null else {}}, true)
+	return result
+
+
+func update(delta: float) -> void:
+	super.update(delta)
+	mode = "survival"
+	round_remaining = maxf(0.0, float(_duration_ticks - _active_ticks) / RULES.HZ)
+	respawn_remaining = 0.0
+	team_scores = [player_kills, 0]
+	capture_limit = 0
+
+
+func _mirror_targets() -> void:
+	targets.clear()
+	for id: int in ZOMBIE_IDS:
+		var actor: SharedPlayerState = simulation.get_actor(id)
+		if actor == null:
+			continue
+		var alive: bool = actor.is_alive()
+		var moving: bool = alive and Vector2(actor.motion.native_velocity.x, actor.motion.native_velocity.z).length_squared() > 0.000001
+		var attack: Dictionary = _attacks.get(id, {})
+		var attack_phase: float = clampf(float(simulation.tick - int(attack.get("started", 0))) / float(attack.get("windup", 1)), 0.0, 1.0) if not attack.is_empty() else 0.0
+		targets.append({"id": id, "name": actor.player_name, "kind": "zombie", "team": 1,
+			"registry_kind": actor.registry_kind, "health": -1, "health_known": false, "alive": alive,
+			"slot_alive": alive, "kills": actor.kills, "deaths": actor.deaths, "score": actor.score,
+			"position": actor.feet(), "feet": actor.feet(), "spawn_generation": actor.spawn_generation,
+			"native_velocity": actor.motion.native_velocity, "yaw": actor.yaw, "pitch": actor.pitch,
+			"crouch": actor.motion.crouch, "crouching": actor.motion.crouch, "sprinting": false,
+			"wading": actor.motion.wading, "grounded": actor.motion.grounded, "moving": moving,
+			"state": "dead" if not alive else ("walking" if moving else "standing"),
+			"weapon": 0, "tool": 0, "displayed_weapon": 0, "displayed_tool": 0,
+			"aiming": false, "aim_down_state": 0.0, "raise_state": 1.0, "tool_raise": 1.0,
+			"sprint_state": 0.0, "reloading": false, "profile": actor.profile, "phase": session_time,
+			"respawn_remaining": 0.0, "death_crouch": actor.motion.crouch,
+			"death_velocity": actor.motion.native_velocity * 32.0, "carries_intel": false,
+			"attack_phase": attack_phase, "attack_kind": str(attack.get("kind", "")), "visual_only": true})
+
+
+func select_weapon(index: int) -> void:
+	if simulation != null and paused and not finished and simulation.tick < 0 and index in [0, 1, 2]:
+		_starting_weapon = index
+		configure_survival(simulation.data, _arena.duplicate(true), _settings.duplicate(true), _local_name, _test_overrides)
+
+
+# Deliberate replacement of all TDM policy extension points.
+func _respawn_ready_actors() -> void: pass
+func _restock_at_supply() -> void: pass
+func _recount_scores() -> void: pass

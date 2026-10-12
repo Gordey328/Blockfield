@@ -3,6 +3,7 @@ extends RefCounted
 ## Curated offline launch choices. Paths are authored here, never read from settings.
 
 const WEAPON_PROFILES = preload("res://simulation/weapon_profiles.gd")
+const SURVIVAL_SETTINGS = preload("res://gameplay/survival_settings.gd")
 const SETTINGS_PATH: String = "user://settings.cfg"
 const SETTINGS_SECTION: String = "play_selection"
 const DEFAULT_CONFIGURATION: Dictionary = {"mode": "tdm", "map_id": "crossroads", "weapon": 0}
@@ -10,7 +11,7 @@ const PREVIEW_ROOT: String = "res://assets/ui/menu/"
 
 static func entries() -> Array[Dictionary]:
 	var training_modes: Array[String] = ["training"]
-	var battle_modes: Array[String] = ["tdm"]
+	var battle_modes: Array[String] = ["tdm", "survival"]
 	return [
 		{"id": "crossroads", "name_ru": "Crossroads", "name_en": "Crossroads",
 			"description_ru": "Компактная арена с укрытиями и обходными путями. Вы и два союзника против трёх ботов.",
@@ -39,7 +40,7 @@ static func entries() -> Array[Dictionary]:
 
 static func available_for(mode: String) -> Array[Dictionary]:
 	var choices: Array[Dictionary] = []
-	if mode not in ["tdm", "training"]:
+	if mode not in ["tdm", "training", "survival"]:
 		return choices
 	for entry: Dictionary in entries():
 		if (entry.modes as Array).has(mode) and _resource_available(entry):
@@ -53,9 +54,9 @@ static func get_entry(id: String) -> Dictionary:
 	return {}
 
 static func validate(configuration: Dictionary) -> Dictionary:
-	# Return only the three bounded values. Extra values can never become paths,
-	# resource-pack requests or simulation options at the scene boundary.
-	if typeof(configuration.get("mode")) != TYPE_STRING or str(configuration.mode) not in ["tdm", "training"]:
+	# Whitelist launch identity and the separately validated survival settings.
+	# Extra values can never become resource paths or lab cheats.
+	if typeof(configuration.get("mode")) != TYPE_STRING or str(configuration.mode) not in ["tdm", "training", "survival"]:
 		return _invalid("Choose a supported offline mode.")
 	if typeof(configuration.get("map_id")) != TYPE_STRING:
 		return _invalid("Choose a map from the catalog.")
@@ -66,8 +67,22 @@ static func validate(configuration: Dictionary) -> Dictionary:
 		return _invalid("The selected map is missing from this build.")
 	if typeof(configuration.get("weapon")) != TYPE_INT or not WEAPON_PROFILES.valid("0.75", int(configuration.weapon)):
 		return _invalid("Choose rifle, SMG or shotgun.")
-	return {"ok": true, "error": "", "configuration": {
-		"mode": str(configuration.mode), "map_id": str(configuration.map_id), "weapon": int(configuration.weapon)}}
+	var canonical: Dictionary = {"mode": str(configuration.mode), "map_id": str(configuration.map_id), "weapon": int(configuration.weapon)}
+	if canonical.mode == "survival":
+		var raw: Variant = configuration.get("survival", SURVIVAL_SETTINGS.defaults())
+		if not raw is Dictionary: return _invalid("Invalid wave settings.")
+		var checked: Dictionary = SURVIVAL_SETTINGS.validate(raw)
+		if not checked.ok: return _invalid(str(checked.error))
+		canonical.survival = checked.settings
+	return {"ok": true, "error": "", "configuration": canonical}
+
+static func load_survival_settings() -> Dictionary:
+	var settings: ConfigFile = ConfigFile.new()
+	if settings.load(SETTINGS_PATH) != OK: return SURVIVAL_SETTINGS.defaults()
+	var raw: Variant = settings.get_value(SETTINGS_SECTION, "survival", SURVIVAL_SETTINGS.defaults())
+	if not raw is Dictionary: return SURVIVAL_SETTINGS.defaults()
+	var checked: Dictionary = SURVIVAL_SETTINGS.validate(raw)
+	return checked.settings if checked.ok else SURVIVAL_SETTINGS.defaults()
 
 static func load_selection() -> Dictionary:
 	var settings: ConfigFile = ConfigFile.new()
@@ -77,6 +92,7 @@ static func load_selection() -> Dictionary:
 		"mode": settings.get_value(SETTINGS_SECTION, "mode", DEFAULT_CONFIGURATION.mode),
 		"map_id": settings.get_value(SETTINGS_SECTION, "map_id", DEFAULT_CONFIGURATION.map_id),
 		"weapon": settings.get_value(SETTINGS_SECTION, "weapon", DEFAULT_CONFIGURATION.weapon)}
+	if candidate.mode == "survival": candidate.survival = load_survival_settings()
 	var result: Dictionary = validate(candidate)
 	return result.configuration if bool(result.ok) else DEFAULT_CONFIGURATION.duplicate(true)
 
@@ -92,6 +108,8 @@ static func save_selection(configuration: Dictionary) -> Error:
 		return loaded
 	for key: String in ["mode", "map_id", "weapon"]:
 		settings.set_value(SETTINGS_SECTION, key, result.configuration[key])
+	if result.configuration.mode == "survival":
+		settings.set_value(SETTINGS_SECTION, "survival", result.configuration.survival)
 	return settings.save(SETTINGS_PATH)
 
 static func weapons(profile: String = "0.75") -> Array[Dictionary]:

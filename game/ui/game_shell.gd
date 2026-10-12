@@ -12,6 +12,9 @@ const SELECTED_PANEL: Color = Color("163c40")
 const BORDER: Color = Color("294052")
 
 var _selection: Dictionary = {"mode":"tdm", "map_id":"crossroads", "weapon":0}
+const SURVIVAL_SETTINGS = preload("res://gameplay/survival_settings.gd")
+var _survival_settings: Dictionary = {}
+var _growth_preview: Label
 var _last_maps: Dictionary[String, String] = {"tdm":"crossroads", "training":"lab"}
 var _page: String = "home"
 var _active_tab: String = "maps"
@@ -61,6 +64,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_load_profile()
 	var saved: Dictionary = CATALOG.load_selection()
+	_survival_settings = CATALOG.load_survival_settings()
 	var checked: Dictionary = CATALOG.validate(saved)
 	if bool(checked.get("ok", false)):
 		_selection = checked.configuration.duplicate(true)
@@ -80,10 +84,11 @@ func show_home() -> void:
 	if _is_built: _build_page()
 
 func show_setup(mode: String = "tdm") -> void:
-	var requested_mode: String = mode if mode in ["tdm", "training"] else "tdm"
+	var requested_mode: String = mode if mode in ["tdm", "training", "survival"] else "tdm"
 	_available_maps = CATALOG.available_for(requested_mode)
 	_selection.mode = requested_mode
-	_selection.map_id = _last_maps.get(requested_mode, "crossroads" if requested_mode == "tdm" else "lab")
+	_selection.map_id = _last_maps.get(requested_mode, "lab" if requested_mode == "training" else "crossroads")
+	if requested_mode == "survival": _selection.survival = _survival_settings.duplicate(true)
 	var checked: Dictionary = CATALOG.validate(_selection)
 	if not bool(checked.get("ok", false)) and not _available_maps.is_empty():
 		_selection.map_id = str(_available_maps[0].id)
@@ -117,6 +122,27 @@ func select_weapon(index: int) -> void:
 
 func get_selection() -> Dictionary:
 	return _selection.duplicate(true)
+
+func set_survival_settings(raw: Dictionary) -> bool:
+	var checked: Dictionary = SURVIVAL_SETTINGS.validate(raw)
+	if not checked.ok: return false
+	_survival_settings = checked.settings
+	if str(_selection.mode) == "survival":
+		_selection.survival = _survival_settings.duplicate(true)
+		_save_valid_selection()
+		_refresh_selection()
+	return true
+
+func _set_wave_option(key: String, value: Variant) -> void:
+	var candidate: Dictionary = _survival_settings.duplicate(true)
+	candidate[key] = value
+	set_survival_settings(candidate)
+
+func _mode_title() -> String:
+	match str(_selection.mode):
+		"tdm": return _ui("Бой 3×3", "Battle 3×3")
+		"survival": return _ui("Волны зомби", "Zombie waves")
+		_: return _ui("Тренировка", "Training")
 
 func get_display_state() -> Dictionary:
 	var available_ids: Array[String] = []
@@ -292,6 +318,7 @@ func _build_home() -> void:
 		copy.add_child(intro)
 	var play: Button = _button("Play", _ui("Играть  →", "Play  →"), func() -> void: show_setup("tdm"), true)
 	copy.add_child(play)
+	copy.add_child(_button("Survival", _ui("Волны зомби", "Zombie waves"), func() -> void: show_setup("survival")))
 	copy.add_child(_button("Training", _ui("Тренировка", "Training"), func() -> void: show_setup("training")))
 	var utilities: GridContainer = GridContainer.new()
 	utilities.columns = 2
@@ -331,7 +358,7 @@ func _build_setup() -> void:
 	title_column.add_theme_constant_override("separation", 2)
 	header.add_child(title_column)
 	title_column.add_child(_label(_ui("Подготовка", "Match setup"), 22 if _mobile else 30))
-	title_column.add_child(_label(_ui("Командный бой 3×3", "Team battle 3×3") if str(_selection.mode) == "tdm" else _ui("Тренировка", "Training"), 13, CombatTheme.ACCENT))
+	title_column.add_child(_label(_mode_title(), 13, CombatTheme.ACCENT))
 	var tabs: HBoxContainer = HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 8)
 	if _mobile and not (_compact and not _portrait):
@@ -339,6 +366,7 @@ func _build_setup() -> void:
 	else:
 		header.add_child(tabs)
 	_maps_button = _button("MapsTab", _ui("Карта", "Map"), func() -> void: _show_tab("maps"))
+	if str(_selection.mode) == "survival": _maps_button.text = _ui("Волны", "Waves")
 	_equipment_button = _button("EquipmentTab", _ui("Снаряжение", "Equipment"), func() -> void: _show_tab("equipment"))
 	_maps_button.toggle_mode = true
 	_equipment_button.toggle_mode = true
@@ -363,8 +391,10 @@ func _build_setup() -> void:
 	_show_tab(_active_tab)
 
 func _build_maps(column: VBoxContainer) -> void:
-	if not _mobile: column.add_child(_label(_ui("Карта", "Map"), 19))
-	if not _compact:
+	var survival: bool = str(_selection.mode) == "survival"
+	if survival: _build_wave_settings(column)
+	if not _mobile and not survival: column.add_child(_label(_ui("Карта", "Map"), 19))
+	if not _compact and not survival:
 		var featured: PanelContainer = _panel()
 		column.add_child(featured)
 		var preview_column: VBoxContainer = VBoxContainer.new()
@@ -419,6 +449,54 @@ func _build_maps(column: VBoxContainer) -> void:
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		column.add_child(hint)
 
+func _build_wave_settings(column: VBoxContainer) -> void:
+	column.add_child(_label(_ui("Настройки волн", "Wave settings"), 19, CombatTheme.ACCENT))
+	_wave_number(column, "WaveDurationMinutes", _ui("Выжить, минут", "Survive, minutes"), "duration_seconds", 1, 30, 1, 60.0)
+	_wave_number(column, "WaveZombieCount", _ui("Зомби на волну, до", "Zombies per wave, up to"), "zombies_per_wave", 1, 24, 1)
+	_wave_number(column, "WaveInterval", _ui("Интервал волн, секунд", "Wave interval, seconds"), "wave_interval_seconds", 30, 120, 5)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+	var label: Label = _label(_ui("Рост со временем", "Growth with time"), 14)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var choice: OptionButton = OptionButton.new()
+	choice.name = "WaveGrowthMode"
+	choice.custom_minimum_size = Vector2(140, TARGET_CSS)
+	for title: String in [_ui("Постоянно", "Constant"), _ui("Плавно", "Linear"), _ui("Ступенями", "Steps")]: choice.add_item(title)
+	var modes: Array[String] = ["constant", "linear", "step"]
+	choice.select(maxi(0, modes.find(str(_survival_settings.growth_mode))))
+	choice.item_selected.connect(func(index: int) -> void: _set_wave_option("growth_mode", modes[index]))
+	row.add_child(choice)
+	_wave_number(column, "WaveGrowth", _ui("Прибавка зомби / минуту", "Extra zombies / minute"), "growth_per_minute", 0, 6, 0.5)
+	_growth_preview = _label("", 13, CombatTheme.ACCENT)
+	_growth_preview.name = "WaveGrowthPreview"
+	_growth_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_growth_preview)
+	var hint: Label = _label(_ui("20 секунд на постройку. Волны пересекаются; одновременно до 12 зомби. По таймеру спавн прекращается — добей оставшихся. Зомби выбирают обход или пролом.", "20 seconds to build. Waves overlap; up to 12 zombies alive. Spawning stops at the time limit — clear the survivors. Zombies choose a detour or a breach."), 13, CombatTheme.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(hint)
+
+func _wave_number(column: VBoxContainer, node_name: String, caption: String, key: String,
+		minimum: float, maximum: float, step_value: float, divisor: float = 1.0) -> void:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+	var label: Label = _label(caption, 14)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var number: SpinBox = SpinBox.new()
+	number.name = node_name
+	number.custom_minimum_size = Vector2(104, TARGET_CSS)
+	number.min_value = minimum
+	number.max_value = maximum
+	number.step = step_value
+	number.value = float(_survival_settings[key]) / divisor
+	number.value_changed.connect(func(value: float) -> void:
+		_set_wave_option(key, value if key == "growth_per_minute" else int(round(value * divisor))))
+	row.add_child(number)
+
 func _build_equipment(column: VBoxContainer) -> void:
 	if not _compact: column.add_child(_label(_ui("Основное оружие", "Primary weapon"), 19))
 	for entry: Dictionary in _profile_rows:
@@ -463,7 +541,9 @@ func _build_equipment(column: VBoxContainer) -> void:
 	var tools: Label = _label(_ui("Лопата  ·  50 блоков  ·  3 гранаты", "Spade  ·  50 blocks  ·  3 grenades"), 13, CombatTheme.MUTED)
 	tools.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	kit_column.add_child(tools)
-	var team: Label = _label(_ui("В бою 3×3 — синяя команда. Оружие выдаётся при старте.", "In 3×3 you join blue team. Your weapon is issued at match start.") if str(_selection.mode) == "tdm" else _ui("В тренировке доступны обе командные внешности и тестовые параметры.", "Training offers both team appearances and test options."), 12, CombatTheme.MUTED)
+	var kit_note: String = _ui("В бою 3×3 — синяя команда. Оружие выдаётся при старте.", "In 3×3 you join blue team. Your weapon is issued at match start.") if str(_selection.mode) == "tdm" else _ui("В тренировке доступны обе командные внешности и тестовые параметры.", "Training offers both team appearances and test options.")
+	if str(_selection.mode) == "survival": kit_note = _ui("Одна жизнь. Запасы конечны; между атаками ищи пункт снабжения.", "One life. Supplies are finite; find the supply point between attacks.")
+	var team: Label = _label(kit_note, 12, CombatTheme.MUTED)
 	team.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(team)
 
@@ -507,8 +587,15 @@ func _refresh_selection() -> void:
 	if _map_preview != null: _map_preview.texture = _texture(str(entry.get("preview", "")))
 	if _map_title != null: _map_title.text = _localized(entry, "name")
 	if _map_description != null: _map_description.text = _localized(entry, "description")
+	if _map_description != null and str(_selection.mode) == "survival": _map_description.text = _ui("Три подхода, разрушаемые укрытия и пункт снабжения. Укрепляйся и сдерживай орду.", "Three approaches, destructible cover and a supply point. Build your defenses and hold back the horde.")
 	if _map_notice != null:
 		_map_notice.text = _ui("Вы и 2 союзника против 3 ботов · 25 убийств или 5 минут", "You and 2 allies against 3 bots · 25 kills or 5 minutes") if str(_selection.mode) == "tdm" else _ui("Свободная тренировка · Без сервера", "Free training · No server needed")
+		if str(_selection.mode) == "survival": _map_notice.text = _ui("Выживание · Волны по времени · Одна жизнь", "Survival · Timed waves · One life")
+	if is_instance_valid(_growth_preview) and str(_selection.mode) == "survival":
+		var forecast: Array[int] = []
+		for minute: int in [0, 5, 10]:
+			forecast.append(clampi(roundi(float(_survival_settings.zombies_per_wave) + (0.0 if _survival_settings.growth_mode == "constant" else float(_survival_settings.growth_per_minute) * minute)), 1, 24))
+		_growth_preview.text = _ui("Квота в начале / на 5-й / на 10-й минуте: %d / %d / %d", "Quota at start / minute 5 / minute 10: %d / %d / %d") % forecast
 	for id: String in _map_buttons:
 		var selected: bool = id == str(_selection.map_id)
 		_apply_card_style(_map_buttons[id], selected)
@@ -524,11 +611,13 @@ func _refresh_selection() -> void:
 	for weapon: Dictionary in _profile_rows:
 		if int(weapon.id) == int(_selection.weapon): weapon_name = _localized(weapon, "name")
 	if _summary != null:
-		_summary.text = "%s · %s\n%s" % [_ui("Бой 3×3", "Battle 3×3") if str(_selection.mode) == "tdm" else _ui("Тренировка", "Training"), _localized(entry, "name"), weapon_name]
+		_summary.text = "%s · %s\n%s" % [_mode_title(), _localized(entry, "name"), weapon_name]
+		if str(_selection.mode) == "survival": _summary.text += _ui(" · %d мин", " · %d min") % (int(_survival_settings.duration_seconds) / 60)
 	if _start != null:
 		var checked: Dictionary = CATALOG.validate(_selection)
 		_start.disabled = _pending or not bool(checked.get("ok", false))
 		_start.text = _ui("Подготовка…", "Preparing…") if _pending else (_ui("Начать бой  →", "Start battle  →") if str(_selection.mode) == "tdm" else _ui("Начать тренировку  →", "Start training  →"))
+		if str(_selection.mode) == "survival" and not _pending: _start.text = _ui("Начать выживание  →", "Start survival  →")
 
 func _launch() -> void:
 	if _pending: return
