@@ -96,6 +96,10 @@ def main():
     suites += [('combat-hud','tests/ui/test_combat_hud.gd')]
     suites += [('game-shell','tests/ui/test_game_shell.gd'),('game-launch','tests/integration/test_game_launch.gd')]
     suites += [('survival-settings','tests/session/test_survival_settings.gd'),
+               ('rush-session','tests/gameplay/test_rush_session.gd'),
+               ('rush-records','tests/gameplay/test_rush_records.gd'),
+               ('rush-upgrade-panel','tests/ui/test_rush_upgrade_panel.gd'),
+               ('rush-scene','tests/integration/test_rush_scene.gd'),
                ('survival-session','tests/session/test_survival_session.gd'),
                ('zombie-ai','tests/ai/test_zombie_ai.gd'),
                ('zombie-view','tests/presentation/test_zombie_view.gd'),
@@ -124,7 +128,7 @@ def main():
     for name,path in suites:
         if selected and name not in selected: continue
         path=ROOT/path
-        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
+        if path.exists():run('test-'+name,(['--fixed-fps','60'] if name in ('ui','game-shell','game-launch','startup-work','survival-launch-latency','survival-levels','survival-options-desktop','survival-setup','survival-panel','survival-scene','rush-upgrade-panel','rush-scene','zombie-view','offline-lifecycle','source-input','mobile-controls','mobile-look','mobile-aim-assist','offline-tdm-scene','native-map-main') else [])+['--script',str(path)],timeout=300)
     run('runtime-smoke',['--quit-after','120'])
     if args.export: export_web()
 

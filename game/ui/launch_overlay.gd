@@ -62,6 +62,7 @@ func _button(identifier: String) -> Button:
 	return button
 
 func _layout() -> void:
+	if not is_inside_tree(): return
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var pixel_size: Vector2 = Vector2(get_window().size)
 	if OS.has_feature("web"):

@@ -60,8 +60,8 @@ func test_catalog() -> void:
 		ids.append(str(entry.id))
 		check(not str(entry.get("name_ru", "")).is_empty() and not str(entry.get("name_en", "")).is_empty(),
 			"map has player-facing localized titles: " + str(entry.id))
-	check(ids.size() == 5 and ids.has("crossroads") and ids.has("lab") and ids.has("title") and ids.has("mirage") and ids.has("dust2"),
-		"catalog exposes all five existing playable maps")
+	check(ids.size() == 7 and ids.has("crossroads") and ids.has("lab") and ids.has("title") and ids.has("mirage") and ids.has("dust2") and ids.has("minecraft_chunk") and ids.has("mira_hq"),
+		"catalog exposes all seven existing playable maps")
 	var tdm: Array = CATALOG.available_for("tdm")
 	check(tdm.size() == 1 and str(tdm[0].id) == "crossroads", "only authored Crossroads supports team battle")
 	check(CATALOG.available_for("training").size() == 4, "training exposes lab and all imported maps")

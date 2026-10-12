@@ -29,6 +29,7 @@ var _resume: Button
 var _restart: Button
 var _home: Button
 var _refresh_age: float = 0.0
+var _rush_record: Dictionary = {}
 var _logical_per_css: Vector2 = Vector2.ONE
 var _css_extent: Vector2 = Vector2.ZERO
 var _css_read_age: float = 1.0
@@ -64,6 +65,10 @@ func refresh() -> void:
 			update_state(value)
 	else:
 		update_state(_state)
+
+func set_rush_record(record: Dictionary) -> void:
+	_rush_record = record.duplicate(true)
+	refresh()
 
 
 func update_state(state: Dictionary) -> void:
@@ -104,6 +109,16 @@ func update_state(state: Dictionary) -> void:
 	_supply.visible = not finished
 	_detail.text = _result_detail(state, outcome) if finished else _ui("Волны идут по времени. Живые зомби продолжают атаковать.\nСнабжение: стойте у отмеченного пункта 2 секунды без опасности; одно пополнение за волну.", "Waves follow the timer. Surviving zombies keep attacking.\nSupply: stay at the marked point for 2 safe seconds; one refill per wave.")
 	_settings.text = _settings_text(settings)
+	if str(settings.get("run_style", "classic")) == "rush":
+		var rush: Dictionary = _session.get_rush_state() if is_instance_valid(_session) and _session.has_method("get_rush_state") else {}
+		if not finished: _rush_record.clear()
+		_title.text = "Blockfield Rush" if not finished else _title.text + " · Rush"
+		var levels: Dictionary = rush.get("levels", {})
+		_settings.text = _ui("3 минуты + зачистка · Усиления за убийства\nУрон %d/3 · Броня %d/3", "3 minutes + cleanup · Upgrades for kills\nPower %d/3 · Armor %d/3") % [int(levels.get("power", 0)), int(levels.get("armor", 0))]
+		_detail.text += _ui("\nОчки: %d", "\nScore: %d") % int(rush.get("score", 0))
+		if finished and not _rush_record.is_empty():
+			_detail.text += _ui(" · Личный рекорд: %d", " · Personal best: %d") % int(_rush_record.get("best", 0))
+			if bool(_rush_record.get("personal_best", false)): _detail.text += _ui("\nНовый рекорд!", "\nNew personal best!")
 	_resume.text = _ui("Продолжить", "Resume")
 	_resume.visible = not finished
 	_resume.disabled = finished

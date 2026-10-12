@@ -51,6 +51,8 @@ var _grenade_team: Dictionary[int,int] = {}
 var _zombie_breach_deadlines: Dictionary[Vector3i,int] = {}
 var _zombie_loadouts: Dictionary[int, Dictionary] = {}
 var _zombie_grenade_profiles: Dictionary[int, Dictionary] = {}
+var _survival_firearm_levels: Dictionary[int, int] = {}
+var _survival_armor_levels: Dictionary[int, int] = {}
 func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: String = "sandbox") -> Dictionary:
 	if map_data == null or map_data.read_only or map_data.blocks.size() != map_data.dimensions.x*map_data.dimensions.y*map_data.dimensions.z \
 			or map_data.epoch <= 0 or map_data.epoch > RULES.MAX_UINT32 or map_data.last_tick > 0 \
@@ -95,6 +97,8 @@ func configure(map_data: VoxelData, match_profile: String = "0.75", game_mode: S
 	_zombie_breach_deadlines.clear()
 	_zombie_loadouts.clear()
 	_zombie_grenade_profiles.clear()
+	_survival_firearm_levels.clear()
+	_survival_armor_levels.clear()
 	objectives = new_objectives
 	return _result(true)
 
@@ -305,6 +309,24 @@ func get_block_remaining_health(cell: Vector3i) -> float:
 	var health: Dictionary = _block_health.get(cell, {})
 	return float(health.health) if not health.is_empty() and int(health.color) == color else 100.0
 
+func set_survival_firearm_level(id: int, level: int) -> bool:
+	var actor: SharedPlayerState = get_actor(id)
+	if mode != "sandbox" or actor == null or actor.registry_kind == "zombie" \
+			or not RULES.can_act(actor) or level < 0 or level > 3:
+		return false
+	_survival_firearm_levels[id] = level
+	return true
+
+
+func set_survival_armor_level(id: int, level: int) -> bool:
+	var actor: SharedPlayerState = get_actor(id)
+	if mode != "sandbox" or actor == null or actor.registry_kind == "zombie" \
+			or not RULES.can_act(actor) or level < 0 or level > 3:
+		return false
+	_survival_armor_levels[id] = level
+	return true
+
+
 func survival_supply(id: int) -> Array[Dictionary]:
 	var actor: SharedPlayerState = get_actor(id)
 	if actor == null or actor.registry_kind == "zombie" or not RULES.can_act(actor):
@@ -316,6 +338,17 @@ func survival_supply(id: int) -> Array[Dictionary]:
 	var events: Array[Dictionary] = [RULES.event(actor, tick, "restock", {"survival": true})]
 	_record_events(events)
 	return RULES.frozen(events)
+
+func survival_field_kit(id: int) -> bool:
+	var actor: SharedPlayerState = get_actor(id)
+	if mode != "sandbox" or actor == null or actor.registry_kind == "zombie" or not RULES.can_act(actor):
+		return false
+	actor.health = mini(100, actor.health + 35)
+	actor.reserve = PROFILES.get_info(actor.profile, actor.weapon).max_stock
+	actor.blocks = mini(50, actor.blocks + 20)
+	actor.grenades = mini(3, actor.grenades + 1)
+	_record_events([RULES.event(actor, tick, "restock", {"rush_field_kit": true})])
+	return true
 
 func clear_controls(id: int) -> bool:
 	var actor := get_actor(id)
@@ -336,6 +369,8 @@ func remove_actor(id: int) -> Dictionary:
 	events.append(RULES.event(actor,_next_tick(),"actor_removed"))
 	actors.erase(id)
 	_zombie_loadouts.erase(id)
+	_survival_firearm_levels.erase(id)
+	_survival_armor_levels.erase(id)
 	_colors.erase(id)
 	_clear_build(id)
 	_secondary.erase(id)
@@ -446,6 +481,10 @@ func damage_actor(id: int, amount: float, attacker_id: int = 0, cause: String = 
 func _damage(victim: SharedPlayerState, amount: float, attacker_id: int, cause: String, action_id: String, attacker_team: int) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if not friendly_fire and attacker_id != victim.player_id and attacker_team == victim.team: return events
+	var attacker: SharedPlayerState = get_actor(attacker_id)
+	if victim.registry_kind != "zombie" and (cause == "zombie_grenade" \
+			or cause == "bite" and attacker != null and attacker.registry_kind == "zombie"):
+		amount *= 1.0 - 0.15 * int(_survival_armor_levels.get(victim.player_id, 0))
 	events.append_array(RULES.damage(victim,amount,maxi(0,tick),attacker_id,cause,action_id))
 	if not events_of(events,"death").is_empty():
 		events.append_array(objectives.drop_actor(victim,maxi(0,tick)))
@@ -506,6 +545,7 @@ func _resolve_shot(owner: SharedPlayerState, shot: Dictionary) -> Array[Dictiona
 			endpoint=hit.position
 			var victim := get_actor(hit.actor_id)
 			var amount := PROFILES.damage(profile,int(shot.weapon),hit.part,horizontal_distance(shot.origin,hit.position))
+			amount *= 1.0 + 0.25 * int(_survival_firearm_levels.get(owner.player_id, 0))
 			var damage_events := _damage(victim,amount,owner.player_id,"weapon",shot.event_id,owner.team)
 			events.append_array(damage_events)
 			if not damage_events.is_empty(): events.append(RULES.event(owner,tick,"hit_confirmed",{"victim_id":victim.player_id,"part":hit.part,"damage":damage_events[0].amount,"position":hit.position,"friendly":owner.team==victim.team,"source_event_id":shot.event_id,"pellet":pellet}))
@@ -836,7 +876,7 @@ func capture_state(id: int) -> Dictionary:
 	for grenade_id: int in ids: projectiles.append(grenades[grenade_id].copy())
 	# Local diagnostics own copies; editing them cannot change the running match.
 	var block_health: Dictionary = _block_health.duplicate(true)
-	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":block_health,"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate(),"zombie_loadouts":_zombie_loadouts.duplicate(true),"zombie_grenade_profiles":_zombie_grenade_profiles.duplicate(true)}
+	return {"epoch":epoch,"tick":maxi(0,tick),"profile":profile,"mode":mode,"owner_id":id,"owner_state":actors[id].copy(),"actors":copied,"grenades":projectiles,"grenade_teams":_grenade_team.duplicate(),"objectives":objectives.snapshot(),"map_sequence":data.map_sequence,"dimensions":data.dimensions,"event_sequence":event_sequence,"block_health":block_health,"block_colors":_colors.duplicate(),"line_start":_line_start.duplicate(),"pending_cell":_pending_cell.duplicate(),"secondary":_secondary.duplicate(),"zombie_loadouts":_zombie_loadouts.duplicate(true),"zombie_grenade_profiles":_zombie_grenade_profiles.duplicate(true),"survival_firearm_levels":_survival_firearm_levels.duplicate(),"survival_armor_levels":_survival_armor_levels.duplicate()}
 
 func _system_event(type: String, details: Dictionary = {}) -> Dictionary:
 	var event := details.duplicate(true)

@@ -107,6 +107,12 @@ promote full P01/P08–P16 or W03 acceptance.
 | M03 | Local authoritative offline rules for health, damage, respawn, restock and objectives | No offline server in original; client relies on `NetClient.cpp:919,1295,1482` | 1 | IMPLEMENTED |
 | M04 | Match reset restores map and all objective/player/resource state | Original reset/map change driven by `NetClient.cpp:1348` | 1 | IMPLEMENTED |
 
+## Market-oriented addition
+
+| ID | Feature and acceptance requirement | Evidence | Iteration | Status |
+| --- | --- | --- | --- | --- |
+| A03 | Blockfield Rush: canonical three-minute survival, one-click Home/replay, kill-based run upgrades and per-weapon local records | User2026-10-12; [ADR0035](decisions/0035-market-oriented-rush.md); new authority/UI/record/scene fixtures; ordinary Web acceptance in progress; market fit and physical-phone acceptance remain separate | Market iteration | IMPLEMENTED |
+
 ## Presentation, UI and content
 
 | ID | Feature and acceptance requirement | Original evidence | Iteration | Status |

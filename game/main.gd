@@ -116,6 +116,7 @@ func _ready() -> void:
 		_launch_overlay.retry_requested.connect(_apply_game_launch)
 		_launch_overlay.show_progress("Выживание", "Подготовка снаряжения…", true)
 		await get_tree().process_frame
+		if not is_inside_tree(): return
 	if get_tree().has_meta("blockfield_utility"):
 		_shell_utility = str(get_tree().get_meta("blockfield_utility"))
 		get_tree().remove_meta("blockfield_utility")
@@ -204,7 +205,9 @@ func _ready() -> void:
 	player.skin_id=skin_id
 	session.player_name=player_name
 	_setup_graphics()
-	if staged: await get_tree().process_frame
+	if staged:
+		await get_tree().process_frame
+		if not is_inside_tree(): return
 	session.player_hurt.connect(func(amount: float,_origin: Vector3,_kind: String):
 		_hurt_age=0.0
 		if audio!=null:audio.flesh_hit(player.global_position,true)
@@ -216,6 +219,7 @@ func _ready() -> void:
 		player._connect_simulation()
 		player._update_view(0.0)
 		await get_tree().process_frame
+		if not is_inside_tree(): return
 	hud.alert_sound_requested.connect(func():player._play_sound("Feedback/Alert"))
 	hud.chat_sound_requested.connect(func():
 		if chat_beep:player._play_sound("Feedback/Chat"))
@@ -236,7 +240,9 @@ func _ready() -> void:
 	session.match_event.connect(_match_event_audio)
 	_player_view=OpenSpadesExtensions.create_third_person_skin(skin_id,{"player":player,"session":session})
 	player.add_child(_player_view)
-	if staged: await get_tree().process_frame
+	if staged:
+		await get_tree().process_frame
+		if not is_inside_tree(): return
 	if not offline_tdm_mode:
 		_spawn_targets()
 		_setup_objectives()
@@ -264,6 +270,7 @@ func get_launch_state() -> Dictionary:
 
 func _apply_game_launch() -> void:
 	# This request is consumed once by Main. UI never grants a live inventory.
+	if not is_inside_tree(): return
 	if _launch_status == "ready" or _launch_in_progress: return
 	_launch_in_progress = true
 	_launch_status = "loading"
@@ -285,6 +292,7 @@ func _apply_game_launch() -> void:
 	_launch_overlay.show_progress(map_name, "Подготовка карты…" if russian else "Preparing map…", russian)
 	# Allow the real loading state to paint before foreground map work starts.
 	await get_tree().process_frame
+	if not is_inside_tree(): return
 	if not offline_tdm_mode and configuration.map_id != "lab":
 		var bytes: PackedByteArray = FileAccess.get_file_as_bytes(str(entry.resource))
 		if bytes.is_empty():
@@ -316,8 +324,10 @@ func _apply_game_launch() -> void:
 			if not is_inside_tree(): return
 		# Present completed terrain once before admitting live input.
 		await get_tree().process_frame
+		if not is_inside_tree(): return
 	if not offline_survival_mode: session.select_weapon(int(configuration.weapon))
-	LAUNCH_CATALOG.save_selection(configuration)
+	var rush_launch: bool = offline_survival_mode and str(configuration.get("survival", {}).get("run_style", "classic")) == "rush"
+	if not rush_launch: LAUNCH_CATALOG.save_selection(configuration)
 	_launch_status = "ready"
 	_launch_in_progress = false
 	_launch_overlay.queue_free()
@@ -1311,6 +1321,7 @@ func open_offline_lab() -> void:
 
 func restart_offline_tdm() -> void:
 	if not offline_tdm_mode: return
+	if _launch_in_progress: return
 	var result: Dictionary = (session as OFFLINE_TDM).restart_match()
 	if not result.get("ok",false):
 		hud.show_notice(str(result.get("error","Match restart failed")))
@@ -1321,6 +1332,14 @@ func restart_offline_tdm() -> void:
 		_create_survival_supply_views()
 	_update_shared_actor_views()
 	hud.set_menu_visible(true)
+	if offline_survival_mode and bool((session as OFFLINE_SURVIVAL).get_rush_state().get("enabled", false)):
+		# A one-click replay waits for the restored terrain before opening controls.
+		_launch_status = "idle"
+		_launch_overlay = LAUNCH_OVERLAY.new()
+		add_child(_launch_overlay)
+		_launch_overlay.home_requested.connect(open_game_home)
+		_launch_overlay.retry_requested.connect(_apply_game_launch)
+		_apply_game_launch.call_deferred()
 
 func present_offline_tick(transactions: Array) -> void:
 	# Both authority and renderer share Data. Present each committed edit once;

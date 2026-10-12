@@ -21,6 +21,8 @@ const VISIBLE_WARNING_TICKS: int = 60
 const STALL_TICKS: int = 1200
 const SUPPLY_STAND_TICKS: int = 120
 const SUPPLY_SAFE_DISTANCE: float = 8.0
+const RUSH_KILL_THRESHOLDS: Array[int] = [3, 7, 12, 18, 25]
+const RUSH_MAX_PERK_LEVEL: int = 3
 
 var phase: String = "preparation"
 var outcome: String = ""
@@ -57,6 +59,10 @@ var _supply_used_wave: int = 0
 var _supply_status: String = "unavailable"
 var _supply_position: Vector3 = Vector3.ZERO
 var _survival_event_sequence: int = 0
+var _rush_pending: bool = false
+var _rush_choices_taken: int = 0
+var _rush_levels: Dictionary[String, int] = {"power": 0, "armor": 0, "field_kit": 0}
+var _rush_choices: Array[Dictionary] = []
 
 
 func get_match_mode() -> String:
@@ -175,6 +181,10 @@ func _reset_survival() -> void:
 	_supply_status = "unavailable"
 	_supply_position = _arena.supply_point
 	_survival_event_sequence = 0
+	_rush_pending = false
+	_rush_choices_taken = 0
+	_rush_levels = {"power": 0, "armor": 0, "field_kit": 0}
+	_rush_choices.clear()
 
 
 func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
@@ -203,6 +213,11 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 	if not owner.is_alive():
 		_finish("defeat", "death")
 		_ingest_events(simulation.drain_events())
+		update(0.0)
+		return {"ok": true, "error": "", "advanced": false, "tick": simulation.tick, "transactions": empty, "presentation_refresh_required": false}
+	if _rush_pending:
+		# Choice time is outside the simulation: projectiles, actor deadlines,
+		# wave windows and the active clock all stop at the same fixed boundary.
 		update(0.0)
 		return {"ok": true, "error": "", "advanced": false, "tick": simulation.tick, "transactions": empty, "presentation_refresh_required": false}
 	if _pending_color >= 0:
@@ -243,6 +258,7 @@ func step_local(buttons: int, move: Vector2, yaw: float, pitch: float,
 	var transactions: Array[Dictionary] = simulation.drain_transactions()
 	var refresh_required: bool = not transactions.is_empty() and bool(transactions[-1].get("refresh_required", false))
 	update(0.0)
+	_offer_rush_upgrade()
 	return {"ok": true, "error": "", "advanced": true, "tick": simulation.tick,
 		"transactions": transactions, "presentation_refresh_required": refresh_required}
 
@@ -594,6 +610,8 @@ func _finish(result: String, reason: String) -> void:
 	finish_reason = reason
 	winning_team = 0 if result == "win" else -1
 	_supply_ticks = 0
+	_rush_pending = false
+	_rush_choices.clear()
 	_attacks.clear()
 	for id: int in simulation.actors:
 		simulation.clear_controls(id)
@@ -631,6 +649,76 @@ func get_survival_state() -> Dictionary:
 		"supply_position": _supply_position, "supply_progress": float(_supply_ticks) / SUPPLY_STAND_TICKS,
 		"supply_available": _supply_status in ["ready", "progress"], "supply_status": _supply_status,
 		"supply_used_wave": _supply_used_wave, "settings": _settings.duplicate(true)}
+
+
+func get_rush_state() -> Dictionary:
+	var owner: SharedPlayerState = get_owner_state()
+	var kills: int = owner.kills if owner != null else 0
+	var enabled: bool = str(_settings.get("run_style", "classic")) == "rush"
+	var score: int = 0
+	if enabled and outcome != "interrupted":
+		score = kills * 100 + headshots * 50 + floori(float(_active_ticks) / RULES.HZ) * 5
+		if outcome == "win":
+			score += 1000
+	return {"enabled": enabled, "pending": _rush_pending,
+		"choices": _rush_choices.duplicate(true), "levels": _rush_levels.duplicate(true),
+		"kills": kills, "next_kills": RUSH_KILL_THRESHOLDS[_rush_choices_taken] if enabled and _rush_choices_taken < RUSH_KILL_THRESHOLDS.size() else 0,
+		"score": score}
+
+
+func _offer_rush_upgrade() -> void:
+	var owner: SharedPlayerState = get_owner_state()
+	if str(_settings.get("run_style", "classic")) != "rush" or _rush_pending or finished \
+			or owner == null or not owner.is_alive() or _rush_choices_taken >= RUSH_KILL_THRESHOLDS.size() \
+			or owner.kills < RUSH_KILL_THRESHOLDS[_rush_choices_taken]:
+		return
+	_rush_choices.clear()
+	if _rush_levels.power < RUSH_MAX_PERK_LEVEL:
+		_rush_choices.append({"id": "power", "title_ru": "Мощность", "title_en": "Firepower",
+			"description_ru": "+25% урона огнестрельного оружия. До 3 уровней.",
+			"description_en": "+25% firearm damage. Up to 3 ranks."})
+	if _rush_levels.armor < RUSH_MAX_PERK_LEVEL:
+		_rush_choices.append({"id": "armor", "title_ru": "Броня", "title_en": "Armor",
+			"description_ru": "−15% урона укусов и гранат зомби. До 3 уровней.",
+			"description_en": "−15% damage from zombie bites and grenades. Up to 3 ranks."})
+	_rush_choices.append({"id": "field_kit", "title_ru": "Полевой набор", "title_en": "Field kit",
+		"description_ru": "+35 здоровья, полный запас патронов, +20 блоков и +1 граната.",
+		"description_en": "+35 health, full reserve ammo, +20 blocks and +1 grenade."})
+	_rush_pending = true
+	_clear_pending_intent()
+	for id: int in simulation.actors:
+		simulation.clear_controls(id)
+	_emit_survival_event("rush_upgrade_ready", {"milestone": _rush_choices_taken, "kills": owner.kills})
+
+
+func choose_upgrade(id: String) -> Dictionary:
+	var owner: SharedPlayerState = get_owner_state()
+	if not _rush_pending or paused or finished or owner == null or not owner.is_alive():
+		return {"ok": false, "error": "No active Rush choice"}
+	var offered: bool = false
+	for choice: Dictionary in _rush_choices:
+		if str(choice.id) == id:
+			offered = true
+			break
+	if not offered:
+		return {"ok": false, "error": "Choose an offered upgrade"}
+	var applied: bool = false
+	match id:
+		"power": applied = simulation.set_survival_firearm_level(OWNER_ID, _rush_levels.power + 1)
+		"armor": applied = simulation.set_survival_armor_level(OWNER_ID, _rush_levels.armor + 1)
+		"field_kit": applied = simulation.survival_field_kit(OWNER_ID)
+	if not applied:
+		return {"ok": false, "error": "Upgrade could not be applied"}
+	_rush_levels[id] += 1
+	_rush_choices_taken += 1
+	_rush_pending = false
+	_rush_choices.clear()
+	_clear_pending_intent()
+	simulation.clear_controls(OWNER_ID)
+	_ingest_events(simulation.drain_events())
+	_emit_survival_event("rush_upgrade_chosen", {"upgrade": id, "level": _rush_levels[id]})
+	update(0.0)
+	return {"ok": true, "error": ""}
 
 
 func get_diagnostics() -> Dictionary:

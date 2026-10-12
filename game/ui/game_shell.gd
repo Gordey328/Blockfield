@@ -31,6 +31,7 @@ var _canvas: Control
 var _margin: MarginContainer
 var _layout: VBoxContainer
 var _start: Button
+var _rush_start: Button
 var _summary: Label
 var _error: Label
 var _map_preview: TextureRect
@@ -241,6 +242,7 @@ func _build_page() -> void:
 		_canvas.remove_child(child)
 		child.queue_free()
 	_start = null
+	_rush_start = null
 	_summary = null
 	_error = null
 	_map_preview = null
@@ -311,20 +313,41 @@ func _build_home() -> void:
 		copy.add_child(_label(_ui("ВОКСЕЛЬНЫЙ ШУТЕР", "VOXEL SHOOTER"), 12, CombatTheme.ACCENT))
 	var heading: Label = _label(_ui("Твоё поле боя.", "Your battlefield."), 32 if _mobile else 54)
 	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	heading.visible = not _compact
 	copy.add_child(heading)
 	if not _compact:
 		var intro: Label = _label(_ui("Бой 3×3 с ботами. Строй укрытия, ищи обходы и меняй мир вокруг себя.", "Fight 3×3 with bots. Build cover, find a flank, and reshape the world."), 16 if _mobile else 19, CombatTheme.MUTED)
 		intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		copy.add_child(intro)
-	var play: Button = _button("Play", _ui("Играть  →", "Play  →"), func() -> void: show_setup("tdm"), true)
-	copy.add_child(play)
-	copy.add_child(_button("Survival", _ui("Волны зомби", "Zombie waves"), func() -> void: show_setup("survival")))
-	copy.add_child(_button("Training", _ui("Тренировка", "Training"), func() -> void: show_setup("training")))
+	_rush_start = _button("Rush", _ui("Rush · 3 минуты  →", "Rush · 3 minutes  →"), _launch_rush, true)
+	copy.add_child(_rush_start)
+	var rush_note: Label = _label(_ui("Одна жизнь · Выбирай усиления · Разрушай и строй", "One life · Choose upgrades · Destroy and build"), 13, CombatTheme.ACCENT)
+	rush_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	copy.add_child(rush_note)
+	_error = _label("", 14, CombatTheme.DANGER)
+	_error.name = "HomeError"
+	_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_error.hide()
+	copy.add_child(_error)
+	var secondary_parent: Node = copy
+	if _compact:
+		var secondary: GridContainer = GridContainer.new()
+		secondary.columns = 2
+		secondary.add_theme_constant_override("h_separation", 8)
+		secondary.add_theme_constant_override("v_separation", 8)
+		copy.add_child(secondary)
+		secondary_parent = secondary
+	var play: Button = _button("Play", _ui("Играть  →", "Play  →"), func() -> void: show_setup("tdm"))
+	secondary_parent.add_child(play)
+	secondary_parent.add_child(_button("Survival", _ui("Волны зомби", "Zombie waves"), func() -> void: show_setup("survival")))
+	secondary_parent.add_child(_button("Training", _ui("Тренировка", "Training"), func() -> void: show_setup("training")))
 	var utilities: GridContainer = GridContainer.new()
 	utilities.columns = 2
 	utilities.add_theme_constant_override("h_separation", 8)
-	copy.add_child(utilities)
-	utilities.add_child(_button("Settings", _ui("Настройки", "Settings"), func() -> void: _request_utility("settings")))
+	if not _compact: copy.add_child(utilities)
+	else: utilities.free()
+	var settings_parent: Node = secondary_parent if _compact else utilities
+	settings_parent.add_child(_button("Settings", _ui("Настройки", "Settings"), func() -> void: _request_utility("settings")))
 	if not _mobile:
 		copy.add_child(_label(_ui("Локальная игра · 1 игрок и 5 ботов", "Offline play · 1 player and 5 bots"), 13, CombatTheme.MUTED))
 		var hero: PanelContainer = _panel()
@@ -590,7 +613,13 @@ func _show_tab(tab: String) -> void:
 		_apply_card_style(_equipment_button, _active_tab == "equipment")
 
 func _refresh_selection() -> void:
-	if not _is_built or _page != "setup": return
+	if not _is_built: return
+	if _page == "home":
+		_refresh_home_actions(_canvas)
+		if is_instance_valid(_rush_start):
+			_rush_start.text = _ui("Подготовка…", "Preparing…") if _pending else _ui("Rush · 3 минуты  →", "Rush · 3 minutes  →")
+		return
+	if _page != "setup": return
 	var entry: Dictionary = CATALOG.get_entry(str(_selection.map_id))
 	if _map_preview != null: _map_preview.texture = _texture(str(entry.get("preview", "")))
 	if _map_title != null: _map_title.text = _localized(entry, "name")
@@ -647,6 +676,26 @@ func _launch() -> void:
 	_pending = true
 	_refresh_selection()
 	launch_requested.emit(get_selection())
+
+func _launch_rush() -> void:
+	if _pending: return
+	# Rush is a one-shot launch, independent of the saved classic setup.
+	var candidate: Dictionary = {"mode": "survival", "map_id": "crossroads",
+		"weapon": int(_selection.weapon), "survival": SURVIVAL_SETTINGS.rush_defaults()}
+	var checked: Dictionary = CATALOG.validate(candidate)
+	if not bool(checked.get("ok", false)):
+		show_launch_error(_ui("Rush недоступен. Проверьте карту и оружие.", "Rush is unavailable. Check the map and weapon."))
+		return
+	if is_instance_valid(_error): _error.hide()
+	_pending = true
+	_refresh_selection()
+	launch_requested.emit(checked.configuration.duplicate(true))
+
+func _refresh_home_actions(node: Node) -> void:
+	if node == null: return
+	if node is Button: (node as Button).disabled = _pending
+	for child: Node in node.get_children():
+		_refresh_home_actions(child)
 
 func _request_utility(kind: String) -> void:
 	if _pending: return

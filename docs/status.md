@@ -3,6 +3,22 @@
 Updated: 2026-10-12 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Market-oriented Rush — 2026-10-12 (implementation in progress)
+
+User authorizes researching mobile/Web games and changing any game feature.
+Managed market-iteration worktree starts at origin/dev76eae15, including checked
+survival runtime1630770; the stale dirty primary checkout is preserved. Three
+specialists have non-overlapping authority, Home/panel and research/scene-fixture
+ownership; coordinator owns shared integration/config/records/docs/release.
+[Research](market-research-2026-10.md) and [ADR0035](decisions/0035-market-oriented-rush.md)
+choose a three-minute FPS Rush hypothesis with run upgrades and personal records.
+No market-success, physical-phone or full-port acceptance is claimed.
+Pinned engine4.7.2.stable.official.ed1daf0bf and upstream
+dcf449c845d509bbde9d79239b32d201c1389961 remain. Engine version readback passes;
+implementation and serial gameplay/browser checks remain in progress.
+Next action: finish specialist handoffs, run parser/behavioral integration checks,
+inspect the ordinary Web build and publish a checked development iteration.
+
 ## Survival expansion — 2026-10-12 (completed and published)
 
 Runtime 1630770bf574280d852abd52204998043a324611 adds faster Start survival,

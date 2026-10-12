@@ -1,5 +1,18 @@
 # Accepted iterations
 
+## Market-oriented iteration — 2026-10-12
+
+The user requests research of mobile and Web game trends and authorizes changing
+any game feature. The first implemented product hypothesis is **Blockfield Rush**:
+one-click entry, five-second preparation, three minutes of timed survival plus
+cleanup, kill-based choices of run upgrades, local personal records per weapon
+and one-click replay. [Market evidence](market-research-2026-10.md) distinguishes
+measured trends from this design choice; [ADR0035](decisions/0035-market-oriented-rush.md)
+defines its rules and acceptance. This iteration requires real gameplay damage,
+choice/pause/reset/record checks and an interactive Godot Web build. Market fit,
+real-phone comfort/performance and portal distribution remain unproven until
+their separate checks. It does not promote original feature parity.
+
 ## Iteration 1 — offline full port and test lab
 Deliver a Godot project and browser build on GitHub Pages. Preserve the original client's gameplay presentation and features; implement local equivalents for behavior that previously required server messages. No server process, account or multiplayer connection is required to enter the lab.
 

@@ -6,14 +6,24 @@ const SPAWN_WINDOW_SECONDS: int = 12
 
 
 static func defaults() -> Dictionary:
-	return {"duration_seconds": 600, "wave_interval_seconds": 60,
+	return {"run_style": "classic", "duration_seconds": 600, "wave_interval_seconds": 60,
 		"zombies_per_wave": 6, "growth_per_minute": 1.0, "growth_mode": "linear",
 		"live_limit": MAX_LIVE, "preparation_seconds": 20,
 		"zombie_damage": 20, "zombie_block_damage": 40}
 
 
+static func rush_defaults() -> Dictionary:
+	return {"run_style": "rush", "duration_seconds": 180, "wave_interval_seconds": 30,
+		"zombies_per_wave": 3, "growth_per_minute": 2.0, "growth_mode": "linear",
+		"live_limit": MAX_LIVE, "preparation_seconds": 5,
+		"zombie_damage": 15, "zombie_block_damage": 40}
+
+
 static func validate(raw: Dictionary, test_overrides: bool = false) -> Dictionary:
-	var settings: Dictionary = defaults()
+	var run_style: Variant = raw.get("run_style", "classic")
+	if typeof(run_style) != TYPE_STRING or run_style not in ["classic", "rush"]:
+		return {"ok": false, "error": "Unknown survival run style", "settings": {}}
+	var settings: Dictionary = rush_defaults() if run_style == "rush" else defaults()
 	for key: String in settings:
 		if raw.has(key):
 			settings[key] = raw[key]
@@ -30,7 +40,7 @@ static func validate(raw: Dictionary, test_overrides: bool = false) -> Dictionar
 		return {"ok": false, "error": "Survival wave interval is outside supported bounds", "settings": {}}
 	if settings.zombies_per_wave < 1 or settings.zombies_per_wave > 24 or settings.live_limit < 1 or settings.live_limit > MAX_LIVE:
 		return {"ok": false, "error": "Survival population is outside supported bounds", "settings": {}}
-	if (not test_overrides and settings.preparation_seconds != 20) or settings.preparation_seconds < 0 or settings.preparation_seconds > 20:
+	if (not test_overrides and settings.preparation_seconds != (5 if run_style == "rush" else 20)) or settings.preparation_seconds < 0 or settings.preparation_seconds > 20:
 		return {"ok": false, "error": "Survival preparation must be 20 seconds", "settings": {}}
 	if settings.zombie_damage < 1 or settings.zombie_damage > 100 or settings.zombie_block_damage < 1 or settings.zombie_block_damage > 100:
 		return {"ok": false, "error": "Zombie damage must be between 1 and 100", "settings": {}}
@@ -40,6 +50,11 @@ static func validate(raw: Dictionary, test_overrides: bool = false) -> Dictionar
 	settings.growth_per_minute = float(settings.growth_per_minute)
 	if typeof(settings.growth_mode) != TYPE_STRING or settings.growth_mode not in ["constant", "linear", "step"]:
 		return {"ok": false, "error": "Unknown survival growth mode", "settings": {}}
+	if run_style == "rush":
+		var canonical: Dictionary = rush_defaults()
+		for key: String in canonical:
+			if settings[key] != canonical[key]:
+				return {"ok": false, "error": "Rush uses its fixed comparable preset", "settings": {}}
 	return {"ok": true, "error": "", "settings": settings}
 
 

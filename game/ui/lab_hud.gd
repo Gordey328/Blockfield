@@ -85,6 +85,11 @@ var _hud_brand: Label
 const OFFLINE_TDM=preload("res://gameplay/offline_tdm_session.gd")
 const SURVIVAL_PANEL = preload("res://ui/survival_panel.gd")
 const OFFLINE_SURVIVAL = preload("res://gameplay/offline_survival_session.gd")
+const RUSH_PANEL = preload("res://ui/rush_upgrade_panel.gd")
+const RUSH_RECORDS = preload("res://gameplay/rush_records.gd")
+var _rush_panel: RUSH_PANEL
+var _rush_pending: bool = false
+var _rush_record_epoch: int = -1
 var _survival_panel: SURVIVAL_PANEL
 var _survival_panel_locale: String = ""
 var _tdm_score: Label
@@ -119,6 +124,14 @@ func setup(app: Node3D, local_session: LocalSession, local_player: BlockfieldPla
 	_create_hud()
 	_create_menu()
 	_create_mobile_controls()
+	if _is_offline_survival():
+		_rush_panel = RUSH_PANEL.new()
+		_rush_panel.name = "RushUpgrades"
+		_rush_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_root.add_child(_rush_panel)
+		_rush_panel.configure(main.locale)
+		_rush_panel.hide()
+		_rush_panel.upgrade_chosen.connect(_choose_rush_upgrade)
 	# Loading/import/fullscreen failures must remain readable in the menu.
 	_alert_panel.reparent(_root)
 	_root.move_child(_alert_panel,_root.get_child_count()-1)
@@ -477,11 +490,49 @@ func _update_survival_status() -> void:
 		title = _ui("ЗАЧИСТКА · ОСТАЛОСЬ %d", "CLEANUP · %d REMAINING") % int(state.get("live", 0))
 		detail = _ui("Новых зомби больше не будет", "No more zombies will spawn")
 	_combat_readout.survival_text = title + "\n" + detail
+	_update_rush_status()
 	_combat_readout.score_text = ""
 	_combat_readout.score_y = maxf(88.0, mobile_controls.get_layout_height() + 8.0) if uses_mobile_controls() and mobile_controls != null else 18.0
 	if is_instance_valid(_survival_panel) and _survival_panel_locale != main.locale:
 		_survival_panel.configure(session, main.locale)
 		_survival_panel_locale = main.locale
+
+func _update_rush_status() -> void:
+	var survival: OFFLINE_SURVIVAL = session as OFFLINE_SURVIVAL
+	var rush: Dictionary = survival.get_rush_state()
+	var pending: bool = bool(rush.get("pending", false))
+	if _rush_pending != pending:
+		_rush_pending = pending
+		_release_mobile_input()
+		_sync_controls()
+	if is_instance_valid(_rush_panel):
+		_rush_panel.configure(main.locale)
+		_rush_panel.refresh(rush)
+		_rush_panel.visible = pending and _focused and not is_menu_open() and visible
+	if not bool(rush.get("enabled", false)): return
+	var levels: Dictionary = rush.get("levels", {})
+	var progress: String = _ui("%d очков · Усиление через %d убийств", "%d points · Upgrade in %d kills") % [int(rush.get("score", 0)), maxi(0, int(rush.get("next_kills", 0)) - int(rush.get("kills", 0)))]
+	if int(rush.get("next_kills", 0)) <= 0:
+		progress = _ui("%d очков · Урон %d · Броня %d", "%d points · Power %d · Armor %d") % [int(rush.get("score", 0)), int(levels.get("power", 0)), int(levels.get("armor", 0))]
+	_combat_readout.survival_text += "\nRush · " + progress
+	if survival.finished and _rush_record_epoch != survival.simulation.epoch:
+		_rush_record_epoch = survival.simulation.epoch
+		var record_state: Dictionary = rush.duplicate(true)
+		record_state.finished = true
+		record_state.outcome = survival.outcome
+		var record: Dictionary = RUSH_RECORDS.record(survival.current_weapon, record_state)
+		_survival_panel.set_rush_record(record)
+		if not str(record.error).is_empty(): show_notice(_ui("Рекорд не удалось сохранить", "Record could not be saved"))
+
+func _choose_rush_upgrade(id: String) -> void:
+	if not _is_offline_survival(): return
+	var accepted: Dictionary = (session as OFFLINE_SURVIVAL).choose_upgrade(id)
+	if not bool(accepted.get("ok", false)):
+		_update_survival_status()
+		return
+	ui_sound_requested.emit("select")
+	_update_survival_status()
+	_sync_controls()
 
 func _update_tdm_status() -> void:
 	if not _is_offline_tdm(): return
@@ -922,10 +973,16 @@ func _input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func _sync_controls() -> void:
-	player.controls_enabled=_focused and visible and not is_menu_open() and not _chat.is_open and not _chat.expanded
+	var launch_blocked: bool = false
+	if main != null and main.has_method("get_launch_state"):
+		var launch: Dictionary = main.get_launch_state()
+		launch_blocked = not (launch.get("configuration", {}) as Dictionary).is_empty() and str(launch.get("status", "idle")) != "ready"
+	player.controls_enabled=_focused and visible and not launch_blocked and not is_menu_open() and not _chat.is_open and not _chat.expanded
+	if _is_offline_survival() and bool((session as OFFLINE_SURVIVAL).get_rush_state().get("pending", false)):
+		player.controls_enabled = false
 	if _is_offline_tdm():
 		var match_session: OFFLINE_TDM=session as OFFLINE_TDM
-		match_session.paused=not _focused or is_menu_open()
+		match_session.paused=not _focused or is_menu_open() or launch_blocked
 		if match_session.finished: player.controls_enabled=false
 	var active:=uses_mobile_controls() and player.controls_enabled
 	if mobile_controls!=null:mobile_controls.set_enabled(active)

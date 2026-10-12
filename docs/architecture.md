@@ -1,6 +1,11 @@
 # Architecture and current contracts
 
 ## Boundaries
+- Rush is a canonical variant of OfflineSurvivalSession, with kill-based run choices
+  and actor-scoped firearm/zombie-armor modifiers. Pending choice and unfinished
+  launch preparation independently gate fixed simulation and HUD input. RushRecords
+  stores local versioned best scores per weapon; UI never grants damage or resources.
+  See [ADR0035](decisions/0035-market-oriented-rush.md).
 - OfflineSurvivalSession reuses OfflineTDMSession's local command/presentation bridge,
   with its own bounded roster, timed overlapping waves, supply and finite outcomes.
   ZombieDirector proposes commands and bite/breach intents; MatchSimulation and the
