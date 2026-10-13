@@ -3,51 +3,56 @@
 Updated: 2026-10-13 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Authored twenty-item arsenal — 2026-10-13 (final verification in progress)
+## Authored twenty-item arsenal — 2026-10-13 (completed and published)
 
-Work only in the attached managed `arsenal-expansion/Blockfield` worktree,
-branch `codex/arsenal-expansion`, based on finished Rush
-`3a39e6445e942855ac202714bbdc8a42cddd3921`. The dirty primary checkout is preserved.
-All20 X01–X20 mechanisms, saved four-slot Survival/Rush kit, separate records,
-finite resources, fixed60Hz authority, cooperative world edits and bounded
-presentation are implemented. A04 remains IMPLEMENTED until final public checks.
-No multiplayer is restored; this addition does not accept the full port.
+All20 X01–X20 are implemented and verified for addition A04 in the offline lab
+and saved four-slot Survival/Rush kit. Finite resources, twenty distinct actions,
+models/sounds, life/epoch/modal cancellation, real zombie lure, canonical bounded
+world edits, shared50particle cap, records and replay are checked. The original
+three weapon/tool paths, maps/zombies, mobile input, Rush/cards and TDM remain.
+No multiplayer is restored; this does not accept the entire OpenSpades port.
 
-Engine4.7.2.stable.official.ed1daf0bf; OpenSpades upstream
-dcf449c845d509bbde9d79239b32d201c1389961. Ordinary Compatibility single-thread
-Web uses the pinned reduced template; exact identities/commands/results and all20
-desktop/synthetic-touch applications are in [arsenal evidence](arsenal-evidence.md).
-Composed native evidence covers102 registered fixtures, not102 reruns on one SHA.
-Latest frozen c4e5693f55bb999dfbfa412fec071dee227c88fa passes import,12 selected
-source/mobile/UI/scene regressions, smoke and ordinary Web export. Panel302/0,
-actual Rush scene115/0, lab50/0. Actual844×390 Web bank now adopts late CSS size
-and leaves the center aim clear. The old CSS cache starvation is reproduced and
-fixed by an independent bounded polling clock.
+[Play the published arsenal](https://gordey328.github.io/Blockfield/arsenal/?v=a8545ca).
+Frozen runtime/source `a8545ca6fd5580f25ad52f861888f68d7b768721`; Pages bundle
+`c477e4e39f772ed5b6a92afd7c35f975cf3f1044`. Pages built with no deployment error;
+all30 public HTTP200 files/58,255,983bytes match frozen SHA256, including maps,
+engine/PCK and notices. Only arsenal/ is added; existing Pages siblings are kept.
+Public Home/catalogue/Rush/replay, gauss3→2, jet2→1, finite lab sun1→0,
+warning/escape and real crater are observed. Private input/benchmark helpers are
+excluded. Game-exported public warning/crater PNGs and raw hashes are under
+`.cache/previews/arsenal-web/` in the attached worktree.
 
-Current source fixes one further real issue: sequential midrun kit choices were
-overwritten by frozen HUD readouts. Coordinator now provides separate pending
-catalogue/live combat readouts; Panel334/0 and expanded actual scene136/0 pass,
-including cumulative four-slot changes, live frozen bank and complete Replay
-adoption. At568×320 the closed/targeting bank ends y147 before the24px aim area
-y148–172; all five targets remain56CSS. Clean parser/import and all specialist
-leases returned. Browser tab1 is about:blank. Root starts the final17-suite
-freeze/export; ordinary Rush/AI and publication remain.
-Draft [PR5](https://github.com/Gordey328/Blockfield/pull/5) is attached; origin/dev
-still3a39e64 until acceptance/integration. No approval is needed for the authorized
-GitHub/Pages release.
+Runtimea8545ca is fast-forwarded into origin/dev; remote heads match and attached
+[PR5](https://github.com/Gordey328/Blockfield/pull/5) reports merged/closed at that
+SHA. Final evidence/doc updates leave game/runtime/build tooling byte-identical.
+Worktree: C:/Users/Gordey/.codex/worktrees/arsenal-expansion/Blockfield,
+branch codex/arsenal-expansion, based on completed Rush3a39e64. The dirty primary
+checkout is preserved. No source or engine lease remains open.
 
-Private actual Web load measurement is complete: a24,576-cell roof detaches in
-145ticks, plain/saturated callbacks53.55/37.72 per second; worst saturated
-callback interval222.4ms. The helper completes and caps stay50/64/12. These are
-separate diagnostic measurements, not stable60FPS or physical-phone acceptance.
-Inherited Entry shutdown and source-input warnings remain explicitly recorded.
-Original third-person held models/killfeed class labels remain the source backup.
+Godot4.7.2.stable.official.ed1daf0bf; OpenSpades upstream
+dcf449c845d509bbde9d79239b32d201c1389961. Normal single-thread Compatibility Web
+uses pinned reduced templatea1ba66d55991c9dee57fda393cb3a8f5088fce527f931b204be51ed78693a922,
+same engine sourceed1daf0bf001b61586d9930840f2f1394092c079. Final frozen17 selected
+fixtures/import/smoke/export pass; all arsenal counts197/812/131/334/47/136/50/171
+have zero failures. Composed evidence covers102 registered fixtures across
+identified freezes, not102 reruns on one SHA. Exact commands/counts, individual
+X01–X20 desktop/synthetic-touch evidence, original source/TDM/Minecraft regression,
+actual3-kill Rush card/Field kit/pause/full pending kit/Replay and failure history
+are in [arsenal evidence](arsenal-evidence.md) and [ADR0036](decisions/0036-authored-arsenal.md).
 
-Owned servers: ordinary8127 PID47244/session66657; private benchmark8128
-PID43928/session70386. Ordinary frozen exports have30files; ignored touch helpers
-in build/web must never be published. Publish only the checked frozen folder.
-Heartbeat zombie-rush stays ACTIVE until all20/public acceptance is complete.
-Prior attempts, failures and specialist handoffs are preserved in
+Private real Web roof measurement:24,576cells/145ticks; plain/saturated rendered
+callbacks53.55/37.72 per second, worst saturated interval222.4ms; bounded50/64/12
+pools, pause/reset/completion checked. Final native terrain max11.813ms; private
+native driver max18.892ms. These are measured limits, not stable60FPS or physical
+phone acceptance. Physical-phone comfort/performance remains untested. New held
+models are first-person; original third-person models/killfeed class labels remain.
+Inherited Entry shutdown11zero-reference and source-input diagnostics, and the
+minor pending-card live-stock display limit, are retained explicitly in evidence.
+
+Heartbeat zombie-rush is PAUSED after completed acceptance (tool result verified).
+Owned local servers8127(PID47244) and8128(PID43928) are stopped after exact command-line checks;
+the public game does not depend on them. Keep the managed worktree for source,
+review and ignored evidence. Historical attempts/handoffs are preserved in
 [arsenal development history](history/2026-10-13-arsenal-development.md).
 
 ## Market-oriented Rush — 2026-10-12 (completed development iteration)

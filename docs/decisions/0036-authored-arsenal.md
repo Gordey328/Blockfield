@@ -1,7 +1,9 @@
 # 0036 Authored arsenal and bounded local ordnance
 
-Date: 2026-10-13 (Europe/Moscow). Status: accepted implementation; verification and
-release are in progress. User request starts on 2026-10-12.
+Date: 2026-10-13 (Europe/Moscow). Status: accepted, implemented and verified for
+addition A04. User request starts on2026-10-12. [Evidence](../arsenal-evidence.md)
+records all20/native/ordinary desktop/synthetic touch, load measurement and Pages.
+Physical phone and full OpenSpades port acceptance remain separate.
 
 The user requests twenty imaginative additional weapons, bombs and stratagems.
 Finished Rush branch3a39e6445e942855ac202714bbdc8a42cddd3921 is the base; it is

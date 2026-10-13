@@ -1,7 +1,8 @@
 # Twenty-item arsenal evidence
 
-Updated 2026-10-13, Europe/Moscow. Status: IMPLEMENTED; exported browser and
-publication acceptance remain pending. This is user addition A04, separate from
+Updated2026-10-13, Europe/Moscow. Status: VERIFIED for addition A04. All20
+ordinary desktop/synthetic-touch applications, integration, load/pause/reset and
+public-game/file checks are complete. This is user addition A04, separate from
 original OpenSpades parity. Base Rush is 3a39e6445e942855ac202714bbdc8a42cddd3921.
 Engine: Godot 4.7.2.stable.official.ed1daf0bf, Compatibility, fixed 60 Hz.
 Upstream: dcf449c845d509bbde9d79239b32d201c1389961.
@@ -14,26 +15,26 @@ and scene coverage rather than a catalog-only assertion.
 
 | ID | Native mechanism evidence | Ordinary Web evidence |
 |---|---|---|
-| X01 Штопор | Charge, eight-cell span, two actors, cover before cuts, bedrock, cancellation | Pending |
-| X02 Кирпичемёт | Swept gravity projectile, damage and collision-aware impulse | Pending |
-| X03 Скрепка | Four visible chained targets, falloff and slow, cover between links | Pending |
-| X04 Утюг | Finite sustained fuel/heat, sticky burn, fire removes cold, self risk | Pending |
-| X05 Морозилка | Accumulated slow/freeze, timed thaw, life identity and heavy shatter | Pending |
-| X06 Бумеранг мясника | Returning swept saw, ricochet cap and one live saw admission | Pending |
-| X07 Улей | Visible target lock, generation validation, three swept homing projectiles | Pending |
-| X08 Пылесос проблем | Pull under held input, release push, cancellation never pushes | Pending |
-| X09 Пеноплюй | Supported placement, actor clearance, ownership/expiry, bounded 36 cells | Pending |
-| X10 Гравимолот | Windup, local impulse/cuts and frozen-target shatter | Pending |
-| X11 Снос по расписанию | Three sticky charges, support/version guards, remote detonation/finite timeout | Pending |
-| X12 Попкорн | Five bounded bouncing descendants, staggered explosions, capacity reservation | Pending |
-| X13 Чёрная дырочка | Finite pull field, collision-aware motion and one final blast | Pending |
-| X14 Дискотека | Reachable visible lure changes real zombie AI; existing bite keeps its target | Pending |
-| X15 Банановая республика | Three finite armed mines, launch and capped chain reaction | Pending |
-| X16 Карманное солнце | Four-second warning, real crater and owner death, one stock, deferred work retained | Pending |
-| X17 Небесный перфоратор | Warning preserves terrain; narrow finite roof penetration, cover/bedrock | Pending |
-| X18 Рояль в кустах | Five warned falling impacts, line placement, finite support and five notes | Pending |
-| X19 Турель в чемодане | Destructible visible target helper, sixty rounds/expiry, occlusion | Pending |
-| X20 Пинок небес | Finite thrust and stock, native collision/ceiling, pause/fuel and reset | Pending |
+| X01 Штопор | Charge, eight-cell span, two actors, cover before cuts, bedrock, cancellation | Desktop/touch charge and3→2; distinctive drill and actual cuts |
+| X02 Кирпичемёт | Swept gravity projectile, damage and collision-aware impulse | Desktop/touch lob and4→3; visible brick |
+| X03 Скрепка | Four visible chained targets, falloff and slow, cover between links | Desktop/touch8→7; final Rush finite8→0 combat and credited kills |
+| X04 Утюг | Finite sustained fuel/heat, sticky burn, fire removes cold, self risk | Desktop fuel240→162; touch240→193 with simultaneous joystick |
+| X05 Морозилка | Accumulated slow/freeze, timed thaw, life identity and heavy shatter | Desktop24→12; touch24→17 and cold feedback |
+| X06 Бумеранг мясника | Returning swept saw, ricochet cap and one live saw admission | Desktop/touch1→0, visible returning saw |
+| X07 Улей | Visible target lock, generation validation, three swept homing projectiles | Desktop/touch valid lock/rockets, invalid aim retains stock; final Rush3→2 and corpse |
+| X08 Пылесос проблем | Pull under held input, release push, cancellation never pushes | Desktop180→110; touch180→139 held/release |
+| X09 Пеноплюй | Supported placement, actor clearance, ownership/expiry, bounded 36 cells | Desktop/touch4→3 and actual pink3×3 cover/expiry |
+| X10 Гравимолот | Windup, local impulse/cuts and frozen-target shatter | Desktop/touch held windup and local cuts; finite cooldown, no ammo required |
+| X11 Снос по расписанию | Three sticky charges, support/version guards, remote detonation/finite timeout | Desktop3→2/expiry and right-click crater; touch Fire/Aim remote crater |
+| X12 Попкорн | Five bounded bouncing descendants, staggered explosions, capacity reservation | Desktop/touch2→1 and visible cascade; equipped in final Rush kit |
+| X13 Чёрная дырочка | Finite pull field, collision-aware motion and one final blast | Desktop/touch1→0 and visible finite pull field |
+| X14 Дискотека | Reachable visible lure changes real zombie AI; existing bite keeps its target | Desktop/touch2→1/multicolor field; final Rush live zombie approaches decoy away from owner |
+| X15 Банановая республика | Three finite armed mines, launch and capped chain reaction | Desktop/touch3→0 and three distinct deployed mine models |
+| X16 Карманное солнце | Four-second warning, real crater and owner death, one stock, deferred work retained | Desktop/touch1→0, siren/warning/crater; touch jet escape combination |
+| X17 Небесный перфоратор | Warning preserves terrain; narrow finite roof penetration, cover/bedrock | Desktop/touch2→1 after Aim/Confirm and actual narrow hole |
+| X18 Рояль в кустах | Five warned falling impacts, line placement, finite support and five notes | Desktop/touch2→1 after Aim/Confirm, warned line and actual cuts; final320 Aim/Confirm flow |
+| X19 Турель в чемодане | Destructible visible target helper, sixty rounds/expiry, occlusion | Desktop/touch supported2→1; final Rush helper damage contributes to3-kill card |
+| X20 Пинок небес | Finite thrust and stock, native collision/ceiling, pause/fuel and reset | Desktop/touch real lift; simultaneous touch joystick; final Rush2→1, finite thrust/cooldown retained after Field kit |
 
 `test_arsenal_terrain.gd` checks concurrent replacement/support, receipt
 backpressure, bounded work, ownership, cancellation and observer disposal. A
@@ -210,3 +211,92 @@ closed and support-targeting banks measure y74–147, before the24px aim area
 y148–172; all five targets remain56CSS and stock stays visible. Logs:
 .cache/logs/test-arsenal-panel-pending-final.log,
 test-arsenal-scene-pending-final.log and arsenal-panel-pending-import.log.
+
+## Final ordinary freeze and browser regression
+
+Source a8545ca6fd5580f25ad52f861888f68d7b768721 passes all17 selected fixtures,
+import, runtime smoke and ordinary Compatibility export. Exact command:
+
+```text
+C:/Users/Gordey/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe -X utf8 tools/release_checkpoint.py --revision a8545ca6fd5580f25ad52f861888f68d7b768721 --import-cache game/.godot --suite arsenal-runtime --suite arsenal-terrain --suite arsenal-view --suite arsenal-panel --suite arsenal-records --suite arsenal-scene --suite arsenal-lab --suite arsenal-web-benchmark --suite mobile-controls --suite mobile-look --suite mobile-aim-assist --suite game-shell --suite rush-upgrade-panel --suite rush-scene --suite source-input --suite offline-tdm-scene --suite survival-scene
+```
+
+Log .cache/logs/arsenal-frozen-a8545ca.log, with individual frozen logs in
+.cache/release-a8545ca6fd55/.cache/logs. Counts: authority197, terrain812,
+view/audio131, Panel334, records47, actual Rush scene136, actual lab50,
+benchmark171; original source-input34, mobile10059, mobile-look223,
+aim-assist79, shell436, Rush UI298, original Rush scene66, TDM scene68,
+survival scene36. All zero failures. Composed102-suite evidence is distinguished
+from these17 final reruns. Inherited smoke/source diagnostics remain as above.
+Final native roof max11.813ms/145ticks/24,576cells; separate native diagnostic
+helper total902.026ms/max18.892ms/182callbacks including8paused. Earlier and real
+Web timing observations remain preserved; these are not phone/FPS promises.
+
+Actual final ordinary IAB interaction uses only visible UI and normal input:
+
+- Rush x03/x14/[x19,x20]: finite arc ammunition, real multicolor decoy and a
+  visible pursuer leaving the owner's close side toward the field; health remains
+ 100 through that interval. Production AI retarget/cover/bite semantics are
+  asserted separately in the actual native scene. A terminal42-second run shows
+ 2kills/410score and the matching kit's personal record.
+- Rush x07/x12/[x19,x20]: valid rockets3→2 and a real corpse; finite turret and
+  jet calls2→1. Combat reaches3kills/435score and the actual upgrade card.
+  A game-button PNG is .cache/previews/arsenal-web/a854-rush-card.png. The card
+  stays3/435 during inspection/download. Field kit is chosen; spent support
+  stocks remain1, with active jet thrust/cooldown still finite. No hidden game
+  state is read or injected; only DOM TouchEvents and real keyboard input are used.
+- The paused catalogue changes all four future slots to x01/x16/[x18,x17]
+  across separate HUD updates. Reopening Weapons retains x01's checkmark;
+  closing still displays the live x07/x12/[x19,x20] bank. Actual Replay waits
+  loading and adopts every new slot, fresh3/12primary stock/100health and restored
+  new-attempt terrain. Ordinary respawn retaining craters is in the earlier lab pass.
+- Actual568×320 closed and targeting bank leaves the central24px aim clear;
+  More→Aim folds into visible Confirm without spending support stock.844×390
+  compact actions and390×844 immediate settled card height/Home Classic opt-out
+  are also inspected. Final source enum/profile paths remain separate.
+- Original Web TDM uses SMG30→15, moves to the existing cover, makes an actual
+  source block hole and shows autonomous bot kills/team score0:3. Its pause reads
+ 4:49. Original Minecraft survival uses source shotgun6→4 and a real wood-wall
+  hole; the colored imported map/minimap, ordinary preparation/pause/replay and
+  terminal zombie outcome are inspected. MIRA HQ's unchanged bundle/asset/native
+  checks are retained; this does not claim another complete playthrough of every map.
+
+The ordinary frozen export is58,255,983bytes/30files. tools/publish_pages_variant.py
+--folder .cache/release-a8545ca6fd55/build/web --slug arsenal publishes only the
+new /arsenal/ path. Bundle commit c477e4e39f772ed5b6a92afd7c35f975cf3f1044 changes
+exactly those30 arsenal/ files, preserving root/rush/other siblings. GitHub Pages
+status built/error.message=null, updated2026-10-13T05:31:29Z. All30 actual HTTP200
+responses SHA256 match the frozen export, including engine/PCK/maps/notices:
+.cache/verify_arsenal_public.py --folder .cache/release-a8545ca6fd55/build/web
+--url https://gordey328.github.io/Blockfield/arsenal/ --output
+.cache/previews/arsenal-web/public-sha256.json. Verification log
+.cache/logs/arsenal-public-verification.log. Neither touch nor private benchmark
+helpers is published. Final public input/render acceptance is recorded below.
+
+Minor retained catalogue display limit: next-attempt cards show live stock and
+cooldowns for currently equipped items, although Replay restores authored stocks.
+This display does not gate equipment or refill resources. Native/actual Replay
+checks above verify that boundary. Physical phone testing remains separate.
+
+## Public game acceptance
+
+Actual https://gordey328.github.io/Blockfield/arsenal/?v=a8545ca loads the ordinary
+engine/PCK and catalogue. Real public Rush starts, records a terminal outcome and
+repeats with fresh map/life; charged gauss3→2 and jet2→1 are observed. An invalid
+sun aim preserves stock and reports rejection; it is not counted as a detonation.
+In the public lab, the original unlimited-resources switch is explicitly OFF.
+Normal mouse drag changes the view; a valid sun placement spends1→0, displays
+its large warning ring, and a jet2→1 with finite thrust escapes. Actual resumed
+input advances the fuse; a real large crater appears while the owner survives.
+The two game-button PNG downloads are
+.cache/previews/arsenal-web/public-arsenal.png (warning/jet) and public-crater.png
+(canonical crater/stock0). Earlier failed-aim PNG is retained as diagnostic,
+not used as successful bomb evidence. Public URL-filtered error/warning logs
+are empty; ordinary IAB pointer-lock restrictions/fallback from prior passes
+remain documented. Source runtimea8545ca is fast-forwarded into origin/dev and
+remote heads match. Release evidence/doc commits do not change its runtime.
+
+This completes A04/X01–X20 acceptance as the authored addition. The game remains
+a development OpenSpades port: original parity rows, first-person-only new held
+models, source killfeed class labels, physical phone comfort/performance and the
+measured saturated frame-cost limit retain their separate stated boundaries.

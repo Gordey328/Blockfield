@@ -112,7 +112,7 @@ promote full P01/P08–P16 or W03 acceptance.
 | ID | Feature and acceptance requirement | Evidence | Iteration | Status |
 | --- | --- | --- | --- | --- |
 | A03 | Blockfield Rush: canonical three-minute survival, one-click Home/replay, kill-based run upgrades and per-weapon local records | User2026-10-12; [ADR0035](decisions/0035-market-oriented-rush.md); frozen3dd42ab/parser/export; Rush850/0, UI274/0, records13/0, real scene66/0; ordinary local/public start/fire/pause/results and controlled Web card render/input/freeze; built Pages/public30 SHA-match; [evidence and limits](rush-iteration.md). Physical phone, full-duration manual win, retention/market fit and portal acceptance remain separate | Market iteration | VERIFIED |
-| A04 | Twenty original weapons/tools, bombs and stratagems, real effects and loadout | User2026-10-12; [plan](arsenal-plan.md), [ADR0036](decisions/0036-authored-arsenal.md); source exists and partial native fixtures pass; full-game/Web/publication acceptance in progress | Arsenal addition | IMPLEMENTED |
+| A04 | Twenty original weapons/tools, bombs and stratagems, real effects and loadout | User2026-10-12; [plan](arsenal-plan.md), [ADR0036](decisions/0036-authored-arsenal.md), [individual evidence](arsenal-evidence.md); frozen a8545ca:17 suites/import/export; all20 desktop/synthetic-touch, Rush/AI/card/replay, bounded world/pools; public30SHA256 and real Pages input/crater. Physical phone/full port remain separate | Arsenal addition | VERIFIED |
 
 ## Presentation, UI and content
 
