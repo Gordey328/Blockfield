@@ -67,7 +67,11 @@ func restore() -> void:
 
 func close_scene() -> void:
 	LabInputBindings.release_actions()
-	if is_instance_valid(app): app.queue_free()
+	if is_instance_valid(app):
+		# This fixture changes source selection repeatedly and then tears down Main.
+		# Stop the final original raise voice before its stream leaves the tree.
+		app.stop_audio()
+		app.queue_free()
 	await frames(3)
 	app = null
 
@@ -263,5 +267,8 @@ func run() -> void:
 	root.content_scale_size = window.scale_size
 	root.content_scale_mode = window.scale_mode
 	root.content_scale_aspect = window.scale_aspect
+	# Give the mixer the same bounded shutdown grace as the existing lab fixture.
+	OS.delay_msec(80)
+	await frames(2)
 	print("FULL ARSENAL INPUT: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

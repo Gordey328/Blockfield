@@ -51,3 +51,21 @@ old/full/map/class records. Runtime fixture verifies finite admission and toggle
 Frozen gate/export, ordinary browser interactions and public hashes are pending.
 No world destruction, authority timing, shared pools or AI mechanism is modified;
 the completed A04 measurements remain separately identified in arsenal-evidence.md.
+
+## Retained failed freeze
+
+Frozen c58817af588c48f4b8465a770149ceac08b68434 passed import and all selected
+behavioral assertions, including full input103/0, but the strict builder rejected
+its shutdown ERROR:2resources/8ObjectDB. Export did not run and this freeze is
+not a release. Verbose reproduction with its exact private user directory
+identifies only original SMG RaiseLocal.ogg and three Ogg playbacks, with no
+authority/scene coroutine leak. The previous working user settings did not show
+this cleanup diagnostic. The new input fixture must stop audio before freeing
+Main and allow the existing lab's80ms audio-thread drain before quit; production
+runtime is unchanged. Logs: `.cache/logs/full-arsenal-frozen-c58817a.log` and
+`.cache/release-c58817af588c/.cache/logs/full-input-private-verbose.log`.
+
+Repair is fixture-only: explicit Main.stop_audio before deletion, then the existing
+80ms mixer drain and two frames before quit. Same private directory / verbose
+reproduction passes103/0 with no leak/resource diagnostic. Its log is
+`.cache/release-c58817af588c/.cache/logs/full-input-private-repaired.log`.

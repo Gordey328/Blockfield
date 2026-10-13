@@ -26,6 +26,13 @@ shell436/Rush66/TDM68/mobile10059/survival36, all zero failures.
 existing Pages arsenal/ path and verify deployed bytes/input. Completed A04 and
 paused zombie-rush heartbeat remain intact.
 
+First frozen c58817a: gameplay assertions pass, but strict full-input gate rejects
+two original RaiseLocal.ogg resources still in use at exit in fresh privateprefs.
+Verbose reproduction identifies audio-thread teardown, not a gameplay failure.
+Fixture-only explicit stop/drain repair passes103/0 with no shutdown diagnostic
+in the exact private directory. Next freeze includes it; failedc588 is not exported.
+New draft [PR6](https://github.com/Gordey328/Blockfield/pull/6) is attached.
+
 ## Authored twenty-item arsenal — 2026-10-13 (completed and published)
 
 All20 X01–X20 are implemented and verified for addition A04 in the offline lab
