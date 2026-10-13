@@ -1,6 +1,6 @@
 # ADR0037 — Optional full inventory and mouse wheel
 
-Status: IMPLEMENTED pending verification/publication, 2026-10-13.
+Status: accepted and VERIFIED, 2026-10-13.
 
 The user requests a menu option to carry all weapons and switch with the mouse
 wheel. The Arsenal catalogue gains “Все 20 / All 20”. This grants all twenty
@@ -26,6 +26,7 @@ Survival/Rush freeze the live mode and save catalogue edits for next attempt,
 including Replay. Home “Classic kit” clears full mode and opts out; selecting
 source during the full wheel preserves the enabled full preference.
 
-Verification and release evidence will be recorded with source SHA, exact engine
-and commands in docs/full-arsenal-evidence.md. Desktop viewport and synthetic
+Verification and publication pass on frozenfd4cfef13 fixtures/import/smoke/export,
+ordinary desktop/synthetic-touch and built public30SHA256/button/wheel. Source SHA,
+exact engine, commands and retained failure are in docs/full-arsenal-evidence.md. Desktop viewport and synthetic
 touch checks do not accept a physical phone or the complete OpenSpades port.

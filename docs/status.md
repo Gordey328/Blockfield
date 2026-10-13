@@ -3,35 +3,44 @@
 Updated: 2026-10-13 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
-## Full arsenal menu / mouse wheel — 2026-10-13 (in progress)
+## Full arsenal menu / mouse wheel — 2026-10-13 (completed and published)
 
-User requests a menu option for carrying all authored equipment and switching
-with the mouse wheel. Branch codex/full-arsenal-wheel in the existing attached
-managed worktree starts from integrated origin/dev351bccd; primary dirty checkout
-is preserved. [ADR0037](decisions/0037-full-arsenal-wheel.md) defines optional
-strict-bool all_items, twenty X IDs plus the current original weapon/tool backup,
-finite inventories, favourite four-slot shortcuts and frozen Survival/Rush kits.
-Off mode and original three weapon/profile indices remain separate. Records use
-a distinct full-kit fingerprint. A05 is not yet accepted/exported/published.
+A05 is VERIFIED. Home→Arsenal→Все20 equips all twenty X01–X20 items in
+Lab/Survival/Rush. Mouse wheel wraps through them and the current original-class
+backup, including with the touch HUD enabled. Selection never refills resources
+or invokes support. Four slots remain favourite shortcuts. Old off-mode wheel,
+original three class indices, maps/AI/authority and source paths are preserved.
+Survival/Rush changes apply next attempt/Replay; full rules have a separate
+record fingerprint. Home Classic opts out; wheel backup retains the full setting.
 
-Coordinator owns ArsenalCoordinator/Player/Entry, build/docs/release. Specialists
-own Catalog/Loadout/Runtime+authority/records fixtures (arsenal_audit), Panel+UI
-fixture (arsenal_refs), actual scene/new wheel fixture (arsenal_terrain).
-Data contracts are agreed; source ownership does not overlap. All source leases
-are returned. Coordinator's sequential working parser/smoke and12 fixtures pass:
-runtime283/records88/Panel423/scene169/lab50/full-input103, original source34,
-shell436/Rush66/TDM68/mobile10059/survival36, all zero failures.
-[Exact commands and checks](full-arsenal-evidence.md) are recorded. Next: frozen
-13-fixture gate/export and ordinary Web menu/wheel/compact checks, then update only the
-existing Pages arsenal/ path and verify deployed bytes/input. Completed A04 and
-paused zombie-rush heartbeat remain intact.
+[Play](https://gordey328.github.io/Blockfield/arsenal/?v=fd4cfef).
+Frozen source fd4cfef58f2c9b858d20ff9cd3276007d9b9190d passes all13 selected
+fixtures, parser/import/smoke and ordinary Compatibility Web export: runtime283,
+records88, Panel423, scene169, Lab50, full input103, source34, shell436,
+launch46, Rush66, TDM68, mobile10059 and survival36, all zero failures.
+Godot4.7.2.stable.official.ed1daf0bf / pinned OpenSpades remain unchanged.
 
-First frozen c58817a: gameplay assertions pass, but strict full-input gate rejects
-two original RaiseLocal.ogg resources still in use at exit in fresh privateprefs.
-Verbose reproduction identifies audio-thread teardown, not a gameplay failure.
-Fixture-only explicit stop/drain repair passes103/0 with no shutdown diagnostic
-in the exact private directory. Next freeze includes it; failedc588 is not exported.
-New draft [PR6](https://github.com/Gordey328/Blockfield/pull/6) is attached.
+Real desktop Web traverses everyX+source and both wraps, retains Paperclip7
+after Fire8→7 plus21wheel steps, and preserves menu scrolling/preferences.
+Synthetic DOMtouch568×320/390×844 toggles and settled844×390 layout pass.
+Actual Rush finish/replay retains the full HUD; real native Rush cards/pause/
+pending-mode/record tests pass. Physical phone/full port remain separate.
+
+Pages bundle8f66709ea5d803571cabf91ef501dde2c91478ac is built/no error. All30
+HTTP200 public files/58,260,431bytes match the frozen SHA256. Only arsenal/
+build-info/index.html/index.pck change; root/rush/other paths are preserved.
+Public button on/checkmarks and actual wheel1→21→20→21→1→2, original SMG30/120
+and public PNG are observed; browser error log is empty. Helpers are excluded.
+
+Runtime is fast-forwarded into dev; attached [PR6](https://github.com/Gordey328/Blockfield/pull/6)
+reports merged/closed atfd4cfef. Managed branch codex/full-arsenal-wheel starts
+from completed dev351bccd in C:/Users/Gordey/.codex/worktrees/arsenal-expansion/Blockfield;
+dirty primary checkout is preserved. Coordinator/specialist source and engine
+leases are closed. Owned HTTP8127/PID49092 is stopped after command-line check;
+public game is independent. Paused zombie-rush heartbeat is not resumed.
+[Exact evidence/commands and retained first-freeze audio teardown failure](full-arsenal-evidence.md)
+and [accepted ADR0037](decisions/0037-full-arsenal-wheel.md) record the result.
+Final documentation changes leave game/tools/tests identical to the checked freeze.
 
 ## Authored twenty-item arsenal — 2026-10-13 (completed and published)
 
