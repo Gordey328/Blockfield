@@ -3,6 +3,29 @@
 Updated: 2026-10-13 (Europe/Moscow). This page is the authoritative current entry point.
 Earlier evidence and failed attempts are preserved in [2026-10-10 history](history/2026-10-10.md).
 
+## Full arsenal menu / mouse wheel — 2026-10-13 (in progress)
+
+User requests a menu option for carrying all authored equipment and switching
+with the mouse wheel. Branch codex/full-arsenal-wheel in the existing attached
+managed worktree starts from integrated origin/dev351bccd; primary dirty checkout
+is preserved. [ADR0037](decisions/0037-full-arsenal-wheel.md) defines optional
+strict-bool all_items, twenty X IDs plus the current original weapon/tool backup,
+finite inventories, favourite four-slot shortcuts and frozen Survival/Rush kits.
+Off mode and original three weapon/profile indices remain separate. Records use
+a distinct full-kit fingerprint. A05 is not yet accepted/exported/published.
+
+Coordinator owns ArsenalCoordinator/Player/Entry, build/docs/release. Specialists
+own Catalog/Loadout/Runtime+authority/records fixtures (arsenal_audit), Panel+UI
+fixture (arsenal_refs), actual scene/new wheel fixture (arsenal_terrain).
+Data contracts are agreed; source ownership does not overlap. All source leases
+are returned. Coordinator's sequential working parser/smoke and12 fixtures pass:
+runtime283/records88/Panel423/scene169/lab50/full-input103, original source34,
+shell436/Rush66/TDM68/mobile10059/survival36, all zero failures.
+[Exact commands and checks](full-arsenal-evidence.md) are recorded. Next: frozen
+13-fixture gate/export and ordinary Web menu/wheel/compact checks, then update only the
+existing Pages arsenal/ path and verify deployed bytes/input. Completed A04 and
+paused zombie-rush heartbeat remain intact.
+
 ## Authored twenty-item arsenal — 2026-10-13 (completed and published)
 
 All20 X01–X20 are implemented and verified for addition A04 in the offline lab

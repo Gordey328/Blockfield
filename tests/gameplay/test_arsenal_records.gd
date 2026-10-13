@@ -28,6 +28,21 @@ func state(score: Variant = 400) -> Dictionary:
 
 func identity_checks() -> void:
 	var loadout: Dictionary = CATALOG.defaults()
+	check(LOADOUT.fingerprint(loadout)=="5f52d6e822df3482b8b83969f39f670d4609641c2138d8874e995bff7e1a6e14","legacy default record fingerprint retains its exact published SHA256")
+	check(LOADOUT.fingerprint(loadout,"crossroads",0)=="3d503dd2d56a137385da71f975fae4e584e69b980fb15096154284c3fa17365f","legacy rifle-backup identity retains its exact published SHA256")
+	check(LOADOUT.fingerprint(loadout,"mira_hq",2)=="42392df914195282f0a5bc67e2599625d850d8dd137f239ef4fe70b8ce657634","legacy map/shotgun identity retains its exact published SHA256")
+	var alternative: Dictionary = {"primary":"x03","bomb":"x14","stratagems":["x18","x19"]}
+	check(LOADOUT.fingerprint(alternative)=="3c2358ea15e5e936bfc87e2039e104e8de6f6f379d450db2c0a929c67f3b412c","legacy alternate-kit identity retains its exact published SHA256")
+	for flag: Variant in [false,0,1,-1,1.0,"true",null,[],{}]:
+		var raw: Dictionary = loadout.merged({"all_items":flag})
+		check(CATALOG.canonical_loadout(raw)==loadout and not CATALOG.canonical_loadout(raw).has("all_items"),"only strict booltrue survives canonical full-inventory admission: "+str(flag))
+		check(LOADOUT.fingerprint(raw)==LOADOUT.fingerprint(loadout),"off or invalid option cannot split the legacy record identity: "+str(flag))
+	var full: Dictionary = loadout.merged({"all_items":true})
+	check(CATALOG.canonical_loadout(full)==full and CATALOG.canonical_loadout(full).all_items==true and not CATALOG.defaults().has("all_items"),"full flag is optional and defaults remain byte-compatible dictionaries")
+	check(CATALOG.FULL_RULES_VERSION=="arsenal_all_v1" and LOADOUT.fingerprint(full)==("arsenal_all_v1|crossroads|source:1|x01|x12|x17|x20").sha256_text(),"full inventory uses its explicit separate rules prefix")
+	check(LOADOUT.fingerprint(full)!=LOADOUT.fingerprint(loadout),"all twenty items cannot inherit the four-slot score bucket")
+	check(LOADOUT.fingerprint(full,"crossroads",0)!=LOADOUT.fingerprint(full,"crossroads",1) and LOADOUT.fingerprint(full,"crossroads",2)!=LOADOUT.fingerprint(full,"crossroads",1) and LOADOUT.fingerprint(full,"crossroads",0)!=LOADOUT.fingerprint(full,"crossroads",2),"full inventory retains all three original backup-class identities")
+	check(LOADOUT.fingerprint(full,"crossroads")!=LOADOUT.fingerprint(full,"mira_hq"),"full inventory maps retain separate identities")
 	var reordered: Dictionary = {"stratagems": ["x17", "x20"], "bomb": "x12", "primary": "x01"}
 	check(LOADOUT.fingerprint(loadout) == LOADOUT.fingerprint(reordered), "dictionary key order does not create another record identity")
 	check(LOADOUT.fingerprint(loadout) == LOADOUT.fingerprint(reordered.merged({"cosmetic": "ignored", "weapon": 19})), "ignored fields cannot create another scoring bucket")
@@ -59,6 +74,9 @@ func identity_checks() -> void:
 	launch.arsenal = "x20"
 	validated = MAPS.validate(launch)
 	check(not validated.ok or not validated.configuration.has("arsenal"), "malformed expansion cannot become an arbitrary launch value")
+	launch.arsenal = full
+	validated = MAPS.validate(launch)
+	check(validated.ok and validated.configuration.arsenal==full,"trusted launch canonicalization carries the explicit full-inventory flag")
 
 func storage_checks() -> void:
 	var original: Array[int] = [100, 200, 300]
@@ -97,11 +115,29 @@ func storage_checks() -> void:
 	var error: Dictionary = RECORDS.arsenal_record(loadout, state(1000), "crossroads", "user://arsenal_fixture_missing_7352/record.cfg")
 	check(not error.saved and not str(error.error).is_empty(), "storage failure is explicit and does not claim a saved result")
 
+func full_inventory_storage_checks() -> void:
+	var legacy: Dictionary = CATALOG.defaults()
+	var full: Dictionary = legacy.merged({"all_items":true})
+	check(LOADOUT.save(full,true,PREFS)==OK and LOADOUT.load_saved(PREFS)=={"enabled":true,"loadout":full},"full-inventory preference survives durable save/load")
+	check(LOADOUT.save(full,false,PREFS)==OK and LOADOUT.load_saved(PREFS)=={"enabled":false,"loadout":full},"selecting the original backup preserves the saved full-inventory preference")
+	check(LOADOUT.save(legacy.merged({"all_items":false}),true,PREFS)==OK and LOADOUT.load_saved(PREFS)=={"enabled":true,"loadout":legacy},"disabling full mode removes its optional key from saved legacy preferences")
+	check(RECORDS.arsenal_best(full,"crossroads",PATH)==0,"full-inventory scores begin separately from the existing four-slot best")
+	check(RECORDS.arsenal_record(full,state(1375),"crossroads",PATH).saved and RECORDS.arsenal_best(full,"crossroads",PATH)==1375,"completed finite full-inventory run stores its separate earned score")
+	check(RECORDS.arsenal_best(legacy,"crossroads",PATH)==800 and RECORDS.best(1,PATH)==250,"full record preserves existing legacy and original scores")
+	check(RECORDS.arsenal_record(full,state(1450),"crossroads",PATH,0).saved and RECORDS.arsenal_record(full,state(1550),"crossroads",PATH,2).saved,"full inventory stores each original backup class independently")
+	check(RECORDS.arsenal_record(full,state(1650),"mira_hq",PATH).saved and RECORDS.arsenal_best(full,"crossroads",PATH)==1375,"full map records remain independent")
+	check(RECORDS.record(2,state(425),PATH).saved,"original shotgun score may still be improved after full records exist")
+	check(RECORDS.best(0,PATH)==100 and RECORDS.best(1,PATH)==250 and RECORDS.best(2,PATH)==425 and RECORDS.arsenal_best(legacy,"crossroads",PATH)==800 and RECORDS.arsenal_best(legacy,"crossroads",PATH,0)==625 and RECORDS.arsenal_best(legacy,"crossroads",PATH,2)==775,"original record rewrite preserves legacy/map/class neighbors")
+	check(RECORDS.arsenal_best(full,"crossroads",PATH,0)==1450 and RECORDS.arsenal_best(full,"crossroads",PATH,1)==1375 and RECORDS.arsenal_best(full,"crossroads",PATH,2)==1550 and RECORDS.arsenal_best(full,"mira_hq",PATH)==1650,"original record rewrite preserves every full rules/map/class bucket")
+	check(RECORDS.arsenal_record(legacy,state(850),"crossroads",PATH).saved and RECORDS.arsenal_best(full,"crossroads",PATH)==1375,"later four-slot improvement cannot overwrite the full-inventory best")
+	check(RECORDS.arsenal_best(legacy.merged({"all_items":false}),"crossroads",PATH)==850 and RECORDS.arsenal_best(legacy.merged({"all_items":"true"}),"crossroads",PATH)==850,"off and malformed flags recover the existing legacy score without inheriting full records")
+
 func run() -> void:
 	remove_fixture(PATH)
 	remove_fixture(PREFS)
 	identity_checks()
 	storage_checks()
+	full_inventory_storage_checks()
 	remove_fixture(PATH)
 	remove_fixture(PREFS)
 	print("ARSENAL RECORDS: %d checks, %d failures" % [checks, failures])

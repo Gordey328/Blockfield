@@ -1,5 +1,13 @@
 # Accepted iterations
 
+## Full arsenal option — 2026-10-13
+
+The user requests carrying all weapons through a menu option and cycling with
+the mouse wheel. Addition A05 extends A04's authored twenty-item roster and keeps
+finite resources, source backup, the four favourite shortcuts and old mode off.
+Survival/Rush menu changes apply on the next attempt; full-kit records have a
+distinct rules fingerprint. See [ADR0037](decisions/0037-full-arsenal-wheel.md).
+
 ## Accepted arsenal addition — 2026-10-12
 
 The user requests about twenty diverse fun weapons, bombs and stratagems after

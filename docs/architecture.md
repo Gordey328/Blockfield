@@ -6,7 +6,12 @@
   original weapon enums. ArsenalTerrain commits cooperative guarded edits and
   collapse; Main presents their canonical receipts once. Coordinator connects
   Home/loadout, existing fire/touch, pause/choice/restart and separate Rush records.
-  View/panel/audio consume snapshots/intents only. See [ADR0036](decisions/0036-authored-arsenal.md).
+  View/panel/audio consume snapshots/intents only. Optional all_items grants every
+  X ID, retaining finite inventory and a separate arsenal_all_v1 fingerprint.
+  Coordinator consumes unhandled wheel input before Player's touch-mouse filter;
+  Panel.set_selection is silent, while catalogue changes retain next-attempt
+  semantics. The21-entry cycle ends at the original current-class backup.
+  See [ADR0036](decisions/0036-authored-arsenal.md) and [ADR0037](decisions/0037-full-arsenal-wheel.md).
 - Rush is a canonical variant of OfflineSurvivalSession, with kill-based run choices
   and actor-scoped firearm/zombie-armor modifiers. Pending choice and unfinished
   launch preparation independently gate fixed simulation and HUD input. RushRecords

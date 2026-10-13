@@ -50,6 +50,7 @@ var _apply: Button
 var _reload: Button
 var _source: Button
 var _home_source: Button
+var _all_items: Button
 var _catalog: Button
 var _close_button: Button
 var _title: Label
@@ -63,6 +64,7 @@ var _canceled_touches: Dictionary[int, bool] = {}
 var _stock_text: String = ""
 var _entries: Array[Dictionary] = []
 var _entry_by_id: Dictionary[String, Dictionary] = {}
+var _cycle: Array[String] = []
 
 func _ready() -> void:
 	_ensure_built()
@@ -93,6 +95,18 @@ func set_readout(readout: Dictionary) -> void:
 func set_loadout(loadout: Dictionary) -> void:
 	_ensure_built()
 	_loadout = CATALOG.canonical_loadout(loadout)
+	_render()
+
+func set_selection(id: String) -> void:
+	# The coordinator already admitted wheel selection. This updates presentation
+	# without asking it to select/apply again or changing the saved composition.
+	_ensure_built()
+	if id != "source" and _entry(id).is_empty(): return
+	_cancel_touches()
+	_actions_open = false
+	_targeting = false
+	_submitted = false
+	_selected = id
 	_render()
 
 func set_enabled(value: bool) -> void:
@@ -185,7 +199,9 @@ func get_display_state() -> Dictionary:
 		"apply_disabled": _apply.disabled, "apply_text": _apply.text,
 		"hint": _hint.text, "stock_text": _meter.text,
 		"columns": _grid.columns, "minimum_target_css": TARGET_CSS,
-		"actions_open": _actions_open, "compact_bank": _compact_bank}
+		"actions_open": _actions_open, "compact_bank": _compact_bank,
+		"all_items": bool(_loadout.get("all_items", false)),
+		"live_all_items": bool(_combat_loadout().get("all_items", false)), "wheel": _wheel_state()}
 
 func _ensure_built() -> void:
 	if _built: return
@@ -193,6 +209,7 @@ func _ensure_built() -> void:
 	layer = 130
 	_loadout = CATALOG.defaults()
 	_entries = CATALOG.entries()
+	_cycle = CATALOG.inventory_cycle()
 	for entry: Dictionary in _entries: _entry_by_id[str(entry.id)] = entry
 	_canvas = Control.new()
 	_canvas.name = "ArsenalCanvas"
@@ -250,7 +267,12 @@ func _ensure_built() -> void:
 	_home_source = _button("ArsenalHomeClassic", _return_source)
 	_home_source.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_home_source.custom_minimum_size.x = 128
+	_home_source.tooltip_text = _ui("Обычный набор: выключить новый арсенал, сохранив избранные предметы.", "Classic kit: turn off the new arsenal and retain favorite items.")
 	heading.add_child(_home_source)
+	_all_items = _button("ArsenalAllItems", _toggle_all_items)
+	_all_items.toggle_mode = true
+	_all_items.size_flags_horizontal = Control.SIZE_SHRINK_END
+	heading.add_child(_all_items)
 	_close_button = _button("ArsenalClose", func() -> void: close())
 	_close_button.size_flags_horizontal = Control.SIZE_SHRINK_END
 	heading.add_child(_close_button)
@@ -318,6 +340,10 @@ func _render() -> void:
 	_source.text = _ui("Обычное", "Classic")
 	_home_source.text = _ui("Обычный набор", "Classic kit")
 	_home_source.visible = _home_mode
+	_all_items.text = _ui("Все 20", "All 20") + "\n" + (_ui("Вкл", "On") if bool(_loadout.get("all_items", false)) else _ui("Выкл", "Off"))
+	_all_items.button_pressed = bool(_loadout.get("all_items", false))
+	_all_items.disabled = not _enabled
+	_all_items.tooltip_text = _ui("Все 20 доступны для переключения колесом мыши. Четыре слота — избранные; запасы остаются конечными.", "All20 are available through the mouse wheel. Four slots are favorites; resources remain finite.")
 	_reload.text = _ui("Зарядить", "Reload")
 	_tabs.primary.text = _ui("Оружие · 10", "Weapons · 10")
 	_tabs.bomb.text = _ui("Бомбы · 6", "Bombs · 6")
@@ -328,10 +354,13 @@ func _render() -> void:
 		_strat_buttons[index].text = _ui("В слот поддержки %d", "Equip support slot %d") % (index + 1)
 		_strat_buttons[index].button_pressed = index == _strat_slot
 	_instruction.text = _ui("Набор сохранён для следующей попытки.", "Kit saved for the next attempt.") if bool(_readout.get("catalog_next_attempt", false)) else _ui("Выбери предмет: 1 оружие, 1 бомба, 2 поддержки. Применяй после закрытия.", "Choose one weapon, one bomb and two supports. Use them after closing.")
+	if bool(_loadout.get("all_items", false)):
+		_instruction.text = _ui("Все20 доступны; карточки выбирают четыре избранных. Колесо переключает предметы.", "All20 are available; cards choose four favorites. Scroll the wheel to switch.") + (_ui(" Набор — для следующей попытки.", " Kit applies next attempt.") if bool(_readout.get("catalog_next_attempt", false)) else "")
 	for index: int in 4:
 		var id: String = _slot_item(index)
 		_slots[index].text = "%s\n%s" % [_slot_label(index), _name(id)]
 		_slots[index].tooltip_text = _description(id)
+		if bool(_combat_loadout().get("all_items", false)): _slots[index].tooltip_text += _ui("\nИзбранное: быстрый слот полного арсенала.", "\nFavorite: a full-arsenal shortcut.")
 		_slots[index].button_pressed = id == _selected
 	for id: String in _cards:
 		var entry: Dictionary = _entry(id)
@@ -355,6 +384,8 @@ func _render() -> void:
 		_meter.text += _ui(" · заряд %d%% · нагрев %d%%", " · charge %d%% · heat %d%%") % [roundi(float(_readout.get("charge", 0.0)) * 100), roundi(float(_readout.get("heat", 0.0)) * 100)]
 	if float(_readout.get("jet_remaining", 0.0)) > 0.0:
 		_meter.text += _ui(" · тяга %.1f с", " · thrust %.1f s") % float(_readout.jet_remaining)
+	_meter.text = _wheel_prefix() + _meter.text
+	_meter.tooltip_text = _meter.text + (_ui("\nКолесо мыши: все20 предметов и обычный набор.", "\nMouse wheel: all20 items and the classic kit.") if bool(_combat_loadout().get("all_items", false)) else "")
 	_stock_text = _meter.text
 	_hint.text = str(_readout.get("target_reason", _ui("Наведи прицел на видимое место и подтверди вызов", "Aim at a visible location and confirm support"))) if _targeting else ""
 	_hint.visible = _targeting
@@ -367,6 +398,18 @@ func _choose_category(category: String) -> void:
 
 func _choose_strat_slot(index: int) -> void:
 	_strat_slot = clampi(index, 0, 1)
+	_render()
+
+func _toggle_all_items() -> void:
+	if not _enabled or not _catalog_open: return
+	_cancel_touches()
+	_actions_open = false
+	_targeting = false
+	var composition: Dictionary = _loadout.duplicate(true)
+	if bool(composition.get("all_items", false)): composition.erase("all_items")
+	else: composition.all_items = true
+	_loadout = CATALOG.canonical_loadout(composition)
+	loadout_changed.emit(_loadout.duplicate(true))
 	_render()
 
 func _equip(id: String) -> void:
@@ -473,9 +516,21 @@ func _slot_label(index: int) -> String:
 	return [_ui("Оружие", "Weapon"), _ui("Бомба", "Bomb"), _ui("Поддержка 1", "Support 1"), _ui("Поддержка 2", "Support 2")][index]
 
 func _is_equipped(id: String) -> bool:
+	if bool(_loadout.get("all_items", false)): return not _entry(id).is_empty()
 	for index: int in 4:
 		if _composition_slot(_loadout, index) == id: return true
 	return false
+
+func _wheel_state() -> Dictionary:
+	if not bool(_combat_loadout().get("all_items", false)): return {"active":false, "index":0, "count":0}
+	var count: int = maxi(1, int(_readout.get("wheel_count", _cycle.size())))
+	var index: int = _cycle.find(_selected) + 1
+	if str(_readout.get("selected_item", "")) == _selected: index = int(_readout.get("wheel_index", index))
+	return {"active":true, "index":clampi(index, 1, count), "count":count}
+
+func _wheel_prefix() -> String:
+	var wheel: Dictionary = _wheel_state()
+	return _ui("Колесо %d/%d · ", "Wheel %d/%d · ") % [wheel.index, wheel.count] if bool(wheel.active) else ""
 
 func _name(id: String) -> String:
 	var entry: Dictionary = _entry(id)
@@ -535,17 +590,23 @@ func _refresh_layout() -> void:
 	_more.disabled = _apply.disabled if _targeting else not _enabled
 	_actions_row.visible = not _compact_bank or _actions_open
 	_meter.max_lines_visible = 1 if _compact_bank else -1
-	_meter.text = _hint.text if _compact_bank and _targeting else _stock_text
+	_meter.text = _wheel_prefix() + _hint.text if _compact_bank and _targeting else _stock_text
 	_hint.visible = _targeting and not _compact_bank
 	_instruction.visible = not compact
 	_title.text = _ui("Арсенал · на следующую попытку", "Arsenal · next attempt") if compact and bool(_readout.get("catalog_next_attempt", false)) else _ui("Арсенал · 20 идей", "Arsenal · 20 inventions")
-	_title.add_theme_font_size_override("font_size", 18 if compact else 22)
+	var narrow_header: bool = css.x < 600.0
+	if narrow_header: _title.text = _ui("Следующая попытка", "Next attempt") if compact and bool(_readout.get("catalog_next_attempt", false)) else _ui("Арсенал", "Arsenal")
+	_title.add_theme_font_size_override("font_size", 18 if compact or narrow_header else 22)
 	var width: float = minf(css.x - inset.x * 2, 580.0)
 	_bank.position = Vector2((css.x - width) * .5, maxf(inset.y, 74.0 if short_bank else (76.0 if compact else 82.0)))
 	_bank.size = Vector2(width, 0)
 	for button: Button in _all_buttons: button.custom_minimum_size.x = TARGET_CSS
 	_more.custom_minimum_size.x = maxf(TARGET_CSS, ceilf(_more.get_theme_font("font").get_string_size(_more.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 16.0))
 	_home_source.custom_minimum_size.x = 128
+	if narrow_header:
+		_home_source.text = _ui("Обычное", "Classic")
+		_home_source.custom_minimum_size.x = 88
+	_all_items.custom_minimum_size.x = 72
 	var panel_padding: float = _overlay.get_theme_stylebox("panel").get_minimum_size().x
 	var margins: float = _catalog_margin.get_theme_constant("margin_left") + _catalog_margin.get_theme_constant("margin_right")
 	# Reserve scrollbar width even before AUTO visibility has settled. The

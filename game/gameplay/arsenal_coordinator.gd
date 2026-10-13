@@ -85,6 +85,31 @@ func is_custom_primary() -> bool:
 func _can_apply() -> bool:
 	return runtime != null and enabled and main.player.controls_enabled and not is_catalog_open() and bridge.allowed()
 
+func handle_wheel(event: InputEventMouseButton) -> bool:
+	if not event.pressed or event.button_index not in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]: return false
+	if not enabled or not bool(_loadout.get("all_items", false)): return false
+	# Consume a full-kit wheel even when blocked, so it cannot fall through to
+	# the classic tool wheel. GUI catalogue scrolling consumes its event first.
+	var blocked: bool = main._launch_in_progress or (not main._launch_configuration.is_empty() and main._launch_status != "ready")
+	if blocked or not main.hud._focused or main.hud.is_menu_open() or not _can_apply(): return true
+	var direction: int = signi(main.player.wheel_tool_direction)
+	if direction == 0: return true
+	if event.button_index == MOUSE_BUTTON_WHEEL_DOWN: direction = -direction
+	var cycle: Array[String] = ArsenalCatalog.inventory_cycle()
+	var current: String = runtime.selected_item if is_custom_primary() else "source"
+	var index: int = cycle.find(current)
+	var next_item: String = cycle[posmod(index + direction, cycle.size())]
+	_panel_trigger = false
+	_mouse_bank_held = false
+	runtime.cancel_trigger()
+	# Selection cannot turn a held touch/mouse press into an automatic call.
+	Input.action_release("primary")
+	Input.action_release("secondary")
+	main.session.set_trigger_held(false)
+	_select(next_item)
+	panel.set_selection(next_item)
+	return true
+
 func prepare_trigger(held: bool) -> void:
 	if runtime == null: return
 	if not _can_apply():
@@ -115,6 +140,10 @@ func _process(delta: float) -> void:
 	readout.selected_item = str(readout.get("selected_item", _loadout.primary)) if is_custom_primary() else "source"
 	readout.enabled = enabled and bool(readout.get("enabled", false)) and bridge.alive() and not is_catalog_open()
 	readout.first_person = main.player.camera_mode == BlockfieldPlayer.CameraMode.FIRST_PERSON
+	if enabled and bool(_loadout.get("all_items", false)):
+		var cycle: Array[String] = ArsenalCatalog.inventory_cycle()
+		readout.wheel_index = cycle.find(str(readout.selected_item)) + 1
+		readout.wheel_count = cycle.size()
 	if main.offline_survival_mode:
 		readout.loadout = _frozen_loadout.duplicate(true)
 		readout.catalog_loadout = (_pending_loadout if not _pending_loadout.is_empty() else _frozen_loadout).duplicate(true)
@@ -170,7 +199,7 @@ func _select(id: String) -> void:
 		if runtime != null: runtime.cancel_trigger()
 		source_selected = true
 		main.player.arsenal_active = false
-		if not main.offline_tdm_mode: ArsenalLoadout.save(_loadout, false)
+		if not main.offline_tdm_mode: ArsenalLoadout.save(_loadout, bool(_loadout.get("all_items", false)))
 		return
 	if main.offline_tdm_mode:
 		if not enabled or not runtime.equipped(id):

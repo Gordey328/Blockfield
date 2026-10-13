@@ -119,7 +119,11 @@ func _open_utility(kind: String) -> void:
 			_arsenal_panel.set_home_mode(true)
 			_arsenal_panel.loadout_changed.connect(func(loadout: Dictionary) -> void: ArsenalLoadout.save(loadout))
 			_arsenal_panel.item_selected.connect(func(id: String) -> void:
-				if id == "source": ArsenalLoadout.save(ArsenalLoadout.load_saved().loadout, false))
+				if id == "source":
+					var classic: Dictionary = ArsenalLoadout.load_saved().loadout
+					classic.erase("all_items")
+					ArsenalLoadout.save(classic, false)
+					_arsenal_panel.set_loadout(classic))
 		_arsenal_panel.set_loadout(ArsenalLoadout.load_saved().loadout)
 		_arsenal_panel.set_enabled(true)
 		_arsenal_panel.show_catalog(true)

@@ -43,6 +43,17 @@ func touch(button: Button, pressed: bool, index: int = 19) -> void:
 	# a different physical input scale; parse_input_event would rescale twice.
 	root.push_input(event, true)
 
+func wheel() -> void:
+	var event: InputEventMouseButton = InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_WHEEL_UP
+	event.position = Vector2(640,360)
+	event.pressed = true
+	event.window_id = root.get_window_id()
+	root.push_input(event, true)
+	event = event.duplicate() as InputEventMouseButton
+	event.pressed = false
+	root.push_input(event, true)
+
 func backup(path: String) -> void:
 	backups[path] = {"exists": FileAccess.file_exists(path), "bytes": FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else PackedByteArray()}
 
@@ -262,6 +273,11 @@ func main_flow() -> void:
 	panel._cards.x19.pressed.emit()
 	await frames(18)
 	check_pending_kit(next_loadout, live_readout, "real second-support choice after all earlier fields")
+	next_loadout.all_items = true
+	panel._all_items.pressed.emit()
+	await frames(18)
+	check_pending_kit(next_loadout, live_readout, "real full-inventory toggle after all four fields")
+	check(panel.get_display_state().all_items and not panel.get_display_state().live_all_items and not runtime.readout().loadout.has("all_items"), "full flag is visibly pending and cannot enable live twenty-item selection in this frozen run")
 	check(session.simulation.tick == live_tick and session.paused and coordinator.is_catalog_open(), "all four real catalogue edits keep the frozen attempt paused while render/HUD callbacks continue")
 	check(runtime.equipped("x01") and runtime.equipped("x12") and runtime.equipped("x17") and runtime.equipped("x20") and not runtime.equipped("x03") and not runtime.equipped("x14") and not runtime.equipped("x18") and not runtime.equipped("x19"), "pending four-slot kit never equips any new item in the active runtime")
 	panel._close_button.pressed.emit()
@@ -291,17 +307,35 @@ func main_flow() -> void:
 	await wait_ready("custom Rush repeat")
 	check(session.simulation.epoch > epoch and coordinator.runtime != old_runtime and coordinator.runtime.visuals().is_empty(), "epoch restart installs a fresh runtime and cancels all old ordnance/statuses")
 	check(coordinator._pending_loadout.is_empty() and session.arsenal_loadout == next_loadout and coordinator.runtime.selected_item == "x03" and not coordinator.source_selected, "actual Replay adopts and selects the saved next kit while clearing its pending change")
-	check(coordinator.runtime.equipped("x03") and coordinator.runtime.equipped("x14") and coordinator.runtime.equipped("x18") and coordinator.runtime.equipped("x19") and not coordinator.runtime.equipped("x01") and not coordinator.runtime.equipped("x12") and not coordinator.runtime.equipped("x17") and not coordinator.runtime.equipped("x20"), "actual Replay equips the complete saved primary/bomb/two-support kit")
+	check(coordinator.runtime.equipped("x03") and coordinator.runtime.equipped("x14") and coordinator.runtime.equipped("x18") and coordinator.runtime.equipped("x19") and coordinator.runtime.readout().loadout.get("all_items", false), "actual Replay equips the saved favorites and enables its pending full-inventory flag")
+	for id: String in CATALOG.inventory_cycle():
+		if id != "source": check(coordinator.runtime.equipped(id), "new full attempt makes authored item available: " + id)
 	await frames(18)
 	check(panel._slot_item(0) == "x03" and panel._slot_item(1) == "x14" and panel._slot_item(2) == "x18" and panel._slot_item(3) == "x19" and panel.get_display_state().catalog_loadout == next_loadout, "new attempt's real HUD refresh adopts the complete new bank and catalogue together")
 	check(LOADOUT.fingerprint(session.arsenal_loadout, "crossroads", session.current_weapon) != LOADOUT.fingerprint(CATALOG.defaults(), "crossroads", 1), "next attempt uses the new full-loadout/source-class record identity")
+	var four_slot_next: Dictionary = next_loadout.duplicate(true)
+	four_slot_next.erase("all_items")
+	check(LOADOUT.fingerprint(next_loadout) != LOADOUT.fingerprint(four_slot_next), "full inventory is a separate scoring identity from the same four favorite slots")
 	check(coordinator.runtime.readout().stock == {"x01":0,"x02":0,"x03":0,"x04":0,"x05":0,"x06":0,"x07":0,"x08":0,"x09":0,"x10":0,"x11":3,"x12":2,"x13":1,"x14":2,"x15":3,"x16":1,"x17":2,"x18":2,"x19":2,"x20":2}, "explicit new attempt replenishes exactly the authored starting stocks")
-	check(session.simulation.spawn_zombie_slot(12, point).ok, "new-kit attempt admits a counted scoring life")
-	session.simulation.damage_actor(12,1000,1,"fixture")
+	app.player.wheel_tool_direction = 1
+	wheel()
+	await frames(2)
+	check(coordinator.runtime.selected_item == "x04" and session.current_weapon == 1 and session.current_tool == LocalSession.Tool.WEAPON, "new full Rush attempt accepts actual wheel selection outside its four favorites")
+	for life: int in 3:
+		check(session.simulation.spawn_zombie_slot(12, point).ok, "new full attempt admits a counted milestone life")
+		session.simulation.damage_actor(12,1000,1,"fixture")
+		await frames(2)
+	check(session.get_rush_state().pending and not app.player.controls_enabled and app.hud._rush_panel.is_visible_in_tree(), "actual full-attempt kill milestone opens the production Rush choice gate")
+	var full_choice_readout: Dictionary = coordinator.runtime.readout().duplicate(true)
+	wheel()
+	await frames(8)
+	check(coordinator.runtime.readout() == full_choice_readout and coordinator.runtime.selected_item == "x04" and session.current_tool == LocalSession.Tool.WEAPON, "actual pending Rush choice blocks full wheel without selection, deployment or source-tool fallback")
+	check(session.choose_upgrade("field_kit").ok, "real full-attempt milestone remains actionable after rejected wheel input")
 	await frames(2)
 	session.simulation.damage_actor(1,1000,0,"fixture")
 	await frames(3)
 	check(RECORDS.arsenal_best(next_loadout, "crossroads", RECORDS.PATH, 1) == int(session.get_rush_state().score) and RECORDS.arsenal_best(CATALOG.defaults()) == 0 and RECORDS.best(1) == 0, "next attempt writes only its selected new-kit bucket after an actual finish")
+	check(RECORDS.arsenal_best(four_slot_next) == 0, "full-attempt result never writes the otherwise-identical four-slot rules bucket")
 	await close_scene()
 
 func ai_flow() -> void:

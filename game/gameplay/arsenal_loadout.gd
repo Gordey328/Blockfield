@@ -20,5 +20,6 @@ static func save(loadout: Dictionary, enabled: bool = true, path: String = PATH)
 
 static func fingerprint(loadout: Dictionary, map_id: String = "crossroads", source_weapon: int = 1) -> String:
 	var canonical: Dictionary = ArsenalCatalog.canonical_loadout(loadout)
-	return ("arsenal_v1|%s|source:%d|%s|%s|%s|%s" % [map_id, source_weapon, canonical.primary,
+	var rules: String = ArsenalCatalog.FULL_RULES_VERSION if canonical.get("all_items", false) else ArsenalCatalog.RULES_VERSION
+	return ("%s|%s|source:%d|%s|%s|%s|%s" % [rules, map_id, source_weapon, canonical.primary,
 		canonical.bomb, canonical.stratagems[0], canonical.stratagems[1]]).sha256_text()

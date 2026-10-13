@@ -141,6 +141,12 @@ var _drag_look_position:=Vector2.ZERO
 func _unhandled_input(event: InputEvent) -> void:
 	if session == null or not controls_enabled:
 		return
+	# The full arsenal wheel remains usable with the optional touch HUD on.
+	# Handle only unclaimed gameplay events; menus keep their own scrolling.
+	if event is InputEventMouseButton and lab != null and lab.get("arsenal_coordinator") != null:
+		if lab.arsenal_coordinator.handle_wheel(event):
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventMouse and lab!=null and lab.get("hud")!=null and lab.hud.has_method("uses_mobile_controls") and lab.hud.uses_mobile_controls():
 		return
 	_sync_camera_mode()

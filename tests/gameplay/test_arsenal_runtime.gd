@@ -6,6 +6,8 @@ const DATA = preload("res://world/voxel_data.gd")
 const SESSION = preload("res://gameplay/local_session.gd")
 const TDM = preload("res://gameplay/offline_tdm_session.gd")
 const MATCH = preload("res://simulation/match_simulation.gd")
+const SURVIVAL = preload("res://gameplay/offline_survival_session.gd")
+const SETTINGS = preload("res://gameplay/survival_settings.gd")
 var checks: int = 0
 var failures: int = 0
 
@@ -81,8 +83,85 @@ func _run() -> void:
 	_bounded_status_and_motion()
 	_lab_actual_respawn_identity()
 	_match_credit_and_power()
+	_full_inventory_admission()
 	print("ARSENAL: %d assertions, %d failures" % [checks,failures])
 	quit(0 if failures==0 else 1)
+
+func _full_inventory_admission() -> void:
+	var cycle: Array[String] = CATALOG.inventory_cycle()
+	var seen: Dictionary[String,bool] = {}
+	check(cycle.size()==21 and cycle.back()=="source","full wheel roster has twenty inventions and one original backup")
+	for index: int in 20:
+		check(cycle[index]=="x%02d" % (index+1) and not seen.has(cycle[index]) and CATALOG.valid(cycle[index]),"full cycle keeps each authored identity once in order: "+cycle[index])
+		seen[cycle[index]] = true
+	cycle[0] = "bad"
+	check(CATALOG.inventory_cycle()[0]=="x01","a caller cannot mutate the next inventory cycle")
+	var full: Dictionary = CATALOG.defaults().merged({"all_items":true})
+	var data: VoxelData = DATA.new()
+	data.clear(Vector3i(48,24,48),1)
+	data.seed_box(Vector3i.ZERO,Vector3i(48,4,48),0x016c7367)
+	var session: OfflineSurvivalSession = SURVIVAL.new()
+	root.add_child(session)
+	var arena: Dictionary = {"owner_spawn":Vector3(24.5,4.01,40.5),"supply_point":Vector3(40.5,4.01,40.5)}
+	var settings: Dictionary = SETTINGS.defaults()
+	settings.preparation_seconds = 0
+	check(session.configure_survival(data,arena,settings,"Full inventory fixture",true,2).ok,"full inventory fixture uses actual Survival authority and an original shotgun backup")
+	session.paused = false
+	var owner: SharedPlayerState = session.get_owner_state()
+	check(session.simulation.spawn_zombie_slot(2,owner.feet()+Vector3(0,0,-6)).ok,"real Survival actor provides a finite weapon target")
+	var bridge: ArsenalBridge = BRIDGE.new()
+	bridge.configure_data(session,data)
+	var runtime: ArsenalRuntime = RUNTIME.new()
+	runtime.configure(bridge,full)
+	session.arsenal = runtime
+	for item: String in CATALOG.inventory_cycle():
+		if item=="source": continue
+		check(runtime.equipped(item),"full Survival admits authored identity: "+item)
+		runtime.select(item)
+		check(runtime.readout().selected_item==item,"full Survival selects the real string identity: "+item)
+	check(not runtime.equipped("source") and not runtime.equipped("x21") and not runtime.equipped("2"),"original backup and invalid IDs never become authored weapon indices")
+	var origin: Vector3 = owner.motion.physics_eye()
+	var direction: Vector3 = (session.simulation.get_actor(2).feet()+Vector3.UP*1.35-origin).normalized()
+	runtime.select("x03")
+	check(runtime.apply("x03",origin,direction).ok,"full mode admits a primary outside the four favorite slots")
+	check(session.step_local(0,Vector2.ZERO,owner.yaw,owner.pitch).ok,"real Survival fixed step commits the selected custom primary")
+	check(session.simulation.get_actor(2).health==60 and runtime.readout().magazine==7,"full mode consumes one finite primary round and damages the real actor")
+	var ground: Vector3 = (owner.feet()+Vector3(6,0,-6)-origin).normalized()
+	check(runtime.apply("x14",origin,ground).ok,"full mode admits a nonfavorite finite bomb")
+	check(session.step_local(0,Vector2.ZERO,owner.yaw,owner.pitch).ok,"real Survival commits the nonfavorite bomb")
+	check(runtime.readout().stock.x14==1 and runtime.readout().fields==1,"full inventory spends a decoy charge and creates its real field")
+	check(runtime.apply("x19",origin,ground).ok,"full mode admits a nonfavorite support through ordinary terrain admission")
+	check(session.step_local(0,Vector2.ZERO,owner.yaw,owner.pitch).ok,"real Survival commits the nonfavorite support")
+	check(runtime.readout().stock.x19==1 and runtime.readout().devices==1,"full inventory spends support stock and deploys one real turret")
+	var spent: Dictionary = runtime._inventory.duplicate(true)
+	for item: String in CATALOG.inventory_cycle(): runtime.select(item)
+	runtime.select("x03")
+	check(runtime.readout().magazine==7 and runtime._inventory==spent,"full cycle including the source sentinel cannot refill or discard spent inventories")
+	check(owner.weapon==2 and session.current_weapon==2,"all authored selections retain the original three-class backup index")
+	runtime.set_loadout(CATALOG.defaults())
+	check(runtime.readout().loadout==full and runtime._inventory==spent,"a mid-run option toggle cannot unfreeze the match kit or refill it")
+	runtime.clear()
+	runtime.configure(bridge,CATALOG.defaults())
+	var legacy_stock: Dictionary = runtime._inventory.duplicate(true)
+	for item: String in ["x03","x14","x19"]:
+		check(not runtime.apply(item,origin,ground).ok,"four-slot Survival still rejects unequipped categories: "+item)
+		var selected: String = runtime.selected_item
+		runtime.select(item)
+		check(runtime.selected_item==selected and not runtime.equipped(item),"four-slot selection cannot bypass admission: "+item)
+	runtime.set_loadout(full)
+	check(not runtime.equipped("x03") and runtime.readout().loadout==CATALOG.defaults() and runtime._inventory==legacy_stock,"four-slot match cannot enable full mode through a live configuration edit")
+	runtime.clear()
+	bridge.dispose()
+	session.free()
+	var lab: Dictionary = fixture("x03")
+	check(fire(lab,"x03").ok and fire(lab,"x12").ok,"lab fixture submits finite primary and bomb uses before toggling")
+	advance(lab)
+	var lab_spent: Dictionary = lab.runtime._inventory.duplicate(true)
+	lab.runtime.set_loadout(full)
+	lab.runtime.set_loadout(CATALOG.defaults())
+	lab.runtime.select("x03")
+	check(lab.runtime.readout().magazine==7 and lab.runtime.readout().stock.x12==1 and lab.runtime._inventory==lab_spent,"lab full-mode on/off roundtrip preserves spent ammo, stock and cooldowns")
+	finish(lab)
 
 func _drill_and_charge() -> void:
 	var f: Dictionary = fixture()

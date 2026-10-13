@@ -74,7 +74,8 @@ func clear() -> void:
 		bridge.terrain.expire_owned(bridge.tick())
 
 func equipped(item: String) -> bool:
-	return bridge != null and (not bridge.session is OfflineTDMSession \
+	return CATALOG.valid(item) and bridge != null and (not bridge.session is OfflineTDMSession \
+		or bool(_loadout.get("all_items", false)) \
 		or item == _loadout.get("primary","") or item == _loadout.get("bomb","") \
 		or (_loadout.get("stratagems",[]) as Array).has(item))
 

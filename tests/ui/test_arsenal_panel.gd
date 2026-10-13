@@ -198,6 +198,7 @@ func _run() -> void:
 	await _check_compact_bank()
 	await _check_web_css_cache()
 	await _check_pending_catalog()
+	await _check_all_items_and_wheel()
 	panel.set_enabled(false)
 	panel.show_catalog(true)
 	_check(not panel._overlay.visible and not panel._bank.visible, "Disabled lifecycle hides and gates both surfaces")
@@ -464,6 +465,105 @@ func _check_pending_catalog() -> void:
 	_check(sample.get_display_state().loadout.primary == "x02" and sample.get_display_state().loadout.bomb == frozen.bomb and state.loadout == frozen, "Fallback live catalogue composition does not mutate the input loadout")
 	sample.free()
 
+func _check_all_items_and_wheel() -> void:
+	root.size = Vector2i(844, 390)
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	root.content_scale_size = Vector2i.ZERO
+	var sample: ArsenalPanel = PANEL.new()
+	root.add_child(sample)
+	sample.set_process(false)
+	sample.set_home_mode(true)
+	var favorites: Dictionary = CATALOG.defaults()
+	var state: Dictionary = {"selected_item":"x01", "loadout":favorites.duplicate(true), "catalog_loadout":favorites.duplicate(true), "stock":{"x12":1, "x16":0, "x17":1}, "cooldowns":{"x17":7.0}, "magazine":1, "reserve":4, "charge":.2, "heat":.3, "enabled":true}
+	var resources: Dictionary = {"stock":state.stock.duplicate(true), "cooldowns":state.cooldowns.duplicate(true), "magazine":state.magazine, "reserve":state.reserve}
+	var edited: Array[Dictionary] = []
+	var selected: Array[String] = []
+	var applied: Array[String] = []
+	var held: Array[bool] = []
+	sample.loadout_changed.connect(func(value: Dictionary) -> void:
+		edited.append(value.duplicate(true))
+		state.catalog_loadout = value.duplicate(true))
+	sample.item_selected.connect(func(id: String) -> void: selected.append(id))
+	sample.apply_requested.connect(func(id: String) -> void: applied.append(id))
+	sample.trigger_changed.connect(func(value: bool) -> void: held.append(value))
+	_coordinator_update(sample, state)
+	sample.show_catalog(true)
+	await _frames(4)
+	_check(sample._all_items.name == "ArsenalAllItems" and sample._all_items in sample._all_buttons and not sample._all_items.button_pressed, "Named All20 header toggle starts off and uses the existing touch quarantine")
+	await _tap(sample._all_items)
+	_check(edited.size() == 1 and edited[0].get("all_items", false) == true and sample._all_items.button_pressed and sample._all_items.text.contains("Вкл"), "Actual Home touch saves one canonical All20-on intent with clear state")
+	_check(selected.is_empty() and applied.is_empty() and sample.get_display_state().selected_item == "x01", "All20 toggle never issues selection/application or changes the held item")
+	for id: String in sample._cards:
+		_check(sample._card_titles[id].text.contains("✓"), "Full catalogue marks every admitted card equipped: " + id)
+	for tick: int in 100:
+		sample._process(.01)
+		if tick % 10 == 0: _coordinator_update(sample, state)
+	_check(sample.get_display_state().all_items and not sample.get_display_state().live_all_items and not sample.get_display_state().wheel.active, "Repeated10Hz readouts preserve pending full mode without changing the live combat flag")
+	_check(sample._instruction.text.contains("избранных") and sample._all_items.tooltip_text.contains("конечными"), "Full mode explains favorite shortcuts and finite resources")
+	_check(sample._readout.stock == resources.stock and sample._readout.cooldowns == resources.cooldowns and sample._readout.magazine == resources.magazine and sample._readout.reserve == resources.reserve, "Toggling full availability does not replenish or alter authority resources")
+	await _tap(sample._all_items)
+	_check(edited.size() == 2 and not edited.back().has("all_items") and not sample._all_items.button_pressed and sample._all_items.text.contains("Выкл"), "Actual toggle-off omits the optional flag instead of storing false")
+	_check(edited.back() == favorites and sample._card_titles.x01.text.contains("✓") and not sample._card_titles.x03.text.contains("✓"), "Turning full mode off preserves all four favorites and restores their checkmarks")
+	state.catalog_next_attempt = true
+	sample.set_home_mode(false)
+	sample.set_readout(state)
+	await _tap(sample._all_items)
+	for tick: int in 30:
+		sample._process(.01)
+		if tick % 10 == 0: _coordinator_update(sample, state)
+	_check(edited.size() == 3 and sample.get_display_state().catalog_loadout.all_items and sample.get_display_state().combat_loadout == favorites and selected.is_empty(), "In-run full toggle saves the next kit without selecting or replacing the frozen kit")
+	sample.close()
+	await _frames(3)
+	_check(not sample.get_display_state().wheel.active and not sample._meter.text.contains("Колесо"), "Pending full flag does not expose a live wheel or hint in the closed frozen bank")
+	for index: int in 4:
+		_check(sample._slot_item(index) == ["x01", "x12", "x17", "x20"][index], "Full pending edit leaves its favorite combat shortcut frozen: " + str(index))
+	# Only an authoritative next-life/lab readout makes full availability live.
+	state.loadout = state.catalog_loadout.duplicate(true)
+	state.erase("catalog_next_attempt")
+	state.selected_item = "x17"
+	state.wheel_index = 17
+	state.wheel_count = 21
+	state.cooldowns.x17 = 0.0
+	sample.set_readout(state)
+	_check(sample.get_display_state().live_all_items and sample.get_display_state().wheel == {"active":true, "index":17, "count":21} and sample._meter.text.begins_with("Колесо 17/21"), "Live full readout shows the authoritative wheel position at the start of the stock line")
+	_check(sample._meter.tooltip_text.contains("обычный набор") and sample._slots[0].tooltip_text.contains("Избранное"), "Live meter explains wheel access to Classic and the favorite slots")
+	await _tap(sample._more)
+	await _tap(sample._apply)
+	_check(sample._targeting and sample._meter.text.begins_with("Колесо 17/21"), "Support targeting retains the visible wheel position without activating stock")
+	sample.set_selection("x18")
+	_check(sample.get_display_state().selected_item == "x18" and not sample._targeting and not sample._actions_open and sample.get_display_state().wheel.index == 18, "Silent wheel selection cancels targeting/drawer and immediately updates its derived position")
+	state.selected_item = "x01"
+	state.wheel_index = 1
+	sample.set_readout(state)
+	await _tap(sample._more)
+	var fire_point: Vector2 = sample._apply.get_global_rect().get_center()
+	_touch(fire_point, true, false, 8)
+	await _frames(1)
+	sample.set_selection("x02")
+	_check(held == [true, false] and sample._touches.is_empty() and sample._canceled_touches.has(8) and not sample._actions_open, "Silent wheel selection releases held primary fire and quarantines every owned pointer")
+	_touch(fire_point, false, false, 8)
+	_check(sample._canceled_touches.is_empty() and selected.is_empty() and applied.is_empty() and edited.size() == 3, "Canceled release after a wheel change cannot emit select/apply/save intents")
+	sample.set_selection("source")
+	_check(sample.get_display_state().wheel.index == 21 and sample.get_display_state().selected_item == "source", "Silent Classic wheel entry keeps full mode active at21/21")
+	sample.set_selection("x99")
+	_check(sample.get_display_state().selected_item == "source" and sample.get_display_state().catalog_loadout.all_items, "Invalid wheel IDs cannot disturb selection or the saved full kit")
+	_check(state.stock == resources.stock and state.magazine == resources.magazine and state.reserve == resources.reserve, "Silent wheel presentation never refills finite stock or ammunition")
+	sample.set_home_mode(true)
+	sample.show_catalog(true)
+	for dimensions: Vector2i in [Vector2i(568,320), Vector2i(844,390), Vector2i(390,844)]:
+		root.size = dimensions
+		for locale: String in ["ru", "en"]:
+			sample.configure(locale)
+			sample._choose_category("stratagem")
+			await _frames(4)
+			var viewport: Rect2 = root.get_visible_rect()
+			for button: Button in [sample._home_source, sample._all_items, sample._close_button]:
+				var rectangle: Rect2 = button.get_global_rect()
+				_check(viewport.grow(.5).encloses(rectangle) and rectangle.size.x >= 55.5 and rectangle.size.y >= 55.5, "Full-mode Home header retains contained56CSS actions: " + str(dimensions) + locale + str(button.name))
+			_check(not sample._home_source.get_global_rect().grow(-.5).intersects(sample._all_items.get_global_rect().grow(-.5)) and not sample._all_items.get_global_rect().grow(-.5).intersects(sample._close_button.get_global_rect().grow(-.5)), "Full toggle shares the existing header row without overlapping its neighbors: " + str(dimensions) + locale)
+			_check(viewport.grow(.5).encloses(sample._title.get_global_rect()) and sample._scroll.get_global_rect().size.y > 56, "Full-mode header leaves a usable card scroll region without adding a56px row: " + str(dimensions) + locale)
+	sample.free()
+
 func _coordinator_update(panel: ArsenalPanel, state: Dictionary) -> void:
 	panel.set_enabled(true)
 	panel.set_combat_visible(true)
@@ -475,7 +575,7 @@ func _check_layout(panel: ArsenalPanel, dimensions: Vector2i, scaled: bool) -> v
 	var context: String = "%s scaled=%s" % [dimensions, scaled]
 	_check(viewport.grow(.5).encloses(panel._overlay.get_global_rect()), "Catalogue stays within logical viewport: " + context)
 	_check(viewport.grow(.5).encloses(panel._scroll.get_global_rect()) and panel._scroll.get_global_rect().size.y * css_per_logical.y > 56, "Short screens retain a usable scrolling catalogue: " + context)
-	for button: Button in [panel._close_button, panel._tabs.primary, panel._tabs.bomb, panel._tabs.stratagem]:
+	for button: Button in [panel._all_items, panel._close_button, panel._tabs.primary, panel._tabs.bomb, panel._tabs.stratagem]:
 		_check(viewport.grow(.5).encloses(button.get_global_rect()), "Header controls remain reachable: " + context)
 		_check(button.get_global_rect().size.x * css_per_logical.x >= 55.5 and button.get_global_rect().size.y * css_per_logical.y >= 55.5, "Header has a56CSS touch target: " + context)
 

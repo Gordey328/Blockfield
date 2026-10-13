@@ -3,6 +3,7 @@ extends RefCounted
 ## Authored expansion identities; source weapon/profile indices remain separate.
 
 const RULES_VERSION: String = "arsenal_v1"
+const FULL_RULES_VERSION: String = "arsenal_all_v1"
 static var _cached: Array[Dictionary] = []
 static var _by_id: Dictionary[String,Dictionary] = {}
 
@@ -61,6 +62,12 @@ static func valid(id: String) -> bool:
 static func defaults() -> Dictionary:
 	return {"primary":"x01", "bomb":"x12", "stratagems":["x17","x20"]}
 
+static func inventory_cycle() -> Array[String]:
+	var cycle: Array[String] = []
+	for item: Dictionary in entries(): cycle.append(str(item.id))
+	cycle.append("source")
+	return cycle
+
 static func canonical_loadout(raw: Dictionary) -> Dictionary:
 	var result: Dictionary = defaults()
 	for key: String in ["primary", "bomb"]:
@@ -71,4 +78,6 @@ static func canonical_loadout(raw: Dictionary) -> Dictionary:
 		if support[0] is String and support[1] is String and support[0] != support[1] \
 				and get_item(support[0]).get("category", "") == "stratagem" and get_item(support[1]).get("category", "") == "stratagem":
 			result.stratagems = support.duplicate()
+	var all_items: Variant = raw.get("all_items", false)
+	if typeof(all_items) == TYPE_BOOL and all_items: result.all_items = true
 	return result

@@ -1,4 +1,4 @@
-"""Add a checked Web export at a sibling Pages path, preserving root files."""
+"""Publish a checked Web export at a sibling Pages path, preserving root files."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--slug", default="reduced")
     parser.add_argument("--repo", default="Gordey328/Blockfield")
     parser.add_argument("--seed-repo", type=Path, help="Existing local gh-pages checkout, read only")
+    parser.add_argument("--update-existing", action="store_true", help="Replace the same canonical file set at an existing sibling path")
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z][a-z0-9-]*", args.slug):
         parser.error("Use one lowercase URL path component")
@@ -37,6 +38,10 @@ def main():
             raise RuntimeError("Missing checked export: " + name)
     if (folder / ".git").exists():
         raise RuntimeError("Use a plain checked export, not a release checkout")
+    paths = sorted(path for path in folder.rglob("*") if path.is_file())
+    names = {path.relative_to(folder).as_posix() for path in paths}
+    if any(path.is_symlink() or path.name in ("arsenal-touch.html", "arsenal-touch-tools.js") for path in paths):
+        raise RuntimeError("Private helpers and symlinks are not canonical release files")
     pages = api("/repos/" + args.repo + "/pages")
     if pages.get("source") != {"branch": "gh-pages", "path": "/"}:
         raise RuntimeError("Expected existing gh-pages root hosting")
@@ -58,16 +63,26 @@ def main():
     git("config", "user.email", git("config", "user.email"), cwd=workspace)
     git("config", "core.autocrlf", "false", cwd=workspace)
     target = workspace / args.slug
-    if target.exists():
+    if target.exists() and not args.update_existing:
         raise RuntimeError("Sibling path already exists; preserve it and inspect before updating")
-    shutil.copytree(folder, target)
-    for path in folder.rglob("*"):
-        if path.is_file():
-            copied = target / path.relative_to(folder)
-            if hashlib.sha256(path.read_bytes()).digest() != hashlib.sha256(copied.read_bytes()).digest():
-                raise RuntimeError("Copied file differs: " + str(path))
+    if args.update_existing:
+        if not target.is_dir() or target.is_symlink():
+            raise RuntimeError("Expected an existing regular sibling directory")
+        old_paths = sorted(path for path in target.rglob("*") if path.is_file())
+        if names != {path.relative_to(target).as_posix() for path in old_paths} or any(path.is_symlink() for path in old_paths):
+            raise RuntimeError("Existing release file set differs; inspect additions/removals explicitly")
+        for path in paths:
+            shutil.copyfile(path, target / path.relative_to(folder))
+    else:
+        shutil.copytree(folder, target)
+    for path in paths:
+        copied = target / path.relative_to(folder)
+        if hashlib.sha256(path.read_bytes()).digest() != hashlib.sha256(copied.read_bytes()).digest():
+            raise RuntimeError("Copied file differs: " + str(path))
+    if any(not name.startswith(args.slug + "/") for name in git("diff", "--name-only", cwd=workspace).splitlines()):
+        raise RuntimeError("Publication would change another Pages path")
     git("add", "--", args.slug, cwd=workspace)
-    git("commit", "-m", "Publish checked reduced Web development build at /" + args.slug + "/", cwd=workspace)
+    git("commit", "-m", "Publish checked Web development build at /" + args.slug + "/", cwd=workspace)
     # Concurrent root publication can advance gh-pages. Rebase this independent
     # directory addition onto it; never force-push or replace root assets.
     for attempt in range(3):
@@ -81,7 +96,7 @@ def main():
             git("rebase", "origin/gh-pages", cwd=workspace)
     queued = api("/repos/" + args.repo + "/pages/builds", "POST")
     url = pages["html_url"].rstrip("/") + "/" + args.slug + "/"
-    result = {"status": queued.get("status"), "url": url, "source_commit": revision,
+    result = {"status": queued.get("status"), "url": url, "source_commit": revision, "file_count": len(paths),
               "bundle_commit": git("rev-parse", "HEAD", cwd=workspace),
               "workspace": str(workspace)}
     (workspace / "publication.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
